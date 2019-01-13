@@ -1,0 +1,9 @@
+[package]
+name = "dbase-rs"
+version = "0.1.0"
+authors = ["tmontaigu <thomas.montaigu@laposte.net>"]
+edition = "2018"
+
+[dependencies]
+byteorder = "1.2.7"
+nom = "4.1.1"
