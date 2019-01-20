@@ -5,7 +5,7 @@ extern crate dbase;
 use std::collections::HashMap;
 
 #[test]
-fn test() {
+fn test_simple_file() {
     let records = dbase::read(LINE_DBF).unwrap();
     assert_eq!(records.len(), 1);
     let mut expected_fields = HashMap::new();

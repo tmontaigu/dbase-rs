@@ -11,6 +11,26 @@ use std::ffi::CString;
 
 type Record = HashMap<String, FieldValue>;
 
+#[derive(Debug)]
+pub enum Error {
+    IoError (std::io::Error),
+    ParseFloatError(std::num::ParseFloatError),
+    InvalidFieldType(char),
+
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IoError(e)
+    }
+}
+
+impl From<std::num::ParseFloatError> for Error {
+    fn from(p: std::num::ParseFloatError) -> Self {
+        Error::ParseFloatError(p)
+    }
+}
+
 pub struct Header {
     num_records: u32,
     offset_to_first_record: u16,
@@ -21,12 +41,12 @@ impl Header {
     pub const SIZE: usize = 32;
     fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let mut skip = [0u8; 4];
-        source.read_exact(&mut skip).unwrap(); //level + last date
-        let num_records = source.read_u32::<LittleEndian>().unwrap();
-        let offset_to_first_record = source.read_u16::<LittleEndian>().unwrap();
-        let size_of_record = source.read_u16::<LittleEndian>().unwrap();
+        source.read_exact(&mut skip)?; //level + last date
+        let num_records = source.read_u32::<LittleEndian>()?;
+        let offset_to_first_record = source.read_u16::<LittleEndian>()?;
+        let size_of_record = source.read_u16::<LittleEndian>()?;
         let mut skip = [0u8; 20];
-        source.read_exact(&mut skip).unwrap(); //level + last date
+        source.read_exact(&mut skip)?; //level + last date
         Ok(Self{
             num_records,
             offset_to_first_record,
@@ -74,21 +94,28 @@ impl FieldType {
             _  => None,
         }
     }
+
+    fn try_from(c: char) -> Result<FieldType, Error> {
+        match Self::from(c) {
+            Some(t) => Ok(t),
+            None => Err(Error::InvalidFieldType(c))
+        }
+    }
 }
 
 
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
     Character(String),
+    Numeric(f64), //Stored as String
+    Logical(bool), // Stored as one char
+    Integer(i32),
     Float(f32),
     Double(f64),
-    Integer(i32),
-    Numeric(f64), //Stored as String
-    Logical(bool),
 }
 
 impl FieldValue {
-    fn read_from<T: Read>(mut source: &mut T, field_info: &RecordFieldInfo) -> Result<Self, std::io::Error> {
+    fn read_from<T: Read>(mut source: &mut T, field_info: &RecordFieldInfo) -> Result<Self, Error> {
         let value = match field_info.field_type {
             FieldType::Logical => {
                 match source.read_u8()? as char {
@@ -97,8 +124,7 @@ impl FieldValue {
                 }
             },
             FieldType::Integer => {
-                let string = read_string_of_len(&mut source, field_info.record_length)?;
-                FieldValue::Integer(string.parse::<i32>().unwrap())
+                FieldValue::Integer(source.read_i32::<LittleEndian>()?)
             },
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.record_length)?;
@@ -106,8 +132,7 @@ impl FieldValue {
             }
             FieldType::Numeric => {
                 let value = read_string_of_len(&mut source, field_info.record_length)?;
-                //println!("numeric value: '{}'", value.trim());
-                FieldValue::Numeric(value.trim().parse::<f64>().unwrap())
+                FieldValue::Numeric(value.trim().parse::<f64>()?)
             },
             FieldType::Float => FieldValue::Float(source.read_f32::<LittleEndian>()?),
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
@@ -128,7 +153,7 @@ pub struct RecordFieldInfo {
 impl RecordFieldInfo {
     pub const SIZE: usize = 32;
 
-    fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
+    fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
         let mut name = [0u8; 11];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
@@ -143,7 +168,7 @@ impl RecordFieldInfo {
         source.read_exact(&mut skip)?;
 
         let s = String::from_utf8_lossy(&name).trim_matches(|c| c == '\u{0}').to_owned();
-        let field_type = FieldType::from(field_type as char).unwrap();
+        let field_type = FieldType::try_from(field_type as char)?;
         Ok(Self{
             name: s,
             field_type,
@@ -177,19 +202,19 @@ pub struct Reader<T: Read> {
 }
 
 impl<T: Read> Reader<T> {
-    fn new(mut source: T) -> Result<Self, std::io::Error> {
-        let header = Header::read_from(&mut source).unwrap();
+    fn new(mut source: T) -> Result<Self, Error> {
+        let header = Header::read_from(&mut source)?;
         let num_fields = (header.offset_to_first_record as usize - Header::SIZE) / RecordFieldInfo::SIZE;
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
         for i in 0..num_fields {
-            let info = RecordFieldInfo::read_from(&mut source).unwrap();
+            let info = RecordFieldInfo::read_from(&mut source)?;
             //println!("{} -> {}, {:?}, length: {}", i, info.name, info.field_type, info.record_length);
             fields_info.push(info);
         }
 
-        let terminator = source.read_u8().unwrap() as char;
+        let terminator = source.read_u8()? as char;
         if terminator != '\r' {
             panic!("unexpected terminator");
         }
@@ -201,11 +226,20 @@ impl<T: Read> Reader<T> {
             current_record: 0
         })
     }
+
+    fn read(self) -> Result<Vec<Record>, Error> {
+        let mut records = Vec::<Record>::with_capacity(self.fields_info.len());
+        for record in self {
+            records.push(record?);
+        }
+        //let file_end = self.source.read_u16::<LittleEndian>()?;
+        Ok(records)
+    }
 }
 
 
 impl<T: Read> Iterator for Reader<T>{
-    type Item = Result<Record, std::io::Error>;
+    type Item = Result<Record, Error>;
 
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if self.current_record >= self.header.num_records {
@@ -214,8 +248,11 @@ impl<T: Read> Iterator for Reader<T>{
         else {
             let mut record = Record::with_capacity(self.fields_info.len() as usize);
             for field_info in &self.fields_info {
-                let value = FieldValue::read_from(&mut self.source, field_info).unwrap();
-                //println!("{:?}", value);
+                let value = match FieldValue::read_from(&mut self.source, field_info) {
+                    Err(e) => return Some(Err(e)),
+                    Ok(value) => value,
+                };
+
                 if field_info.name != "DeletionFlag" {
                     record.insert(field_info.name.clone(), value);
                 }
@@ -228,15 +265,10 @@ impl<T: Read> Iterator for Reader<T>{
 
 
 
-pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, std::io::Error> {
+pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
     let f = File::open(path)?;
-
-    let reader = Reader::new(f).unwrap();
-    let mut records = Vec::<Record>::with_capacity(reader.fields_info.len());
-    for record in reader {
-        records.push(record?);
-    }
-    Ok(records)
+    let reader = Reader::new(f)?;
+    reader.read()
 }
 
 
