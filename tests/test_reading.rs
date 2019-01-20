@@ -13,3 +13,4 @@ fn test_simple_file() {
 
     assert_eq!(records[0], expected_fields);
 }
+
