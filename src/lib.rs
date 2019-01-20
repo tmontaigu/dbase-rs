@@ -8,6 +8,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use std::collections::HashMap;
 use std::path::Path;
 use std::ffi::CString;
+use std::str::FromStr;
 
 type Record = HashMap<String, FieldValue>;
 
@@ -15,7 +16,9 @@ type Record = HashMap<String, FieldValue>;
 pub enum Error {
     IoError (std::io::Error),
     ParseFloatError(std::num::ParseFloatError),
+    ParseIntError(std::num::ParseIntError),
     InvalidFieldType(char),
+
 
 }
 
@@ -28,6 +31,12 @@ impl From<std::io::Error> for Error {
 impl From<std::num::ParseFloatError> for Error {
     fn from(p: std::num::ParseFloatError) -> Self {
         Error::ParseFloatError(p)
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(p: std::num::ParseIntError) -> Self {
+        Error::ParseIntError(p)
     }
 }
 
@@ -103,6 +112,28 @@ impl FieldType {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Date {
+    year: i32,
+    month: i32,
+    day: i32,
+}
+
+impl FromStr for Date {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let year =  s[0..4].parse::<i32>()?;
+        let month = s[4..6].parse::<i32>()?;
+        let day = s[6..8].parse::<i32>()?;
+
+        Ok(Self{
+            year,
+            month,
+            day,
+        })
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
@@ -112,6 +143,7 @@ pub enum FieldValue {
     Integer(i32),
     Float(f32),
     Double(f64),
+    Date(Date),
 }
 
 impl FieldValue {
@@ -136,6 +168,10 @@ impl FieldValue {
             },
             FieldType::Float => FieldValue::Float(source.read_f32::<LittleEndian>()?),
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
+            FieldType::Date => {
+                let value = read_string_of_len(&mut source, field_info.record_length)?;
+                FieldValue::Date(value.parse::<Date>()?)
+            }
             _ => panic!("unhandled type")
         };
         Ok(value)
