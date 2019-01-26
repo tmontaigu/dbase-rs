@@ -1,6 +1,6 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
-use std::io::{Read};
+use std::io::{Read, BufReader};
 use std::fs::File;
 use std::path::Path;
 use std::collections::HashMap;
@@ -12,6 +12,8 @@ use record::{RecordFieldInfo};
 use record::field::FieldValue;
 use Error;
 
+/// Type definition of a record.
+/// A .dbf file is composed of many records
 pub type Record = HashMap<String, FieldValue>;
 
 /// Struct with the handle to the source .dbf file
@@ -29,6 +31,11 @@ impl<T: Read> Reader<T> {
     /// Reads the header and fields information as soon as its created.
     ///
     /// # Example
+    ///
+    /// ```
+    /// let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+    ///
+    /// ```
     ///
     /// ```
     /// use std::fs::File;
@@ -82,6 +89,22 @@ impl<T: Read> Reader<T> {
     }
 }
 
+impl Reader<BufReader<File>> {
+    /// Creates a new dbase Reader from a path
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+    /// ```
+    ///
+    ///
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let bufreader = BufReader::new(File::open(path)?);
+        Reader::new(bufreader)
+    }
+}
+
 
 impl<T: Read> Iterator for Reader<T> {
     type Item = Result<Record, Error>;
@@ -116,7 +139,6 @@ impl<T: Read> Iterator for Reader<T> {
 /// assert_eq!(records.len(), 1);
 /// ```
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
-    let f = File::open(path)?;
-    let reader = Reader::new(f)?;
+    let reader = Reader::from_path(path)?;
     reader.read()
 }

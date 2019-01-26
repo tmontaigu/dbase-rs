@@ -7,8 +7,11 @@ use record::field::{FieldType};
 use Error;
 
 
+/// Struct giving the info for a record field
 pub struct RecordFieldInfo {
+    /// The name of the field
     pub name: String,
+    /// The field type
     pub field_type: FieldType,
     pub record_length: u8,
     pub num_decimal_places: u8,

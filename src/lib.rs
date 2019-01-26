@@ -1,5 +1,9 @@
+//! dbase is rust library ment to read (writing coming later) .dbf file.
+//! 
+//! # Reading
 //!
-//! To Read the whole file at one you should use the [read](fn.read.html)
+//! To Read the whole file at once you should use the [read](fn.read.html) function.
+//!
 //! Once you have access to the records, you will have to `match` against the real
 //! [FieldValue](enum.FieldValue.html)
 //!
@@ -19,6 +23,20 @@
 //!     }
 //!}
 //! ```
+//!
+//! You can also create a [Reader](reading/Reader.struct.html) and iterate over the records.
+//!
+//! ```
+//! let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+//! for record_result in reader {
+//!     let record = record_result.unwrap();
+//!     for (name, value) in record {
+//!         println!("name: {}, value: {:?}", name, value);
+//!     }
+//! }
+//!
+//! ```
+//!
 
 extern crate byteorder;
 

@@ -79,6 +79,8 @@ impl FromStr for Date {
     }
 }
 
+
+/// Enum where each variant stores the record value
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
     Character(String),
