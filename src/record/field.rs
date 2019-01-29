@@ -63,6 +63,8 @@ pub struct Date {
     day: i32,
 }
 
+
+
 impl FromStr for Date {
     type Err = std::num::ParseIntError;
 
@@ -76,6 +78,18 @@ impl FromStr for Date {
             month,
             day,
         })
+    }
+}
+
+
+
+impl Date {
+    pub(crate) fn from_bytes(bytes: [u8; 3]) -> Self {
+        Self {
+            year: 1900i32 + bytes[0] as i32,
+            month: bytes[1] as i32,
+            day: bytes[2] as i32,
+        }
     }
 }
 

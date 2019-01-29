@@ -67,6 +67,10 @@ impl<T: Read> Reader<T> {
         })
     }
 
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
     /// Make the `Reader` read the [Records](type.Record.html)
     ///
     /// # Examples
