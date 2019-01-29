@@ -60,6 +60,7 @@ pub enum Error {
     ParseIntError(std::num::ParseIntError),
     /// The Field as an invalid FieldType
     InvalidFieldType(char),
+    InvalidDate,
 }
 
 impl From<std::io::Error> for Error {

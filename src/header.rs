@@ -1,8 +1,9 @@
 #[allow(dead_code)]
-use std::io::{Read};
-use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::{Read, Write};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::field::Date;
+use Error;
 
 pub struct FileType(u8);
 
@@ -48,6 +49,7 @@ pub struct Header {
 
 impl Header {
     pub(crate) const SIZE: usize = 32;
+    pub(crate) const TERMINATOR_VALUE: u8 = 0x2D;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = FileType{0: source.read_u8()?};
@@ -75,7 +77,7 @@ impl Header {
         let _reserved = source.read_u8()?;
         let terminator = source.read_u8()?;
 
-        if terminator != 0x0D {
+        if terminator != Self::TERMINATOR_VALUE {
             println!("Strange header terminator value: {}", terminator);
         }
 
@@ -90,5 +92,32 @@ impl Header {
             table_flags,
             code_page_mark,
         })
+    }
+
+    pub(crate) fn write_to<T: Write>(&self, mut dest: &mut T) -> Result<(), Error> {
+        dest.write_u8(self.file_type.0)?;
+        self.last_update.write_to(&mut dest)?;
+        dest.write_u32::<LittleEndian>(self.num_records)?;
+        dest.write_u16::<LittleEndian>(self.offset_to_first_record)?;
+        dest.write_u16::<LittleEndian>(self.size_of_record)?;
+
+        // Reserved
+        dest.write_u16::<LittleEndian>(0)?;
+
+        let byte_value = if self.is_transaction_incomplete { 1u8 } else { 0u8 };
+        dest.write_u8(byte_value)?;
+        dest.write_u8(self.encryption_flag)?;
+
+        let mut _reserved = [0u8; 12];
+        dest.write_all(&mut _reserved)?;
+
+        dest.write_u8(self.table_flags.0)?;
+        dest.write_u8(self.code_page_mark)?;
+        // Reserved
+        dest.write_u8(0)?;
+        // Have to be 0
+        dest.write_u8(0)?;
+        dest.write_u8(Self::TERMINATOR_VALUE)?;
+        Ok(())
     }
 }

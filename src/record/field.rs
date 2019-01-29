@@ -1,7 +1,7 @@
-use std::io::{Read};
+use std::io::{Read, Write};
 use std::str::FromStr;
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::RecordFieldInfo;
 use Error;
@@ -58,38 +58,58 @@ impl FieldType {
 
 #[derive(Debug, PartialEq)]
 pub struct Date {
-    year: i32,
-    month: i32,
-    day: i32,
+    year: u32,
+    month: u32,
+    day: u32,
 }
 
+impl Date {
+    pub(crate) fn from_bytes(bytes: [u8; 3]) -> Self {
+        Self {
+            year: 1900u32 + bytes[0] as u32,
+            month: bytes[1] as u32,
+            day: bytes[2] as u32,
+        }
+    }
+
+    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
+        self.validate()?;
+        dest.write_u8((self.year - 1900) as u8)?;        
+        dest.write_u8(self.month as u8)?;
+        dest.write_u8(self.day as u8)?;
+        Ok(())
+    }
+
+    // Does some extremely basic checks
+    fn validate(&self) -> Result<(), Error> {
+        if self.month > 12 ||
+           self.day > 31 ||
+           self.year < 1900 ||
+           self.year > 2155 {
+               Err(Error::InvalidDate)
+           }
+        else {
+            Ok(())
+        }
+    }
+
+
+}
 
 
 impl FromStr for Date {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let year = s[0..4].parse::<i32>()?;
-        let month = s[4..6].parse::<i32>()?;
-        let day = s[6..8].parse::<i32>()?;
+        let year = s[0..4].parse::<u32>()?;
+        let month = s[4..6].parse::<u32>()?;
+        let day = s[6..8].parse::<u32>()?;
 
         Ok(Self {
             year,
             month,
             day,
         })
-    }
-}
-
-
-
-impl Date {
-    pub(crate) fn from_bytes(bytes: [u8; 3]) -> Self {
-        Self {
-            year: 1900i32 + bytes[0] as i32,
-            month: bytes[1] as i32,
-            day: bytes[2] as i32,
-        }
     }
 }
 
