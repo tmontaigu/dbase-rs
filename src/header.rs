@@ -33,16 +33,16 @@ impl TableFlags {
 }
 
 
-pub(crate) struct Header {
-    pub(crate) file_type: FileType,
-    pub(crate) last_update: Date,
-    pub(crate) num_records: u32,
-    pub(crate) offset_to_first_record: u16,
-    pub(crate) size_of_record: u16,
-    pub(crate) is_transaction_incomplete: bool,
-    pub(crate) encryption_flag: u8,
-    pub(crate) table_flags: TableFlags,
-    pub(crate) code_page_mark: u8,
+pub struct Header {
+    pub file_type: FileType,
+    pub last_update: Date,
+    pub num_records: u32,
+    pub offset_to_first_record: u16,
+    pub size_of_record: u16,
+    pub is_transaction_incomplete: bool,
+    pub encryption_flag: u8,
+    pub table_flags: TableFlags,
+    pub code_page_mark: u8,
 }
 
 
@@ -60,19 +60,19 @@ impl Header {
         let offset_to_first_record = source.read_u16::<LittleEndian>()?;
         let size_of_record = source.read_u16::<LittleEndian>()?;
 
-        let reserved = source.read_u16::<LittleEndian>()?;
+        let _reserved = source.read_u16::<LittleEndian>()?;
 
         let is_transaction_incomplete = (source.read_u8()? != 0) as bool;
         let encryption_flag = source.read_u8()?;
 
-        let mut reserved = [0u8; 12];
-        source.read_exact(&mut reserved)?;
+        let mut _reserved = [0u8; 12];
+        source.read_exact(&mut _reserved)?;
 
         let table_flags = TableFlags{0: source.read_u8()?};
 
         let code_page_mark = source.read_u8()?;
 
-        let reserved = source.read_u8()?;
+        let _reserved = source.read_u8()?;
         let terminator = source.read_u8()?;
 
         if terminator != 0x0D {
