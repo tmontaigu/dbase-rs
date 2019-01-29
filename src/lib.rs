@@ -38,6 +38,8 @@
 //! ```
 //!
 
+//https://dbfviewer.com/dbf-file-structure/
+
 extern crate byteorder;
 
 mod header;
