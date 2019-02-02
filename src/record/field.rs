@@ -74,7 +74,7 @@ impl Date {
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
         self.validate()?;
-        dest.write_u8((self.year - 1900) as u8)?;        
+        dest.write_u8((self.year - 1900) as u8)?;
         dest.write_u8(self.month as u8)?;
         dest.write_u8(self.day as u8)?;
         Ok(())

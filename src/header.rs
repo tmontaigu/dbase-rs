@@ -43,13 +43,13 @@ pub struct Header {
     pub is_transaction_incomplete: bool,
     pub encryption_flag: u8,
     pub table_flags: TableFlags,
-    pub code_page_mark: u8,
+    pub code_page_mark: u8, //FIXME is the "language driver id" instead ?
 }
 
 
 impl Header {
     pub(crate) const SIZE: usize = 32;
-    pub(crate) const TERMINATOR_VALUE: u8 = 0x2D;
+    pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = FileType{0: source.read_u8()?};
@@ -75,11 +75,7 @@ impl Header {
         let code_page_mark = source.read_u8()?;
 
         let _reserved = source.read_u8()?;
-        let terminator = source.read_u8()?;
-
-        if terminator != Self::TERMINATOR_VALUE {
-            println!("Strange header terminator value: {}", terminator);
-        }
+        let _reserved = source.read_u8()?;
 
         Ok(Self {
             file_type,
@@ -115,9 +111,55 @@ impl Header {
         dest.write_u8(self.code_page_mark)?;
         // Reserved
         dest.write_u8(0)?;
-        // Have to be 0
         dest.write_u8(0)?;
-        dest.write_u8(Self::TERMINATOR_VALUE)?;
         Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::fs::File;
+    use std::io::Cursor;
+    use std::io::{Seek, SeekFrom};
+
+    #[test]
+    fn pos_after_reading_header() {
+        let mut file = File::open("tests/data/line.dbf").unwrap();
+        let _hdr = Header::read_from(&mut file).unwrap();
+        let pos_after_reading = file.seek(SeekFrom::Current(0)).unwrap();
+        assert_eq!(pos_after_reading, Header::SIZE as u64);
+    }
+
+    #[test]
+    fn pos_after_writing_header() {
+        let mut file = File::open("tests/data/line.dbf").unwrap();
+        let hdr = Header::read_from(&mut file).unwrap();
+
+        let mut out = Cursor::new(Vec::<u8>::with_capacity(Header::SIZE));
+        hdr.write_to(&mut out).unwrap();
+        let pos_after_writing = out.seek(SeekFrom::Current(0)).unwrap();
+        assert_eq!(pos_after_writing, Header::SIZE as u64);
+    }
+
+
+    #[test]
+    fn read_write_header() {
+        let mut file = File::open("tests/data/line.dbf").unwrap();
+
+        let mut hdr_bytes = [0u8; Header::SIZE];
+        file.read_exact(&mut hdr_bytes).unwrap();
+        let hdr_bytes : Vec<u8> = hdr_bytes.to_vec();
+
+        let mut cursor = Cursor::new(hdr_bytes);
+        let hdr = Header::read_from(&mut cursor).unwrap();
+        let hdr_bytes = cursor.into_inner();
+
+        let mut cursor = Cursor::new(Vec::<u8>::with_capacity(Header::SIZE));
+        hdr.write_to(&mut cursor).unwrap();
+        let hdr_bytes_written = cursor.into_inner();
+
+        assert_eq!(hdr_bytes_written, hdr_bytes);
     }
 }
