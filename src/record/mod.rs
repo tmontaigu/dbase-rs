@@ -58,8 +58,8 @@ impl RecordFieldInfo {
         let flags = FieldFlags{0: source.read_u8()?};
 
         let mut autoincrement_next_val = [0u8; 5];
+
         source.read_exact(&mut autoincrement_next_val)?;
-        
         let autoincrement_step = source.read_u8()?;
 
         let mut _reserved = [0u8; 7];
@@ -73,7 +73,7 @@ impl RecordFieldInfo {
             field_type,
             record_length,
             num_decimal_places,
-            flags, 
+            flags,
             autoincrement_next_val,
             autoincrement_step,
         })

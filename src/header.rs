@@ -49,7 +49,6 @@ pub struct Header {
 
 impl Header {
     pub(crate) const SIZE: usize = 32;
-    pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = FileType{0: source.read_u8()?};
