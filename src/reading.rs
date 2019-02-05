@@ -53,7 +53,6 @@ impl<T: Read> Reader<T> {
         fields_info.push(RecordFieldInfo::new_deletion_flag());
         for _ in 0..num_fields {
             let info = RecordFieldInfo::read_from(&mut source)?;
-            //println!("{} -> {}, {:?}, length: {}", i, info.name, info.field_type, info.record_length);
             fields_info.push(info);
         }
 

@@ -8,24 +8,24 @@ use Error;
 
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum FieldType {
-    Character,
+    Character = 'C' as isize,
     Currency,
-    Numeric,
-    Float,
+    Numeric = 'N' as isize,
+    Float = 'F' as isize,
     Date,
     DateTime,
     Double,
     Integer,
     Logical,
-    Memo,
-    General,
-    BinaryCharacter,
-    BinaryMemo,
-    Picture,
-    Varbinary,
-    BinaryVarchar,
+    //Memo,
+    //General,
+    //BinaryCharacter,
+    //BinaryMemo,
+    //Picture,
+    //Varbinary,
+    //BinaryVarchar,
 }
 
 impl FieldType {
@@ -40,8 +40,8 @@ impl FieldType {
             'B' => Some(FieldType::Double),
             'I' => Some(FieldType::Integer),
             'L' => Some(FieldType::Logical),
-            'M' => Some(FieldType::Memo),
-            'G' => Some(FieldType::General),
+            //'M' => Some(FieldType::Memo),
+            //'G' => Some(FieldType::General),
             //'C' => Some(FieldType::BinaryCharacter), ??
             //'M' => Some(FieldType::BinaryMemo),
             _ => None,
@@ -56,11 +56,12 @@ impl FieldType {
     }
 }
 
+
 #[derive(Debug, PartialEq)]
 pub struct Date {
-    year: u32,
-    month: u32,
-    day: u32,
+    pub year: u32,
+    pub month: u32,
+    pub day: u32,
 }
 
 impl Date {
@@ -92,8 +93,6 @@ impl Date {
             Ok(())
         }
     }
-
-
 }
 
 
@@ -118,10 +117,10 @@ impl FromStr for Date {
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
     Character(String),
-    Numeric(f64),
     //Stored as String
-    Logical(bool),
+    Numeric(f64),
     // Stored as one char
+    Logical(bool),
     Integer(i32),
     Float(f32),
     Double(f64),
@@ -157,6 +156,48 @@ impl FieldValue {
             _ => panic!("unhandled type")
         };
         Ok(value)
+    }
+
+    pub fn field_type(&self) -> FieldType {
+        match self {
+            FieldValue::Character(_) => FieldType::Character,
+            FieldValue::Numeric(_) => FieldType::Numeric,
+            FieldValue::Logical(_) => FieldType::Logical,
+            FieldValue::Integer(_) => FieldType::Integer,
+            FieldValue::Float(_) => FieldType::Float,
+            FieldValue::Double(_) => FieldType::Double,
+            FieldValue::Date(_) => FieldType::Date,
+        }
+    }
+
+    pub(crate) fn size_in_bytes(&self)-> usize {
+        match self {
+            FieldValue::Character(s) => s.len(), // FIXME only valid is ascii
+            FieldValue::Numeric(n) => {
+                let s = n.to_string();
+                s.len()
+            }
+            _ => unimplemented!(),
+        }
+    }
+    pub(crate) fn to_bytes(&self, bytes: &mut [u8; std::u8::MAX as usize]) {
+    }
+
+    pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<usize, std::io::Error> {
+        match self {
+            FieldValue::Character(s) => {
+                let bytes = s.as_bytes();
+                dest.write_all(&bytes)?;
+                Ok(bytes.len())
+            },
+            FieldValue::Numeric(d) => {
+                let str_rep = d.to_string();
+                dest.write_all(&str_rep.as_bytes())?;
+                Ok(str_rep.as_bytes().len())
+            },
+            _ => unimplemented!(),
+
+        }
     }
 }
 
