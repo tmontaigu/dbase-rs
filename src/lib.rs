@@ -45,8 +45,10 @@ extern crate byteorder;
 mod header;
 mod record;
 mod reading;
+mod writing;
 
 pub use reading::{Reader, read, Record};
+pub use writing::{Writer};
 pub use record::field::FieldValue;
 
 /// Errors that may happen when reading a .dbf

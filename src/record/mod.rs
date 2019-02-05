@@ -1,15 +1,20 @@
-use std::io::{Read};
+use std::io::{Read, Write};
 
-use byteorder::{ReadBytesExt};
+use byteorder::{ReadBytesExt, WriteBytesExt};
 
 pub mod field;
 use record::field::{FieldType};
 use Error;
 
 
+#[derive(Copy, Clone)]
 pub struct FieldFlags(u8);
 
 impl FieldFlags {
+    pub fn new() -> Self {
+        Self{0: 0}
+    }
+
     pub fn system_column(&self) -> bool {
         (self.0 & 0x01) != 0
     }
@@ -33,6 +38,7 @@ pub struct RecordFieldInfo {
     pub name: String,
     /// The field type
     pub field_type: FieldType,
+    pub displacement_field: [u8; 4],
     pub record_length: u8,
     pub num_decimal_places: u8,
     pub flags: FieldFlags,
@@ -48,6 +54,7 @@ impl RecordFieldInfo {
         let mut name = [0u8; 11];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
+        println!("field type: {}", field_type);
 
         let mut displacement_field = [0u8; 4];
         source.read_exact(&mut displacement_field)?;
@@ -71,6 +78,7 @@ impl RecordFieldInfo {
         Ok(Self{
             name: s,
             field_type,
+            displacement_field,
             record_length,
             num_decimal_places,
             flags,
@@ -79,10 +87,35 @@ impl RecordFieldInfo {
         })
     }
 
+    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
+        let name_as_bytes = self.name.as_bytes();
+        //TODO error if name cannot be len > 10
+        let num_bytes = self.name.as_bytes().len();
+        dest.write_all(&self.name.as_bytes()[0..num_bytes])?;
+        let mut name_bytes = [0u8; 11];
+        name_bytes[10] = '\0' as u8;
+        dest.write_all(&name_bytes[0..11-num_bytes])?;
+
+        dest.write_u8(self.field_type as u8)?;
+
+        dest.write_all(&self.displacement_field)?;
+        dest.write_u8(self.record_length)?;
+        dest.write_u8(self.num_decimal_places)?;
+        dest.write_u8(self.flags.0)?;
+        dest.write_all(&self.autoincrement_next_val)?;
+        dest.write_u8(self.autoincrement_step)?;
+
+        let reserved = [0u8; 7];
+        dest.write_all(&reserved)?;
+
+        Ok(())
+    }
+
     pub fn new_deletion_flag() -> Self {
         Self{
             name: "DeletionFlag".to_owned(),
             field_type: FieldType::Character,
+            displacement_field: [0u8; 4],
             record_length: 1,
             num_decimal_places: 0,
             flags: FieldFlags{0: 0u8},
@@ -92,3 +125,34 @@ impl RecordFieldInfo {
         }
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use header::Header;
+
+    use std::io::{Seek, SeekFrom, Cursor};
+    use std::fs::File;
+
+    #[test]
+    fn test_record_info_read_writing() {
+        let mut file = File::open("tests/data/line.dbf").unwrap();
+        file.seek(SeekFrom::Start(Header::SIZE as u64)).unwrap();
+
+        let mut record_info_bytes = [0u8; RecordFieldInfo::SIZE];
+        file.read_exact(&mut record_info_bytes).unwrap();
+        let mut cursor = Cursor::new(record_info_bytes);
+
+        let records_info = RecordFieldInfo::read_from(&mut cursor).unwrap();
+
+
+        let mut out = Cursor::new(Vec::<u8>::with_capacity(RecordFieldInfo::SIZE));
+        records_info.write_to(&mut out).unwrap();
+
+        let bytes_written = out.into_inner();
+        assert_eq!(bytes_written.len(), record_info_bytes.len());
+        assert_eq!(bytes_written, record_info_bytes);
+    }
+}
+

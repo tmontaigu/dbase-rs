@@ -48,6 +48,20 @@ pub struct Header {
 
 
 impl Header {
+    pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
+        Self {
+            file_type: FileType{0: 0x03},
+            last_update: Date{year: 1990, month: 12, day: 25}, //FIXME use chrono crate
+            num_records: num_records,
+            offset_to_first_record: offset,
+            size_of_record: size_of_records,
+            is_transaction_incomplete: false,
+            encryption_flag: 0,
+            table_flags: TableFlags{0:0},
+            code_page_mark: 0,
+        }
+    }
+
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
@@ -162,3 +176,7 @@ mod test {
         assert_eq!(hdr_bytes_written, hdr_bytes);
     }
 }
+
+
+
+
