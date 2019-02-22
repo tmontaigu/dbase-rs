@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::str::FromStr;
+use std::fmt;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -201,6 +202,12 @@ impl FieldValue {
             _ => unimplemented!(),
 
         }
+    }
+}
+
+impl fmt::Display for FieldValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
