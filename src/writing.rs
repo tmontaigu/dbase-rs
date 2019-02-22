@@ -1,16 +1,12 @@
-use std::io::Write;
-
 
 use byteorder::{WriteBytesExt};
 
-use record::field::FieldValue;
 use record::{RecordFieldInfo, FieldFlags};
 use reading::TERMINATOR_VALUE;
 use header::Header;
 use {Error, Record};
+use std::io::Write;
 
-//type RecordTable = HashMap<String, Vec<FieldValue>>;
-//
 const FILE_TERMINATOR: u8 = 0x1A;
 
 pub struct Writer<T: Write> {
@@ -24,7 +20,7 @@ impl<T: Write> Writer<T> {
     }
 
     pub fn write(mut self, records: Vec<Record>) -> Result<(), Error> {
-        if (records.len() < 1) {
+        if records.len() < 1 {
             return Ok(());
         }
 
@@ -55,7 +51,8 @@ impl<T: Write> Writer<T> {
 
 
         let offset_to_first_record = Header::SIZE + (records.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
-        let hdr = Header::new(records.len() as u32, offset_to_first_record as u16, 0);
+        let size_of_record = records_info.iter().fold(0u16, |s, ref info| s + info.record_length as u16);
+        let hdr = Header::new(records.len() as u32, offset_to_first_record as u16, size_of_record);
 
         hdr.write_to(&mut self.dest)?;
         for record_info in &records_info {
@@ -64,7 +61,7 @@ impl<T: Write> Writer<T> {
 
         self.dest.write_u8(TERMINATOR_VALUE)?;
 
-        let mut value_buffer = [0u8; std::u8::MAX as usize];
+        let value_buffer = [0u8; std::u8::MAX as usize];
         for record in &records {
             self.dest.write_u8(' ' as u8)?; // DeletionFlag
             for (field_name, record_info) in fields_name.iter().zip(&records_info) {
@@ -81,8 +78,4 @@ impl<T: Write> Writer<T> {
        self.dest.write_u8(FILE_TERMINATOR)?;
        Ok(())
     }
-
-    //pub fn write(self, record_table: RecordTable) -> Result<(), Error> {
-    //    Ok(())
-    //}
 }

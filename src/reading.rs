@@ -157,7 +157,7 @@ mod test {
 
     #[test]
     fn pos_after_reading() {
-        let mut file = File::open("tests/data/line.dbf").unwrap();
+        let file = File::open("tests/data/line.dbf").unwrap();
         let mut reader = Reader::new(file).unwrap();
         let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
 

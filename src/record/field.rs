@@ -172,15 +172,18 @@ impl FieldValue {
 
     pub(crate) fn size_in_bytes(&self)-> usize {
         match self {
-            FieldValue::Character(s) => s.len(), // FIXME only valid is ascii
+            FieldValue::Character(s) => {
+                let str_bytes: &[u8] = s.as_ref();
+                str_bytes.len()
+            },
             FieldValue::Numeric(n) => {
                 let s = n.to_string();
                 s.len()
-            }
+            },
+            FieldValue::Logical(_) => 1,
+
             _ => unimplemented!(),
         }
-    }
-    pub(crate) fn to_bytes(&self, bytes: &mut [u8; std::u8::MAX as usize]) {
     }
 
     pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<usize, std::io::Error> {

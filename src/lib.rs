@@ -49,7 +49,8 @@ mod writing;
 
 pub use reading::{Reader, read, Record};
 pub use writing::{Writer};
-pub use record::field::FieldValue;
+pub use record::field::{FieldValue};
+pub use record::FieldFlags;
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]

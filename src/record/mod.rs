@@ -88,7 +88,6 @@ impl RecordFieldInfo {
     }
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
-        let name_as_bytes = self.name.as_bytes();
         //TODO error if name cannot be len > 10
         let num_bytes = self.name.as_bytes().len();
         dest.write_all(&self.name.as_bytes()[0..num_bytes])?;
@@ -125,6 +124,7 @@ impl RecordFieldInfo {
         }
     }
 }
+
 
 
 #[cfg(test)]
