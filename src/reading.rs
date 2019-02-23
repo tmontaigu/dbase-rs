@@ -47,7 +47,7 @@ impl<T: Read> Reader<T> {
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source)?;
-        let num_fields = (header.offset_to_first_record as usize - Header::SIZE) / RecordFieldInfo::SIZE;
+        let num_fields = (header.offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>()) / RecordFieldInfo::SIZE;
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());

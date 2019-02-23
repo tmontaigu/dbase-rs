@@ -170,7 +170,7 @@ impl FieldValue {
             }
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.record_length)?;
-                FieldValue::Character(value.trim().to_owned())
+                FieldValue::Character(value.trim().trim_matches(|c| c == '\u{0}').to_owned())
             }
             FieldType::Numeric => {
                 let value = read_string_of_len(&mut source, field_info.record_length)?;

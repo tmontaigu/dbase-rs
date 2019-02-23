@@ -54,7 +54,6 @@ impl RecordFieldInfo {
         let mut name = [0u8; 11];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
-        println!("field type: {}", field_type);
 
         let mut displacement_field = [0u8; 4];
         source.read_exact(&mut displacement_field)?;

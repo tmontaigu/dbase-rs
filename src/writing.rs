@@ -19,11 +19,10 @@ impl<T: Write> Writer<T> {
         Self { dest }
     }
 
-    pub fn write(mut self, records: Vec<Record>) -> Result<(), Error> {
+    pub fn write(mut self, records: Vec<Record>) -> Result<(T), Error> {
         if records.len() < 1 {
-            return Ok(());
+            return Ok(self.dest); // Or Err(NothingToWrite) ?
         }
-
         let fields_name: Vec<&String> = records[0].keys().collect();
 
         let mut records_info = Vec::<RecordFieldInfo>::with_capacity(fields_name.len());
@@ -42,6 +41,9 @@ impl<T: Write> Writer<T> {
             );
         }
 
+        println!("NUM Field: {}", records_info.len());
+
+
         for record in &records[1..records.len()] {
             for (field_name, record_info) in fields_name.iter().zip(&mut records_info) {
                 let field_value = record.get(*field_name).unwrap();
@@ -49,8 +51,7 @@ impl<T: Write> Writer<T> {
             }
         }
 
-
-        let offset_to_first_record = Header::SIZE + (records.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
+        let offset_to_first_record = Header::SIZE + (records_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
         let size_of_record = records_info.iter().fold(0u16, |s, ref info| s + info.record_length as u16);
         let hdr = Header::new(records.len() as u32, offset_to_first_record as u16, size_of_record);
 
@@ -61,7 +62,7 @@ impl<T: Write> Writer<T> {
 
         self.dest.write_u8(TERMINATOR_VALUE)?;
 
-        let value_buffer = [0u8; std::u8::MAX as usize];
+        let value_buffer = [' ' as u8; std::u8::MAX as usize];
         for record in &records {
             self.dest.write_u8(' ' as u8)?; // DeletionFlag
             for (field_name, record_info) in fields_name.iter().zip(&records_info) {
@@ -76,6 +77,6 @@ impl<T: Write> Writer<T> {
             }
         }
        self.dest.write_u8(FILE_TERMINATOR)?;
-       Ok(())
+       Ok(self.dest)
     }
 }

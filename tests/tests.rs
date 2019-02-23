@@ -3,6 +3,7 @@ const LINE_DBF: &str = "./tests/data/line.dbf";
 extern crate dbase;
 
 use std::collections::HashMap;
+use std::io::{Cursor, Seek, SeekFrom};
 
 
 #[test]
@@ -32,5 +33,35 @@ fn test_read_write_simple_file() {
     let records = dbase::read("lol.dbf").unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
+}
+
+#[test]
+fn from_scratch() {
+    let mut fst = dbase::Record::new();
+    fst.insert("Name".to_string(), dbase::FieldValue::Character("Fallujah".to_string()));
+
+    let mut scnd = dbase::Record::new();
+    scnd.insert("Name".to_string(), dbase::FieldValue::Character("Beyond Creation".to_string()));
+
+    let records = vec![fst, scnd];
+
+    let cursor = Cursor::new(Vec::<u8>::new());
+    let writer = dbase::Writer::new(cursor);
+    let mut cursor = writer.write(records).unwrap();
+    cursor.seek(SeekFrom::Start(0)).unwrap();
+
+    let reader = dbase::Reader::new(cursor).unwrap();
+    let read_records = reader.read().unwrap();
+
+    assert_eq!(read_records.len(), 2);
+
+    match read_records[0].get("Name").unwrap() {
+        dbase::FieldValue::Character(s) => assert_eq!(s, "Fallujah"),
+        _ => assert!(false)
+    }
+    match read_records[1].get("Name").unwrap() {
+        dbase::FieldValue::Character(s) => assert_eq!(s, "Beyond Creation"),
+        _ => assert!(false)
+    }
 }
 
