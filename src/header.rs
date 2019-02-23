@@ -1,19 +1,19 @@
-#[allow(dead_code)]
 use std::io::{Read, Write};
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use record::field::Date;
 use Error;
+use record::field::Date;
 
 pub struct FileType(u8);
 
 impl FileType {
-    pub fn version_numer(&self) -> u8 {
-        self.0 & 0b0000111
+    pub fn version_number(&self) -> u8 {
+        self.0 & 0b000_0111
     }
 
     pub fn has_dbase_sql_table(&self) -> bool {
-        (self.0 & 0b00110000) != 0
+        (self.0 & 0b0011_0000) != 0
     }
 }
 
@@ -25,7 +25,7 @@ impl TableFlags {
     }
 
     pub fn has_memo_field(&self) -> bool {
-        (self.0 & 0x02) == 1
+        (self.0 & 0x02) == 2
     }
 
     pub fn is_a_database(&self) -> bool {
@@ -50,14 +50,14 @@ pub struct Header {
 impl Header {
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
-            file_type: FileType{0: 0x03},
-            last_update: Date{year: 1990, month: 12, day: 25}, //FIXME use chrono crate
-            num_records: num_records,
+            file_type: FileType { 0: 0x03 },
+            last_update: Date { year: 1990, month: 12, day: 25 }, //FIXME use chrono crate
+            num_records,
             offset_to_first_record: offset,
             size_of_record: size_of_records,
             is_transaction_incomplete: false,
             encryption_flag: 0,
-            table_flags: TableFlags{0:0},
+            table_flags: TableFlags { 0: 0 },
             code_page_mark: 0,
         }
     }
@@ -65,7 +65,7 @@ impl Header {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
-        let file_type = FileType{0: source.read_u8()?};
+        let file_type = FileType { 0: source.read_u8()? };
 
         let mut date = [0u8; 3];
         source.read_exact(&mut date)?;
@@ -83,7 +83,7 @@ impl Header {
         let mut _reserved = [0u8; 12];
         source.read_exact(&mut _reserved)?;
 
-        let table_flags = TableFlags{0: source.read_u8()?};
+        let table_flags = TableFlags { 0: source.read_u8()? };
 
         let code_page_mark = source.read_u8()?;
 
@@ -117,8 +117,8 @@ impl Header {
         dest.write_u8(byte_value)?;
         dest.write_u8(self.encryption_flag)?;
 
-        let mut _reserved = [0u8; 12];
-        dest.write_all(&mut _reserved)?;
+        let _reserved = [0u8; 12];
+        dest.write_all(&_reserved)?;
 
         dest.write_u8(self.table_flags.0)?;
         dest.write_u8(self.code_page_mark)?;
@@ -132,10 +132,11 @@ impl Header {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::fs::File;
-    use std::io::Cursor;
     use std::io::{Seek, SeekFrom};
+    use std::io::Cursor;
+
+    use super::*;
 
     #[test]
     fn pos_after_reading_header() {
@@ -163,7 +164,7 @@ mod test {
 
         let mut hdr_bytes = [0u8; Header::SIZE];
         file.read_exact(&mut hdr_bytes).unwrap();
-        let hdr_bytes : Vec<u8> = hdr_bytes.to_vec();
+        let hdr_bytes: Vec<u8> = hdr_bytes.to_vec();
 
         let mut cursor = Cursor::new(hdr_bytes);
         let hdr = Header::read_from(&mut cursor).unwrap();

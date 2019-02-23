@@ -15,19 +15,19 @@ impl FieldFlags {
         Self{0: 0}
     }
 
-    pub fn system_column(&self) -> bool {
+    pub fn system_column(self) -> bool {
         (self.0 & 0x01) != 0
     }
 
-    pub fn can_store_null(&self) -> bool {
+    pub fn can_store_null(self) -> bool {
         (self.0 & 0x02) != 0
     }
 
-    pub fn is_binary(&self) -> bool {
+    pub fn is_binary(self) -> bool {
         (self.0 & 0x04) != 0
     }
 
-    pub fn is_auto_incrementing(&self) -> bool {
+    pub fn is_auto_incrementing(self) -> bool {
         (self.0 & 0x0C) != 0
     }
 }

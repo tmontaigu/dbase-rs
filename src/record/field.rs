@@ -245,11 +245,10 @@ impl FieldValue {
                 Ok(std::mem::size_of::<f64>())
             },
             FieldValue::Integer(i) => {
-                dest.write_i32::<LittleEndian>(*i);
+                dest.write_i32::<LittleEndian>(*i)?;
                 Ok(std::mem::size_of::<i32>())
             },
             _ => unimplemented!(),
-
         }
     }
 }
@@ -277,7 +276,7 @@ mod test {
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> RecordFieldInfo {
         RecordFieldInfo {
             name: "".to_owned(),
-            field_type: field_type,
+            field_type,
             displacement_field: [0u8; 4],
             record_length: len,
             num_decimal_places: 0,

@@ -20,7 +20,7 @@ impl<T: Write> Writer<T> {
     }
 
     pub fn write(mut self, records: Vec<Record>) -> Result<(T), Error> {
-        if records.len() < 1 {
+        if records.is_empty() {
             return Ok(self.dest); // Or Err(NothingToWrite) ?
         }
         let fields_name: Vec<&String> = records[0].keys().collect();
