@@ -45,9 +45,12 @@ extern crate byteorder;
 mod header;
 mod record;
 mod reading;
+mod writing;
 
 pub use reading::{Reader, read, Record};
-pub use record::field::FieldValue;
+pub use writing::{Writer};
+pub use record::field::{FieldValue};
+pub use record::FieldFlags;
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -60,6 +63,7 @@ pub enum Error {
     ParseIntError(std::num::ParseIntError),
     /// The Field as an invalid FieldType
     InvalidFieldType(char),
+    InvalidDate,
 }
 
 impl From<std::io::Error> for Error {

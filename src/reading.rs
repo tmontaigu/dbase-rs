@@ -12,6 +12,9 @@ use record::{RecordFieldInfo};
 use record::field::FieldValue;
 use Error;
 
+
+pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
+
 /// Type definition of a record.
 /// A .dbf file is composed of many records
 pub type Record = HashMap<String, FieldValue>;
@@ -44,18 +47,17 @@ impl<T: Read> Reader<T> {
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source)?;
-        let num_fields = (header.offset_to_first_record as usize - Header::SIZE) / RecordFieldInfo::SIZE;
+        let num_fields = (header.offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>()) / RecordFieldInfo::SIZE;
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
         for _ in 0..num_fields {
             let info = RecordFieldInfo::read_from(&mut source)?;
-            //println!("{} -> {}, {:?}, length: {}", i, info.name, info.field_type, info.record_length);
             fields_info.push(info);
         }
 
-        let terminator = source.read_u8()? as char;
-        if terminator != '\r' {
+        let terminator = source.read_u8()?;
+        if terminator != TERMINATOR_VALUE {
             panic!("unexpected terminator");
         }
 
@@ -145,4 +147,24 @@ impl<T: Read> Iterator for Reader<T> {
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
     let reader = Reader::from_path(path)?;
     reader.read()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::{Seek, SeekFrom};
+    use std::fs::File;
+
+    #[test]
+    fn pos_after_reading() {
+        let file = File::open("tests/data/line.dbf").unwrap();
+        let mut reader = Reader::new(file).unwrap();
+        let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
+
+        // Do not count the the "DeletionFlag record info that is added
+        let mut expted_pos = Header::SIZE + ((reader.fields_info.len() -1) * RecordFieldInfo::SIZE);
+        // Add the terminator
+        expted_pos += std::mem::size_of::<u8>();
+        assert_eq!(pos_after_reading, expted_pos as u64);
+    }
 }
