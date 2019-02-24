@@ -13,6 +13,7 @@ use record::field::FieldValue;
 use Error;
 
 
+/// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
 /// Type definition of a record.
@@ -22,6 +23,7 @@ pub type Record = HashMap<String, FieldValue>;
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 pub struct Reader<T: Read> {
+    /// Where the data is read from
     source: T,
     header: Header,
     fields_info: Vec<RecordFieldInfo>,
@@ -162,9 +164,9 @@ mod test {
         let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
 
         // Do not count the the "DeletionFlag record info that is added
-        let mut expted_pos = Header::SIZE + ((reader.fields_info.len() -1) * RecordFieldInfo::SIZE);
+        let mut expected_pos = Header::SIZE + ((reader.fields_info.len() - 1) * RecordFieldInfo::SIZE);
         // Add the terminator
-        expted_pos += std::mem::size_of::<u8>();
-        assert_eq!(pos_after_reading, expted_pos as u64);
+        expected_pos += std::mem::size_of::<u8>();
+        assert_eq!(pos_after_reading, expected_pos as u64);
     }
 }

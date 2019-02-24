@@ -1,4 +1,4 @@
-//! dbase is rust library ment to read (writing coming later) .dbf file.
+//! dbase is rust library meant to read and write
 //! 
 //! # Reading
 //!
@@ -42,21 +42,21 @@
 
 extern crate byteorder;
 
+pub use reading::{read, Reader, Record};
+pub use record::field::FieldValue;
+pub use record::FieldFlags;
+pub use writing::{write_to, write_to_path, Writer};
+
 mod header;
 mod record;
 mod reading;
 mod writing;
 
-pub use reading::{Reader, read, Record};
-pub use writing::{Writer};
-pub use record::field::{FieldValue};
-pub use record::FieldFlags;
-
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
 pub enum Error {
     /// Wrapper of `std::io::Error` to forward any reading/writing error
-    IoError (std::io::Error),
+    IoError(std::io::Error),
     /// Wrapper to forward errors whe trying to parse a float from the file
     ParseFloatError(std::num::ParseFloatError),
     /// Wrapper to forward errors whe trying to parse an integer value from the file

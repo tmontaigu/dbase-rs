@@ -28,7 +28,7 @@ fn test_read_write_simple_file() {
 
     let file = File::create("lol.dbf").unwrap();
     let writer = dbase::Writer::new(file);
-    writer.write(records).unwrap();
+    writer.write(&records).unwrap();
 
     let records = dbase::read("lol.dbf").unwrap();
     assert_eq!(records.len(), 1);
@@ -47,7 +47,7 @@ fn from_scratch() {
 
     let cursor = Cursor::new(Vec::<u8>::new());
     let writer = dbase::Writer::new(cursor);
-    let mut cursor = writer.write(records).unwrap();
+    let mut cursor = writer.write(&records).unwrap();
     cursor.seek(SeekFrom::Start(0)).unwrap();
 
     let reader = dbase::Reader::new(cursor).unwrap();
