@@ -169,17 +169,17 @@ impl FieldValue {
                 FieldValue::Integer(source.read_i32::<LittleEndian>()?)
             }
             FieldType::Character => {
-                let value = read_string_of_len(&mut source, field_info.record_length)?;
+                let value = read_string_of_len(&mut source, field_info.field_length)?;
                 FieldValue::Character(value.trim().trim_matches(|c| c == '\u{0}').to_owned())
             }
             FieldType::Numeric => {
-                let value = read_string_of_len(&mut source, field_info.record_length)?;
+                let value = read_string_of_len(&mut source, field_info.field_length)?;
                 FieldValue::Numeric(value.trim().parse::<f64>()?)
             }
             FieldType::Float => FieldValue::Float(source.read_f32::<LittleEndian>()?),
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
             FieldType::Date => {
-                let value = read_string_of_len(&mut source, field_info.record_length)?;
+                let value = read_string_of_len(&mut source, field_info.field_length)?;
                 FieldValue::Date(value.parse::<Date>()?)
             }
             _ => panic!("unhandled type")
@@ -278,7 +278,7 @@ mod test {
             name: "".to_owned(),
             field_type,
             displacement_field: [0u8; 4],
-            record_length: len,
+            field_length: len,
             num_decimal_places: 0,
             flags: FieldFlags{0: 0u8},
             autoincrement_next_val: [0u8; 5],

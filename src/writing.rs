@@ -1,11 +1,11 @@
-
-use byteorder::{WriteBytesExt};
-
-use record::{RecordFieldInfo, FieldFlags};
-use reading::TERMINATOR_VALUE;
-use header::Header;
-use {Error, Record};
 use std::io::Write;
+
+use byteorder::WriteBytesExt;
+
+use {Error, Record};
+use header::Header;
+use reading::TERMINATOR_VALUE;
+use record::RecordFieldInfo;
 
 const FILE_TERMINATOR: u8 = 0x1A;
 
@@ -21,42 +21,39 @@ impl<T: Write> Writer<T> {
 
     pub fn write(mut self, records: Vec<Record>) -> Result<(T), Error> {
         if records.is_empty() {
-            return Ok(self.dest); // Or Err(NothingToWrite) ?
+            return Ok(self.dest);
         }
         let fields_name: Vec<&String> = records[0].keys().collect();
 
-        let mut records_info = Vec::<RecordFieldInfo>::with_capacity(fields_name.len());
+        let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(fields_name.len());
         for (field_name, field_value) in &records[0] {
-            records_info.push(
-                RecordFieldInfo{
-                    name: field_name.to_owned(),
-                    field_type: field_value.field_type(),
-                    displacement_field: [0u8; 4],
-                    record_length: field_value.size_in_bytes() as u8, //FIXME chec fo overflow
-                    num_decimal_places: 0,
-                    flags: FieldFlags::new(),
-                    autoincrement_next_val: [0u8; 5],
-                    autoincrement_step: 0u8,
-                }
+            let field_length = field_value.size_in_bytes();
+            if field_length > std::u8::MAX as usize {
+                return Err(Error::FieldLengthTooLong);
+            }
+
+            fields_info.push(
+                RecordFieldInfo::new(field_name.to_owned(), field_value.field_type(), field_length as u8)
             );
         }
 
-        println!("NUM Field: {}", records_info.len());
-
-
         for record in &records[1..records.len()] {
-            for (field_name, record_info) in fields_name.iter().zip(&mut records_info) {
-                let field_value = record.get(*field_name).unwrap();
-                record_info.record_length = std::cmp::max(record_info.record_length, field_value.size_in_bytes() as u8);
+            for (field_name, record_info) in fields_name.iter().zip(&mut fields_info) {
+                let field_value = record.get(*field_name).unwrap(); // TODO: Should return an Err()
+                let field_length = field_value.size_in_bytes();
+                if field_length > std::u8::MAX as usize {
+                    return Err(Error::FieldLengthTooLong);
+                }
+                record_info.field_length = std::cmp::max(record_info.field_length, field_length as u8);
             }
         }
 
-        let offset_to_first_record = Header::SIZE + (records_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
-        let size_of_record = records_info.iter().fold(0u16, |s, ref info| s + info.record_length as u16);
+        let offset_to_first_record = Header::SIZE + (fields_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
+        let size_of_record = fields_info.iter().fold(0u16, |s, ref info| s + info.field_length as u16);
         let hdr = Header::new(records.len() as u32, offset_to_first_record as u16, size_of_record);
 
         hdr.write_to(&mut self.dest)?;
-        for record_info in &records_info {
+        for record_info in &fields_info {
             record_info.write_to(&mut self.dest)?;
         }
 
@@ -65,18 +62,18 @@ impl<T: Write> Writer<T> {
         let value_buffer = [' ' as u8; std::u8::MAX as usize];
         for record in &records {
             self.dest.write_u8(' ' as u8)?; // DeletionFlag
-            for (field_name, record_info) in fields_name.iter().zip(&records_info) {
+            for (field_name, record_info) in fields_name.iter().zip(&fields_info) {
                 let value = record.get(*field_name).unwrap();
                 let bytes_written = value.write_to(&mut self.dest)? as u8;
-                if bytes_written > record_info.record_length {
+                if bytes_written > record_info.field_length {
                     panic!("record length was miscalculated");
                 }
 
-                let bytes_to_pad = record_info.record_length - bytes_written;
+                let bytes_to_pad = record_info.field_length - bytes_written;
                 self.dest.write_all(&value_buffer[0..bytes_to_pad as usize])?;
             }
         }
-       self.dest.write_u8(FILE_TERMINATOR)?;
-       Ok(self.dest)
+        self.dest.write_u8(FILE_TERMINATOR)?;
+        Ok(self.dest)
     }
 }

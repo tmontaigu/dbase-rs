@@ -39,7 +39,7 @@ pub struct RecordFieldInfo {
     /// The field type
     pub field_type: FieldType,
     pub displacement_field: [u8; 4],
-    pub record_length: u8,
+    pub field_length: u8,
     pub num_decimal_places: u8,
     pub flags: FieldFlags,
     pub autoincrement_next_val: [u8; 5],
@@ -49,6 +49,19 @@ pub struct RecordFieldInfo {
 
 impl RecordFieldInfo {
     pub(crate) const SIZE: usize = 32;
+
+    pub(crate) fn new(name: String, field_type: FieldType, length: u8) -> Self {
+        Self {
+            name,
+            field_type,
+            displacement_field: [0u8; 4],
+            field_length: length,
+            num_decimal_places: 0,
+            flags: FieldFlags::new(),
+            autoincrement_next_val: [0u8; 5],
+            autoincrement_step: 0u8,
+        }
+    }
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
         let mut name = [0u8; 11];
@@ -78,7 +91,7 @@ impl RecordFieldInfo {
             name: s,
             field_type,
             displacement_field,
-            record_length,
+            field_length: record_length,
             num_decimal_places,
             flags,
             autoincrement_next_val,
@@ -97,7 +110,7 @@ impl RecordFieldInfo {
         dest.write_u8(self.field_type as u8)?;
 
         dest.write_all(&self.displacement_field)?;
-        dest.write_u8(self.record_length)?;
+        dest.write_u8(self.field_length)?;
         dest.write_u8(self.num_decimal_places)?;
         dest.write_u8(self.flags.0)?;
         dest.write_all(&self.autoincrement_next_val)?;
@@ -114,7 +127,7 @@ impl RecordFieldInfo {
             name: "DeletionFlag".to_owned(),
             field_type: FieldType::Character,
             displacement_field: [0u8; 4],
-            record_length: 1,
+            field_length: 1,
             num_decimal_places: 0,
             flags: FieldFlags{0: 0u8},
             autoincrement_next_val: [0u8; 5],
