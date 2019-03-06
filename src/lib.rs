@@ -65,6 +65,7 @@ pub enum Error {
     InvalidFieldType(char),
     InvalidDate,
     FieldLengthTooLong,
+    FieldNameTooLong,
 }
 
 impl From<std::io::Error> for Error {

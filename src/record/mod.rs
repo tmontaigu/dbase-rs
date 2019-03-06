@@ -100,8 +100,10 @@ impl RecordFieldInfo {
     }
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
-        //TODO error if name cannot be len > 10
         let num_bytes = self.name.as_bytes().len();
+        if num_bytes > 10 {
+            return Err(Error::FieldLengthTooLong);
+        }
         dest.write_all(&self.name.as_bytes()[0..num_bytes])?;
         let mut name_bytes = [0u8; 11];
         name_bytes[10] = '\0' as u8;
