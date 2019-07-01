@@ -6,19 +6,6 @@ use std::collections::HashMap;
 use std::io::{Cursor, Seek, SeekFrom};
 
 #[test]
-fn test_complex_file() {
-    let filename = "support/data/World_EEZ_v10_20180221/eez_boundaries_v10.dbf";
-
-    let reader = dbase::Reader::from_path(filename).unwrap();
-    for record_result in reader {
-        let record = record_result.unwrap();
-        for (name, value) in record {
-            println!("name: {}, value: {:?}", name, value);
-        }
-    }
-}
-
-#[test]
 fn test_simple_file() {
     let records = dbase::read(LINE_DBF).unwrap();
     assert_eq!(records.len(), 1);
