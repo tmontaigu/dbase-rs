@@ -1,17 +1,17 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
-use std::io::{Read, BufReader};
-use std::fs::File;
-use std::path::Path;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 
-use byteorder::{ReadBytesExt};
+use byteorder::ReadBytesExt;
 
 use header::Header;
-use record::{RecordFieldInfo};
-use record::field::FieldValue;
-use Error;
 
+use record::field::FieldValue;
+use record::RecordFieldInfo;
+use Error;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -49,7 +49,9 @@ impl<T: Read> Reader<T> {
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source)?;
-        let num_fields = (header.offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>()) / RecordFieldInfo::SIZE;
+        let num_fields =
+            (header.offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>())
+                / RecordFieldInfo::SIZE;
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
@@ -154,9 +156,9 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::{Seek, SeekFrom};
-    use std::fs::File;
 
+    use std::fs::File;
+    use std::io::{Seek, SeekFrom};
     #[test]
     fn pos_after_reading() {
         let file = File::open("tests/data/line.dbf").unwrap();
@@ -164,7 +166,8 @@ mod test {
         let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
 
         // Do not count the the "DeletionFlag record info that is added
-        let mut expected_pos = Header::SIZE + ((reader.fields_info.len() - 1) * RecordFieldInfo::SIZE);
+        let mut expected_pos =
+            Header::SIZE + ((reader.fields_info.len() - 1) * RecordFieldInfo::SIZE);
         // Add the terminator
         expected_pos += std::mem::size_of::<u8>();
         assert_eq!(pos_after_reading, expected_pos as u64);

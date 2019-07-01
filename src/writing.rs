@@ -5,11 +5,11 @@ use std::path::Path;
 
 use byteorder::WriteBytesExt;
 
-use {Error, Record};
+
 use header::Header;
 use reading::TERMINATOR_VALUE;
 use record::RecordFieldInfo;
-
+use {Error, Record};
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
@@ -63,9 +63,11 @@ impl<T: Write> Writer<T> {
                 return Err(Error::FieldLengthTooLong);
             }
 
-            fields_info.push(
-                RecordFieldInfo::new(field_name.to_owned(), field_value.field_type(), field_length as u8)
-            );
+            fields_info.push(RecordFieldInfo::new(
+                field_name.to_owned(),
+                field_value.field_type(),
+                field_length as u8,
+            ));
         }
 
         // TODO check that for the same field, the field type is the same
@@ -76,13 +78,21 @@ impl<T: Write> Writer<T> {
                 if field_length > std::u8::MAX as usize {
                     return Err(Error::FieldLengthTooLong);
                 }
-                record_info.field_length = std::cmp::max(record_info.field_length, field_length as u8);
+                record_info.field_length =
+                    std::cmp::max(record_info.field_length, field_length as u8);
             }
         }
 
-        let offset_to_first_record = Header::SIZE + (fields_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
-        let size_of_record = fields_info.iter().fold(0u16, |s, ref info| s + info.field_length as u16);
-        let hdr = Header::new(records.len() as u32, offset_to_first_record as u16, size_of_record);
+        let offset_to_first_record =
+            Header::SIZE + (fields_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>();
+        let size_of_record = fields_info
+            .iter()
+            .fold(0u16, |s, ref info| s + info.field_length as u16);
+        let hdr = Header::new(
+            records.len() as u32,
+            offset_to_first_record as u16,
+            size_of_record,
+        );
 
         hdr.write_to(&mut self.dest)?;
         for record_info in &fields_info {
@@ -102,7 +112,8 @@ impl<T: Write> Writer<T> {
                 }
 
                 let bytes_to_pad = record_info.field_length - bytes_written;
-                self.dest.write_all(&value_buffer[0..bytes_to_pad as usize])?;
+                self.dest
+                    .write_all(&value_buffer[0..bytes_to_pad as usize])?;
             }
         }
         self.dest.write_u8(FILE_TERMINATOR)?;
