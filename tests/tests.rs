@@ -5,13 +5,15 @@ extern crate dbase;
 use std::collections::HashMap;
 use std::io::{Cursor, Seek, SeekFrom};
 
-
 #[test]
 fn test_simple_file() {
     let records = dbase::read(LINE_DBF).unwrap();
     assert_eq!(records.len(), 1);
     let mut expected_fields = HashMap::new();
-    expected_fields.insert("name".to_owned(), dbase::FieldValue::Character("linestring1".to_owned()));
+    expected_fields.insert(
+        "name".to_owned(),
+        dbase::FieldValue::Character("linestring1".to_owned()),
+    );
 
     assert_eq!(records[0], expected_fields);
 }
@@ -19,7 +21,10 @@ fn test_simple_file() {
 #[test]
 fn test_read_write_simple_file() {
     let mut expected_fields = HashMap::new();
-    expected_fields.insert("name".to_owned(), dbase::FieldValue::Character("linestring1".to_owned()));
+    expected_fields.insert(
+        "name".to_owned(),
+        dbase::FieldValue::Character("linestring1".to_owned()),
+    );
 
     use std::fs::File;
     let records = dbase::read(LINE_DBF).unwrap();
@@ -38,10 +43,16 @@ fn test_read_write_simple_file() {
 #[test]
 fn from_scratch() {
     let mut fst = dbase::Record::new();
-    fst.insert("Name".to_string(), dbase::FieldValue::Character("Fallujah".to_string()));
+    fst.insert(
+        "Name".to_string(),
+        dbase::FieldValue::Character("Fallujah".to_string()),
+    );
 
     let mut scnd = dbase::Record::new();
-    scnd.insert("Name".to_string(), dbase::FieldValue::Character("Beyond Creation".to_string()));
+    scnd.insert(
+        "Name".to_string(),
+        dbase::FieldValue::Character("Beyond Creation".to_string()),
+    );
 
     let records = vec![fst, scnd];
 
@@ -57,11 +68,11 @@ fn from_scratch() {
 
     match read_records[0].get("Name").unwrap() {
         dbase::FieldValue::Character(s) => assert_eq!(s, "Fallujah"),
-        _ => assert!(false)
+        _ => assert!(false),
     }
     match read_records[1].get("Name").unwrap() {
         dbase::FieldValue::Character(s) => assert_eq!(s, "Beyond Creation"),
-        _ => assert!(false)
+        _ => assert!(false),
     }
 }
 

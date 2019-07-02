@@ -1,5 +1,5 @@
 //! dbase is rust library meant to read and write
-//! 
+//!
 //! # Reading
 //!
 //! To Read the whole file at once you should use the [read](fn.read.html) function.
@@ -48,8 +48,8 @@ pub use record::FieldFlags;
 pub use writing::{write_to, write_to_path, Writer};
 
 mod header;
-mod record;
 mod reading;
+mod record;
 mod writing;
 
 /// Errors that may happen when reading a .dbf

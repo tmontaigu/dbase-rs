@@ -3,3 +3,6 @@
 Cargo.lock
 
 \.idea/
+support/
+*.dbf
+.DS_Store

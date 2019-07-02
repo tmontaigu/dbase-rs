@@ -1,6 +1,8 @@
-use std::io::{Read, Write};
-use std::str::FromStr;
+
 use std::fmt;
+use std::io::{Read, Write};
+
+use std::str::FromStr;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -52,7 +54,7 @@ impl FieldType {
     pub fn try_from(c: char) -> Result<FieldType, Error> {
         match Self::from(c) {
             Some(t) => Ok(t),
-            None => Err(Error::InvalidFieldType(c))
+            None => Err(Error::InvalidFieldType(c)),
         }
     }
 }
@@ -84,13 +86,9 @@ impl Date {
 
     // Does some extremely basic checks
     fn validate(&self) -> Result<(), Error> {
-        if self.month > 12 ||
-           self.day > 31 ||
-           self.year < 1900 ||
-           self.year > 2155 {
-               Err(Error::InvalidDate)
-       }
-        else {
+        if self.month > 12 || self.day > 31 || self.year < 1900 || self.year > 2155 {
+            Err(Error::InvalidDate)
+        } else {
             Ok(())
         }
     }
@@ -105,11 +103,7 @@ impl FromStr for Date {
         let month = s[4..6].parse::<u32>()?;
         let day = s[6..8].parse::<u32>()?;
 
-        Ok(Self {
-            year,
-            month,
-            day,
-        })
+        Ok(Self { year, month, day })
     }
 }
 
@@ -123,7 +117,7 @@ impl std::string::ToString for Date {
         if self.year < 100 {
             s.push('0');
             s.push('0');
-        } else if self.year < 1000{
+        } else if self.year < 1000 {
             s.push('0');
         }
         s.push_str(&year_str);
@@ -157,17 +151,16 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T: Read>(mut source: &mut T, field_info: &RecordFieldInfo) -> Result<Self, Error> {
+    pub(crate) fn read_from<T: Read>(
+        mut source: &mut T,
+        field_info: &RecordFieldInfo,
+    ) -> Result<Self, Error> {
         let value = match field_info.field_type {
-            FieldType::Logical => {
-                match source.read_u8()? as char {
-                    '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(true),
-                    _ => FieldValue::Logical(false),
-                }
-            }
-            FieldType::Integer => {
-                FieldValue::Integer(source.read_i32::<LittleEndian>()?)
-            }
+            FieldType::Logical => match source.read_u8()? as char {
+                '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(true),
+                _ => FieldValue::Logical(false),
+            },
+            FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 FieldValue::Character(value.trim().trim_matches(|c| c == '\u{0}').to_owned())
@@ -180,9 +173,18 @@ impl FieldValue {
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
             FieldType::Date => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                FieldValue::Date(value.parse::<Date>()?)
+
+                match value == "        " {
+                    true => FieldValue::Date(Date {
+                        year: 0,
+                        month: 0,
+                        day: 0,
+                    }),
+                    false => FieldValue::Date(value.parse::<Date>()?),
+                }
+
             }
-            _ => panic!("unhandled type")
+            _ => panic!("unhandled type"),
         };
         Ok(value)
     }
@@ -199,16 +201,16 @@ impl FieldValue {
         }
     }
 
-    pub(crate) fn size_in_bytes(&self)-> usize {
+    pub(crate) fn size_in_bytes(&self) -> usize {
         match self {
             FieldValue::Character(s) => {
                 let str_bytes: &[u8] = s.as_ref();
                 str_bytes.len()
-            },
+            }
             FieldValue::Numeric(n) => {
                 let s = n.to_string();
                 s.len()
-            },
+            }
             FieldValue::Logical(_) => 1,
             FieldValue::Date(_) => 8,
             _ => unimplemented!(),
@@ -221,11 +223,12 @@ impl FieldValue {
                 let bytes = s.as_bytes();
                 dest.write_all(&bytes)?;
                 Ok(bytes.len())
-            },
+            }
             FieldValue::Numeric(d) => {
                 let str_rep = d.to_string();
                 dest.write_all(&str_rep.as_bytes())?;
-                Ok(str_rep.as_bytes().len()) },
+                Ok(str_rep.as_bytes().len())
+            }
             FieldValue::Logical(b) => {
                 if *b {
                     dest.write_u8('t' as u8)?;
@@ -233,21 +236,21 @@ impl FieldValue {
                     dest.write_u8('f' as u8)?;
                 }
                 Ok(1)
-            },
+            }
             FieldValue::Date(d) => {
                 let date_str = d.to_string();
                 let date_str_bytes: &[u8] = date_str.as_ref();
                 dest.write_all(&date_str_bytes)?;
                 Ok(date_str_bytes.len())
-            },
+            }
             FieldValue::Double(d) => {
                 dest.write_f64::<LittleEndian>(*d)?;
                 Ok(std::mem::size_of::<f64>())
-            },
+            }
             FieldValue::Integer(i) => {
                 dest.write_i32::<LittleEndian>(*i)?;
                 Ok(std::mem::size_of::<i32>())
-            },
+            }
             _ => unimplemented!(),
         }
     }
@@ -270,9 +273,9 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::{Cursor, Seek, SeekFrom};
-    use record::FieldFlags;
 
+    use record::FieldFlags;
+    use std::io::{Cursor, Seek, SeekFrom};
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> RecordFieldInfo {
         RecordFieldInfo {
             name: "".to_owned(),
@@ -280,7 +283,7 @@ mod test {
             displacement_field: [0u8; 4],
             field_length: len,
             num_decimal_places: 0,
-            flags: FieldFlags{0: 0u8},
+            flags: FieldFlags { 0: 0u8 },
             autoincrement_next_val: [0u8; 5],
             autoincrement_step: 0u8,
         }
@@ -288,7 +291,11 @@ mod test {
 
     #[test]
     fn write_read_date() {
-        let date = FieldValue::Date(Date{year: 2019, month: 01, day: 01});
+        let date = FieldValue::Date(Date {
+            year: 2019,
+            month: 01,
+            day: 01,
+        });
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = date.write_to(&mut out).unwrap();
@@ -303,8 +310,8 @@ mod test {
                 assert_eq!(read_date.year, 2019);
                 assert_eq!(read_date.month, 1);
                 assert_eq!(read_date.day, 1);
-            },
-            _ => assert!(false, "Did not read a date ??")
+            }
+            _ => assert!(false, "Did not read a date ??"),
         }
     }
 
@@ -318,17 +325,18 @@ mod test {
         assert_eq!(num_bytes_written, field.size_in_bytes());
 
         out.seek(SeekFrom::Start(0)).unwrap();
-        let record_info = create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
+        let record_info =
+            create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
 
 
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Character(s) => {
                 assert_eq!(s, "Only ASCII");
-            },
-            _ => assert!(false, "Did not read a Character field ??")
+            }
+            _ => assert!(false, "Did not read a Character field ??"),
         }
     }
-    
+
 
     #[test]
     fn write_read_utf8_char() {
@@ -339,14 +347,15 @@ mod test {
         assert_eq!(num_bytes_written, field.size_in_bytes());
 
         out.seek(SeekFrom::Start(0)).unwrap();
-        let record_info = create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
+        let record_info =
+            create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
 
 
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Character(s) => {
                 assert_eq!(s, "🤔");
-            },
-            _ => assert!(false, "Did not read a Character field ??")
+            }
+            _ => assert!(false, "Did not read a Character field ??"),
         }
     }
 }
