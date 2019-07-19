@@ -44,7 +44,7 @@ impl<T: Write> Writer<T> {
     /// use std::io::Cursor;
     ///
     /// let mut fst = dbase::Record::new();
-    /// fst.insert("Name".to_string(), dbase::FieldValue::Character("Fallujah".to_string()));
+    /// fst.insert("Name".to_string(), dbase::FieldValue::from("Fallujah"));
     /// let records = vec![fst];
     ///
     /// let writer = dbase::Writer::new(Cursor::new(Vec::<u8>::new()));
@@ -140,8 +140,8 @@ impl Writer<BufWriter<File>> {
 /// use std::io::Cursor;
 ///
 /// let mut fst = dbase::Record::new();
-/// fst.insert("Name".to_string(), dbase::FieldValue::Character("The Flesh PrevailsFallujah".to_string()));
-/// fst.insert("Price".to_string(), dbase::FieldValue::Numeric(9.99));
+/// fst.insert("Name".to_string(), dbase::FieldValue::from("The Flesh Prevails"));
+/// fst.insert("Price".to_string(), dbase::FieldValue::Numeric(Some(9.99)));
 /// let records = vec![fst];
 ///
 /// let cursor = Cursor::new(Vec::<u8>::new());
@@ -158,8 +158,8 @@ pub fn write_to<T: Write>(records: &Vec<Record>, dest: T) -> Result<T, Error> {
 ///
 /// ```
 /// let mut fst = dbase::Record::new();
-/// fst.insert("Name".to_string(), dbase::FieldValue::Character("The Flesh PrevailsFallujah".to_string()));
-/// fst.insert("Price".to_string(), dbase::FieldValue::Numeric(9.99));
+/// fst.insert("Name".to_string(), dbase::FieldValue::from("The Flesh Prevails"));
+/// fst.insert("Price".to_string(), dbase::FieldValue::Numeric(Some(9.99)));
 /// let records = vec![fst];
 ///
 /// dbase::write_to_path(&records, "albums.dbf").unwrap();
