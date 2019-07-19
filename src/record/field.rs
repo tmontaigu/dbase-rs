@@ -8,6 +8,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::RecordFieldInfo;
 use Error;
+use std::convert::TryFrom;
 
 
 #[allow(dead_code)]
@@ -58,8 +59,12 @@ impl FieldType {
             _ => None,
         }
     }
+}
 
-    pub fn try_from(c: char) -> Result<FieldType, Error> {
+impl TryFrom<char> for FieldType {
+    type Error = Error;
+
+    fn try_from(c: char) -> Result<Self, Self::Error> {
         match Self::from(c) {
             Some(t) => Ok(t),
             None => Err(Error::InvalidFieldType(c)),

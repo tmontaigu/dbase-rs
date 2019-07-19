@@ -5,6 +5,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 pub mod field;
 use record::field::FieldType;
 use Error;
+use std::convert::TryFrom;
 
 
 #[derive(Copy, Clone)]
