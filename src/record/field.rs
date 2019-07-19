@@ -367,13 +367,30 @@ mod test {
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
 
-
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Date(Some(read_date)) => {
                 assert_eq!(read_date.year, 2019);
                 assert_eq!(read_date.month, 1);
                 assert_eq!(read_date.day, 1);
             }
+            _ => assert!(false, "Did not read a date ??"),
+        }
+    }
+
+    #[test]
+    fn test_write_read_empty_date() {
+        let date = FieldValue::Date(None);
+
+        let mut out = Cursor::new(Vec::<u8>::new());
+        let num_bytes_written = date.write_to(&mut out).unwrap();
+        assert_eq!(num_bytes_written, date.size_in_bytes());
+
+        out.seek(SeekFrom::Start(0)).unwrap();
+        let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
+
+
+        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+            FieldValue::Date(maybe_date) => assert!(maybe_date.is_none()),
             _ => assert!(false, "Did not read a date ??"),
         }
     }
