@@ -194,7 +194,15 @@ impl FieldValue {
                     FieldValue::Numeric(Some(trimmed_value.parse::<f64>()?))
                 }
             }
-            FieldType::Float => FieldValue::Float(Some(source.read_f32::<LittleEndian>()?)),
+            FieldType::Float => {
+                let value = read_string_of_len(&mut source, field_info.field_length)?;
+                let trimmed_value = value.trim();
+                if trimmed_value.is_empty() {
+                    FieldValue::Float(None)
+                } else {
+                    FieldValue::Float(Some(trimmed_value.parse::<f32>()?))
+                }
+            },
             FieldType::Date => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 if value.chars().all(|c| c == ' ') {
@@ -241,6 +249,15 @@ impl FieldValue {
                     }
                     None => 0
                 }
+            },
+            FieldValue::Float(value) => {
+                match value {
+                    Some(f) => {
+                        let s = f.to_string();
+                        s.len()
+                    }
+                    None => 0
+                }
             }
             FieldValue::Logical(_) => 1,
             FieldValue::Date(_) => 8,
@@ -264,6 +281,18 @@ impl FieldValue {
                 match value {
                     Some(n) => {
                         let str_rep = n.to_string();
+                        dest.write_all(&str_rep.as_bytes())?;
+                        Ok(str_rep.as_bytes().len())
+                    }
+                    None => {
+                        Ok(0)
+                    }
+                }
+            },
+            FieldValue::Float(value) => {
+                match value {
+                    Some(f) => {
+                        let str_rep = f.to_string();
                         dest.write_all(&str_rep.as_bytes())?;
                         Ok(str_rep.as_bytes().len())
                     }
@@ -441,6 +470,27 @@ mod test {
                 assert_eq!(s, Some(String::from("🤔")));
             }
             _ => assert!(false, "Did not read a Character field ??"),
+        }
+    }
+
+    #[test]
+    fn write_read_float() {
+        let field = FieldValue::Float(Some(12.43));
+
+        let mut out = Cursor::new(Vec::<u8>::new());
+        let num_bytes_written = field.write_to(&mut out).unwrap();
+        assert_eq!(num_bytes_written, field.size_in_bytes());
+
+        out.seek(SeekFrom::Start(0)).unwrap();
+        let record_info =
+            create_temp_record_field_info(FieldType::Float, num_bytes_written as u8);
+
+
+        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+            FieldValue::Float(s) => {
+                assert_eq!(s, Some(12.43));
+            }
+            _ => assert!(false, "Did not read a Float field ??"),
         }
     }
 }
