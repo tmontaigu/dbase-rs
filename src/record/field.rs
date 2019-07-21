@@ -169,7 +169,10 @@ impl FieldValue {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 FieldValue::Numeric(value.trim().parse::<f64>()?)
             }
-            FieldType::Float => FieldValue::Float(source.read_f32::<LittleEndian>()?),
+            FieldType::Float => {
+                let value = read_string_of_len(&mut source, field_info.field_length)?;
+                FieldValue::Float(value.trim().parse::<f32>()?)
+            },
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
             FieldType::Date => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
@@ -210,6 +213,10 @@ impl FieldValue {
             FieldValue::Numeric(n) => {
                 let s = n.to_string();
                 s.len()
+            },
+            FieldValue::Float(f) => {
+                let s = f.to_string();
+                s.len()
             }
             FieldValue::Logical(_) => 1,
             FieldValue::Date(_) => 8,
@@ -242,6 +249,11 @@ impl FieldValue {
                 let date_str_bytes: &[u8] = date_str.as_ref();
                 dest.write_all(&date_str_bytes)?;
                 Ok(date_str_bytes.len())
+            }
+            FieldValue::Float(d) => {
+                let str_rep = d.to_string();
+                dest.write_all(&str_rep.as_bytes())?;
+                Ok(str_rep.as_bytes().len())
             }
             FieldValue::Double(d) => {
                 dest.write_f64::<LittleEndian>(*d)?;
@@ -356,6 +368,27 @@ mod test {
                 assert_eq!(s, "🤔");
             }
             _ => assert!(false, "Did not read a Character field ??"),
+        }
+    }
+
+    #[test]
+    fn write_read_float() {
+        let field = FieldValue::Float(12.43);
+
+        let mut out = Cursor::new(Vec::<u8>::new());
+        let num_bytes_written = field.write_to(&mut out).unwrap();
+        assert_eq!(num_bytes_written, field.size_in_bytes());
+
+        out.seek(SeekFrom::Start(0)).unwrap();
+        let record_info =
+            create_temp_record_field_info(FieldType::Float, num_bytes_written as u8);
+
+
+        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+            FieldValue::Float(s) => {
+                assert_eq!(s, 12.43);
+            }
+            _ => assert!(false, "Did not read a Float field ??"),
         }
     }
 }
