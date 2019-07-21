@@ -1,9 +1,28 @@
 const LINE_DBF: &str = "./tests/data/line.dbf";
+const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 
 extern crate dbase;
 
 use std::collections::HashMap;
 use std::io::{Cursor, Seek, SeekFrom};
+
+#[test]
+fn test_none_float() {
+    let records = dbase::read(NONE_FLOAT_DBF).unwrap();
+    assert_eq!(records.len(), 1);
+
+    let mut expected_fields = HashMap::new();
+    expected_fields.insert(
+        "name".to_owned(),
+        dbase::FieldValue::Character(Some("tralala".to_owned())),
+    );
+    expected_fields.insert(
+        "money".to_owned(),
+        dbase::FieldValue::Float(None),
+    );
+
+    assert_eq!(records[0], expected_fields);
+}
 
 #[test]
 fn test_simple_file() {
