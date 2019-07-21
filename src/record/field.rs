@@ -8,20 +8,24 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::RecordFieldInfo;
 use Error;
+use std::convert::TryFrom;
 
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub enum FieldType {
+    // dBASE III
     Character = 'C' as isize,
-    Currency,
-    Numeric = 'N' as isize,
-    Float = 'F' as isize,
     Date,
-    DateTime,
-    Double,
-    Integer,
+    Float = 'F' as isize,
+    Numeric = 'N' as isize,
     Logical,
+    // Visual FoxPro
+    Currency,
+    DateTime,
+    Integer,
+    // Unknown
+    Double,
     //Memo,
     //General,
     //BinaryCharacter,
@@ -34,15 +38,20 @@ pub enum FieldType {
 impl FieldType {
     pub fn from(c: char) -> Option<FieldType> {
         match c {
+            // dBASE III field types
+            // All stored as strings
             'C' => Some(FieldType::Character),
-            'Y' => Some(FieldType::Currency),
-            'N' => Some(FieldType::Numeric),
-            'F' => Some(FieldType::Float),
             'D' => Some(FieldType::Date),
-            'T' => Some(FieldType::DateTime),
-            'B' => Some(FieldType::Double),
-            'I' => Some(FieldType::Integer),
+            'F' => Some(FieldType::Float),
+            'N' => Some(FieldType::Numeric),
             'L' => Some(FieldType::Logical),
+            // Visual FoxPro field types
+            // stored in binary formats
+            'Y' => Some(FieldType::Currency),
+            'T' => Some(FieldType::DateTime),
+            'I' => Some(FieldType::Integer),
+            // unknown version
+            'B' => Some(FieldType::Double),
             //'M' => Some(FieldType::Memo),
             //'G' => Some(FieldType::General),
             //'C' => Some(FieldType::BinaryCharacter), ??
@@ -50,8 +59,12 @@ impl FieldType {
             _ => None,
         }
     }
+}
 
-    pub fn try_from(c: char) -> Result<FieldType, Error> {
+impl TryFrom<char> for FieldType {
+    type Error = Error;
+
+    fn try_from(c: char) -> Result<Self, Self::Error> {
         match Self::from(c) {
             Some(t) => Ok(t),
             None => Err(Error::InvalidFieldType(c)),
@@ -139,15 +152,17 @@ impl std::string::ToString for Date {
 /// Enum where each variant stores the record value
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
-    Character(String),
-    //Stored as String
-    Numeric(f64),
-    // Stored as one char
-    Logical(bool),
+    // dBase III fields
+    // Stored as strings, fully padded (ie only space char) strings
+    // are interpreted as None
+    Character(Option<String>),
+    Numeric(Option<f64>),
+    Logical(Option<bool>),
+    Date(Option<Date>),
+    Float(Option<f32>),
+    //Visual FoxPro fields
     Integer(i32),
-    Float(f32),
     Double(f64),
-    Date(Date),
 }
 
 impl FieldValue {
@@ -157,36 +172,47 @@ impl FieldValue {
     ) -> Result<Self, Error> {
         let value = match field_info.field_type {
             FieldType::Logical => match source.read_u8()? as char {
-                '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(true),
-                _ => FieldValue::Logical(false),
+                ' ' => FieldValue::Logical(None),
+                '1' | '0' | 'T' | 't' | 'Y' | 'y'| 'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(true)),
+                _ => FieldValue::Logical(Some(false)),
             },
-            FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                FieldValue::Character(value.trim().trim_matches(|c| c == '\u{0}').to_owned())
+                let trimmed_value = value.trim();
+                if trimmed_value.is_empty() {
+                    FieldValue::Character(None)
+                } else {
+                    FieldValue::Character(Some(trimmed_value.to_owned()))
+                }
             }
             FieldType::Numeric => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                FieldValue::Numeric(value.trim().parse::<f64>()?)
+                let trimmed_value = value.trim();
+                if trimmed_value.is_empty() {
+                    FieldValue::Numeric(None)
+                } else {
+                    FieldValue::Numeric(Some(trimmed_value.parse::<f64>()?))
+                }
             }
             FieldType::Float => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                FieldValue::Float(value.trim().parse::<f32>()?)
+                let trimmed_value = value.trim();
+                if trimmed_value.is_empty() {
+                    FieldValue::Float(None)
+                } else {
+                    FieldValue::Float(Some(trimmed_value.parse::<f32>()?))
+                }
             },
-            FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
             FieldType::Date => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-
-                match value == "        " {
-                    true => FieldValue::Date(Date {
-                        year: 0,
-                        month: 0,
-                        day: 0,
-                    }),
-                    false => FieldValue::Date(value.parse::<Date>()?),
+                if value.chars().all(|c| c == ' ') {
+                    FieldValue::Date(None)
+                } else {
+                    FieldValue::Date(Some(value.parse::<Date>()?))
                 }
-
             }
+            FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
+            FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
             _ => panic!("unhandled type"),
         };
         Ok(value)
@@ -206,17 +232,32 @@ impl FieldValue {
 
     pub(crate) fn size_in_bytes(&self) -> usize {
         match self {
-            FieldValue::Character(s) => {
-                let str_bytes: &[u8] = s.as_ref();
-                str_bytes.len()
+            FieldValue::Character(value) => {
+                match value {
+                    Some(s) => {
+                        let str_bytes: &[u8] = s.as_ref();
+                        str_bytes.len()
+                    }
+                    None => 0
+                }
             }
-            FieldValue::Numeric(n) => {
-                let s = n.to_string();
-                s.len()
+            FieldValue::Numeric(value) => {
+                match value {
+                    Some(n) => {
+                        let s = n.to_string();
+                        s.len()
+                    }
+                    None => 0
+                }
             },
-            FieldValue::Float(f) => {
-                let s = f.to_string();
-                s.len()
+            FieldValue::Float(value) => {
+                match value {
+                    Some(f) => {
+                        let s = f.to_string();
+                        s.len()
+                    }
+                    None => 0
+                }
             }
             FieldValue::Logical(_) => 1,
             FieldValue::Date(_) => 8,
@@ -226,34 +267,65 @@ impl FieldValue {
 
     pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<usize, Error> {
         match self {
-            FieldValue::Character(s) => {
-                let bytes = s.as_bytes();
-                dest.write_all(&bytes)?;
-                Ok(bytes.len())
+            FieldValue::Character(value) => {
+                match value {
+                    Some(s) => {
+                        let bytes = s.as_bytes();
+                        dest.write_all(&bytes)?;
+                        Ok(bytes.len())
+                    }
+                    None => Ok(0)
+                }
             }
-            FieldValue::Numeric(d) => {
-                let str_rep = d.to_string();
-                dest.write_all(&str_rep.as_bytes())?;
-                Ok(str_rep.as_bytes().len())
+            FieldValue::Numeric(value) => {
+                match value {
+                    Some(n) => {
+                        let str_rep = n.to_string();
+                        dest.write_all(&str_rep.as_bytes())?;
+                        Ok(str_rep.as_bytes().len())
+                    }
+                    None => {
+                        Ok(0)
+                    }
+                }
+            },
+            FieldValue::Float(value) => {
+                match value {
+                    Some(f) => {
+                        let str_rep = f.to_string();
+                        dest.write_all(&str_rep.as_bytes())?;
+                        Ok(str_rep.as_bytes().len())
+                    }
+                    None => {
+                        Ok(0)
+                    }
+                }
             }
-            FieldValue::Logical(b) => {
-                if *b {
-                    dest.write_u8('t' as u8)?;
+            FieldValue::Logical(value) => {
+                if let Some(b) = value {
+                    if *b {
+                        dest.write_u8('t' as u8)?;
+                    } else {
+                        dest.write_u8('f' as u8)?;
+                    }
                 } else {
-                    dest.write_u8('f' as u8)?;
+                    dest.write_u8('?' as u8)?;
                 }
                 Ok(1)
             }
-            FieldValue::Date(d) => {
-                let date_str = d.to_string();
-                let date_str_bytes: &[u8] = date_str.as_ref();
-                dest.write_all(&date_str_bytes)?;
-                Ok(date_str_bytes.len())
-            }
-            FieldValue::Float(d) => {
-                let str_rep = d.to_string();
-                dest.write_all(&str_rep.as_bytes())?;
-                Ok(str_rep.as_bytes().len())
+            FieldValue::Date(value) => {
+                match value {
+                    Some(d) => {
+                        let date_str = d.to_string();
+                        let date_str_bytes: &[u8] = date_str.as_ref();
+                        dest.write_all(&date_str_bytes)?;
+                        Ok(date_str_bytes.len())
+                    }
+                    None => {
+                        dest.write_all(&[' ' as u8; 8])?;
+                        Ok(8)
+                    }
+                }
             }
             FieldValue::Double(d) => {
                 dest.write_f64::<LittleEndian>(*d)?;
@@ -271,6 +343,19 @@ impl FieldValue {
 impl fmt::Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+
+impl From<&str> for FieldValue {
+    fn from(s: &str) -> Self {
+        FieldValue::Character(Some(String::from(s)))
+    }
+}
+
+impl From<Date> for FieldValue {
+    fn from(d: Date) -> Self {
+        FieldValue::Date(Some(d))
     }
 }
 
@@ -303,7 +388,7 @@ mod test {
 
     #[test]
     fn write_read_date() {
-        let date = FieldValue::Date(Date {
+        let date = FieldValue::from(Date {
             year: 2019,
             month: 01,
             day: 01,
@@ -316,9 +401,8 @@ mod test {
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
 
-
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
-            FieldValue::Date(read_date) => {
+            FieldValue::Date(Some(read_date)) => {
                 assert_eq!(read_date.year, 2019);
                 assert_eq!(read_date.month, 1);
                 assert_eq!(read_date.day, 1);
@@ -327,10 +411,28 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_write_read_empty_date() {
+        let date = FieldValue::Date(None);
+
+        let mut out = Cursor::new(Vec::<u8>::new());
+        let num_bytes_written = date.write_to(&mut out).unwrap();
+        assert_eq!(num_bytes_written, date.size_in_bytes());
+
+        out.seek(SeekFrom::Start(0)).unwrap();
+        let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
+
+
+        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+            FieldValue::Date(maybe_date) => assert!(maybe_date.is_none()),
+            _ => assert!(false, "Did not read a date ??"),
+        }
+    }
+
 
     #[test]
     fn write_read_ascii_char() {
-        let field = FieldValue::Character(String::from("Only ASCII"));
+        let field = FieldValue::Character(Some(String::from("Only ASCII")));
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
@@ -343,7 +445,7 @@ mod test {
 
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Character(s) => {
-                assert_eq!(s, "Only ASCII");
+                assert_eq!(s, Some(String::from("Only ASCII")));
             }
             _ => assert!(false, "Did not read a Character field ??"),
         }
@@ -352,7 +454,7 @@ mod test {
 
     #[test]
     fn write_read_utf8_char() {
-        let field = FieldValue::Character(String::from("🤔"));
+        let field = FieldValue::Character(Some(String::from("🤔")));
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
@@ -365,7 +467,7 @@ mod test {
 
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Character(s) => {
-                assert_eq!(s, "🤔");
+                assert_eq!(s, Some(String::from("🤔")));
             }
             _ => assert!(false, "Did not read a Character field ??"),
         }
@@ -373,7 +475,7 @@ mod test {
 
     #[test]
     fn write_read_float() {
-        let field = FieldValue::Float(12.43);
+        let field = FieldValue::Float(Some(12.43));
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
@@ -386,7 +488,7 @@ mod test {
 
         match FieldValue::read_from(&mut out, &record_info).unwrap() {
             FieldValue::Float(s) => {
-                assert_eq!(s, 12.43);
+                assert_eq!(s, Some(12.43));
             }
             _ => assert!(false, "Did not read a Float field ??"),
         }

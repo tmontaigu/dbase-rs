@@ -16,8 +16,8 @@
 //!     for (name, value) in record {
 //!         println!("{} -> {:?}", name, value);
 //!         match value {
-//!             FieldValue::Character(string) => println!("Got string: {}", string),
-//!             FieldValue::Numeric(value) => println!("Got numeric value of  {}", value),
+//!             FieldValue::Character(Some(string)) => println!("Got string: {}", string),
+//!             FieldValue::Numeric(value) => println!("Got numeric value of  {:?}", value),
 //!             _ => {}
 //!         }
 //!     }

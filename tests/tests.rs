@@ -12,7 +12,7 @@ fn test_simple_file() {
     let mut expected_fields = HashMap::new();
     expected_fields.insert(
         "name".to_owned(),
-        dbase::FieldValue::Character("linestring1".to_owned()),
+        dbase::FieldValue::Character(Some("linestring1".to_owned())),
     );
 
     assert_eq!(records[0], expected_fields);
@@ -23,7 +23,7 @@ fn test_read_write_simple_file() {
     let mut expected_fields = HashMap::new();
     expected_fields.insert(
         "name".to_owned(),
-        dbase::FieldValue::Character("linestring1".to_owned()),
+        dbase::FieldValue::Character(Some("linestring1".to_owned())),
     );
 
     use std::fs::File;
@@ -45,13 +45,13 @@ fn from_scratch() {
     let mut fst = dbase::Record::new();
     fst.insert(
         "Name".to_string(),
-        dbase::FieldValue::Character("Fallujah".to_string()),
+        dbase::FieldValue::from("Fallujah"),
     );
 
     let mut scnd = dbase::Record::new();
     scnd.insert(
         "Name".to_string(),
-        dbase::FieldValue::Character("Beyond Creation".to_string()),
+        dbase::FieldValue::from("Beyond Creation"),
     );
 
     let records = vec![fst, scnd];
@@ -67,11 +67,11 @@ fn from_scratch() {
     assert_eq!(read_records.len(), 2);
 
     match read_records[0].get("Name").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, "Fallujah"),
+        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Fallujah"))),
         _ => assert!(false),
     }
     match read_records[1].get("Name").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, "Beyond Creation"),
+        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Beyond Creation"))),
         _ => assert!(false),
     }
 }
