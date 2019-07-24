@@ -17,8 +17,20 @@ fn test_none_float() {
         dbase::FieldValue::Character(Some("tralala".to_owned())),
     );
     expected_fields.insert(
-        "money".to_owned(),
+        "value_f".to_owned(),
+        dbase::FieldValue::Float(Some(12.345)),
+    );
+    expected_fields.insert(
+        "value_f_non".to_owned(),
         dbase::FieldValue::Float(None),
+    );
+    expected_fields.insert(
+        "value_n".to_owned(),
+        dbase::FieldValue::Numeric(Some(4.0)),
+    );
+    expected_fields.insert(
+        "value_n_non".to_owned(),
+        dbase::FieldValue::Numeric(None),
     );
 
     assert_eq!(records[0], expected_fields);
