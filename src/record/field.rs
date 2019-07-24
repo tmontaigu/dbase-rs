@@ -188,7 +188,7 @@ impl FieldValue {
             FieldType::Numeric => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 let trimmed_value = value.trim();
-                if trimmed_value.is_empty() {
+                if trimmed_value.is_empty() || value.chars().all(|c| c == '*') {
                     FieldValue::Numeric(None)
                 } else {
                     FieldValue::Numeric(Some(trimmed_value.parse::<f64>()?))
@@ -197,7 +197,7 @@ impl FieldValue {
             FieldType::Float => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 let trimmed_value = value.trim();
-                if trimmed_value.is_empty() {
+                if trimmed_value.is_empty() || value.chars().all(|c| c == '*') {
                     FieldValue::Float(None)
                 } else {
                     FieldValue::Float(Some(trimmed_value.parse::<f32>()?))
