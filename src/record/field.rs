@@ -335,7 +335,6 @@ impl FieldValue {
                 dest.write_i32::<LittleEndian>(*i)?;
                 Ok(std::mem::size_of::<i32>())
             }
-            _ => unimplemented!(),
         }
     }
 }
