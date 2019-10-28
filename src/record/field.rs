@@ -1,6 +1,7 @@
 
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
+
 
 use std::str::FromStr;
 
@@ -9,6 +10,72 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use record::RecordFieldInfo;
 use Error;
 use std::convert::TryFrom;
+
+#[derive(Debug)]
+pub(crate) struct MemoHeader {
+    next_available_block_index: u32,
+    block_size: u16,
+}
+
+impl MemoHeader {
+    pub(crate) fn read_from<R: Read>(src: &mut R) -> std::io::Result<Self> {
+        let next_available_block_index = src.read_u32::<LittleEndian>()?;
+        let block_size = match src.read_u16::<LittleEndian>()? {
+            0 => 512,
+            v => v
+        };
+
+
+        Ok(Self {
+            next_available_block_index,
+            block_size
+        })
+    }
+}
+
+pub(crate) struct MemoReader<T: Read + Seek> {
+    header: MemoHeader,
+    source: T,
+    internal_buffer: Vec<u8>
+}
+
+impl<T: Read + Seek> MemoReader<T> {
+    pub(crate) fn read_from(mut src: T) -> std::io::Result<Self> {
+        let header = MemoHeader::read_from(&mut src)?;
+        let internal_buffer = vec![0u8; header.block_size as usize];
+        Ok(Self {
+            header,
+            source: src,
+            internal_buffer,
+        })
+    }
+
+    fn read_data_at(&mut self, index: u32) -> std::io::Result<&[u8]> {
+        let byte_offset = index * u32::from(self.header.block_size);
+        self.source.seek(SeekFrom::Start(u64::from(byte_offset)))?;
+        // TODO if the memo is fox base we can read the type & length
+        //let _type = self.source.read_u32::<LittleEndian>()?;
+        //println!("type: {}", _type);
+        //let length = self.source.read_u32::<LittleEndian>()?;
+        //println!("index: {}, offset: {}data len: {}",index, byte_offset, length);
+
+        // It seems like the last block of the memo can sometime be shorter than
+        // the expected block size
+        if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
+            if index != self.header.next_available_block_index - 1  &&
+               e.kind() != std::io::ErrorKind::UnexpectedEof {
+                return Err(e);
+            }
+        }
+        match self.internal_buffer.iter().position(|byte| *byte == 0x1A) {
+            Some(pos) => {
+                Ok(&self.internal_buffer[..pos])
+            }
+            ,
+            None => Ok(&self.internal_buffer)
+        }
+    }
+}
 
 
 #[allow(dead_code)]
@@ -26,7 +93,7 @@ pub enum FieldType {
     Integer,
     // Unknown
     Double,
-    //Memo,
+    Memo,
     //General,
     //BinaryCharacter,
     //BinaryMemo,
@@ -52,7 +119,7 @@ impl FieldType {
             'I' => Some(FieldType::Integer),
             // unknown version
             'B' => Some(FieldType::Double),
-            //'M' => Some(FieldType::Memo),
+            'M' => Some(FieldType::Memo),
             //'G' => Some(FieldType::General),
             //'C' => Some(FieldType::BinaryCharacter), ??
             //'M' => Some(FieldType::BinaryMemo),
@@ -163,11 +230,13 @@ pub enum FieldValue {
     //Visual FoxPro fields
     Integer(i32),
     Double(f64),
+    Memo(String),
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T: Read>(
+    pub(crate) fn read_from<T: Read + Seek>(
         mut source: &mut T,
+        memo_reader: &mut Option<MemoReader<T>>,
         field_info: &RecordFieldInfo,
     ) -> Result<Self, Error> {
         let value = match field_info.field_type {
@@ -213,6 +282,20 @@ impl FieldValue {
             }
             FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
+            FieldType::Memo => {
+                let index_in_memo = 
+                if field_info.field_length > 4 {
+                    let string = read_string_of_len(&mut source, field_info.field_length)?;
+                    string.trim().parse::<u32>()?
+                } else {
+                    source.read_u32::<LittleEndian>()?
+                };
+                let data_from_memo = memo_reader
+                    .as_mut()
+                    .expect("A memo memo_reader was expected")
+                    .read_data_at(index_in_memo)?;
+                FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
+            }
             _ => panic!("unhandled type"),
         };
         Ok(value)
@@ -227,6 +310,7 @@ impl FieldValue {
             FieldValue::Float(_) => FieldType::Float,
             FieldValue::Double(_) => FieldType::Double,
             FieldValue::Date(_) => FieldType::Date,
+            FieldValue::Memo(_) => FieldType::Memo,
         }
     }
 
@@ -334,6 +418,9 @@ impl FieldValue {
             FieldValue::Integer(i) => {
                 dest.write_i32::<LittleEndian>(*i)?;
                 Ok(std::mem::size_of::<i32>())
+            }
+            FieldValue::Memo(_text) => {
+                unimplemented!();
             }
         }
     }

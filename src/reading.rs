@@ -2,14 +2,14 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 
 use byteorder::ReadBytesExt;
 
 use header::Header;
 
-use record::field::FieldValue;
+use record::field::{FieldValue, MemoReader};
 use record::RecordFieldInfo;
 use Error;
 
@@ -22,15 +22,16 @@ pub type Record = HashMap<String, FieldValue>;
 
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
-pub struct Reader<T: Read> {
+pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
     source: T,
+    memo_reader: Option<MemoReader<T>>,
     header: Header,
     fields_info: Vec<RecordFieldInfo>,
     current_record: u32,
 }
 
-impl<T: Read> Reader<T> {
+impl<T: Read + Seek> Reader<T> {
     /// Creates a new reader from the source.
     ///
     /// Reads the header and fields information as soon as its created.
@@ -67,6 +68,7 @@ impl<T: Read> Reader<T> {
 
         Ok(Self {
             source,
+            memo_reader: None,
             header,
             fields_info,
             current_record: 0,
@@ -110,13 +112,23 @@ impl Reader<BufReader<File>> {
     ///
     ///
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let p = path.as_ref().to_owned();
         let bufreader = BufReader::new(File::open(path)?);
-        Reader::new(bufreader)
+        let mut reader = Reader::new(bufreader)?;
+        if reader.header.file_type.has_memo() {
+            // TODO its .dbt for dase & .fbt for fox pro
+            let memo_path = p.with_extension("dbt");
+            // TODO if this fails, the returned error is not enough explicit about the fact that 
+            // the needed memo file could not be found
+            let memo_reader = MemoReader::read_from(BufReader::new(File::open(memo_path)?))?;
+            reader.memo_reader = Some(memo_reader);
+        }
+        Ok(reader)
     }
 }
 
 
-impl<T: Read> Iterator for Reader<T> {
+impl<T: Read + Seek> Iterator for Reader<T> {
     type Item = Result<Record, Error>;
 
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
@@ -125,7 +137,7 @@ impl<T: Read> Iterator for Reader<T> {
         } else {
             let mut record = Record::with_capacity(self.fields_info.len() as usize);
             for field_info in &self.fields_info {
-                let value = match FieldValue::read_from(&mut self.source, field_info) {
+                let value = match FieldValue::read_from(&mut self.source, &mut self.memo_reader, field_info) {
                     Err(e) => return Some(Err(e)),
                     Ok(value) => value,
                 };

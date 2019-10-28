@@ -2,20 +2,51 @@ use std::io::{Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-
 use record::field::Date;
 use Error;
-pub struct FileType(u8);
 
-impl FileType {
-    pub fn version_number(&self) -> u8 {
-        self.0 & 0b000_0111
-    }
+#[derive(Debug, Copy, Clone)]
+pub enum Version {
+    FoxBase,
+    DBase3{has_memo: bool},
+    Unknown,
+}
 
-    pub fn has_dbase_sql_table(&self) -> bool {
-        (self.0 & 0b0011_0000) != 0
+impl Version {
+    pub(crate) fn has_memo(&self) -> bool {
+        match self {
+             Version::FoxBase => false,
+             Version::DBase3{has_memo} => *has_memo,
+             _ => panic!("unknown version")
+        }
     }
 }
+
+impl From<Version> for u8 {
+    fn from(v: Version) -> u8 {
+        match v {
+             Version::FoxBase => 0x02,
+             Version::DBase3{has_memo: false} => 0x03,
+             Version::DBase3{has_memo: true} => 0x83,
+             _ => panic!("unknown version")
+        }
+    }
+}
+
+impl From<u8> for Version {
+    fn from(b: u8) -> Self {
+        match b {
+            0x02 => Version::FoxBase,
+            0x03 => Version::DBase3{has_memo: false},
+            0x83 => Version::DBase3{has_memo: true},
+            _ => {
+                println!("Unknown version byte: {}", b);
+                Version::Unknown
+            }
+        }
+    }
+}
+
 
 pub struct TableFlags(u8);
 
@@ -35,7 +66,7 @@ impl TableFlags {
 
 
 pub struct Header {
-    pub file_type: FileType,
+    pub file_type: Version,
     pub last_update: Date,
     pub num_records: u32,
     pub offset_to_first_record: u16,
@@ -50,7 +81,7 @@ pub struct Header {
 impl Header {
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
-            file_type: FileType { 0: 0x03 },
+            file_type: Version::DBase3{has_memo: false},
             last_update: Date {
                 year: 1990,
                 month: 12,
@@ -69,9 +100,7 @@ impl Header {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
-        let file_type = FileType {
-            0: source.read_u8()?,
-        };
+        let file_type = Version::from(source.read_u8()?);
 
         let mut date = [0u8; 3];
         source.read_exact(&mut date)?;
@@ -112,7 +141,7 @@ impl Header {
     }
 
     pub(crate) fn write_to<T: Write>(&self, mut dest: &mut T) -> Result<(), Error> {
-        dest.write_u8(self.file_type.0)?;
+        dest.write_u8(u8::from(self.file_type))?;
         self.last_update.write_to(&mut dest)?;
         dest.write_u32::<LittleEndian>(self.num_records)?;
         dest.write_u16::<LittleEndian>(self.offset_to_first_record)?;
