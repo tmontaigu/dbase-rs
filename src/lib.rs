@@ -66,6 +66,10 @@ pub enum Error {
     InvalidDate,
     FieldLengthTooLong,
     FieldNameTooLong,
+    /// Happens when at least one field is a Memo type
+    /// and the that additional memo file could not be found / was not given
+    MissingMemoFile,
+    ErrorOpeningMemoFile(std::io::Error)
 }
 
 impl From<std::io::Error> for Error {

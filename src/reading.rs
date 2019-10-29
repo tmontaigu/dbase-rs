@@ -7,11 +7,10 @@ use std::path::Path;
 
 use byteorder::ReadBytesExt;
 
-use header::Header;
-
-use record::field::{FieldValue, MemoFileType, MemoReader};
-use record::RecordFieldInfo;
 use Error;
+use header::Header;
+use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
+use record::RecordFieldInfo;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -61,10 +60,8 @@ impl<T: Read + Seek> Reader<T> {
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
-        for i in 0..num_fields {
-            println!("{} / {}", i, num_fields);
+        for _ in 0..num_fields {
             let info = RecordFieldInfo::read_from(&mut source)?;
-            println!("{:?}", info);
             fields_info.push(info);
         }
 
@@ -127,16 +124,26 @@ impl Reader<BufReader<File>> {
         let p = path.as_ref().to_owned();
         let bufreader = BufReader::new(File::open(path)?);
         let mut reader = Reader::new(bufreader)?;
-        //TODO should probably have only 1 fn that returns an Option<MemoFileType>
-        if reader.header.file_type.has_memo() {
-            let memo_type = reader.header.file_type.memo_type();
-            let memo_path = match memo_type {
-                MemoFileType::DbaseMemo => p.with_extension("dbt"),
+        let at_least_one_field_is_memo = reader
+            .fields_info
+            .iter()
+            .any(|f_info| f_info.field_type == FieldType::Memo);
+
+        let memo_type = reader.header.file_type.supported_memo_type();
+        if at_least_one_field_is_memo && memo_type.is_some() {
+            let memo_path = match memo_type.unwrap() {
+                MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
                 MemoFileType::FoxBaseMemo => p.with_extension("fpt")
             };
-            // TODO if this fails, the returned error is not enough explicit about the fact that 
-            // the needed memo file could not be found
-            let memo_reader = MemoReader::new(memo_type, BufReader::new(File::open(memo_path)?))?;
+
+            let memo_file = match File::open(memo_path) {
+                Ok(file) => file,
+                Err(err) => {
+                    return Err(Error::ErrorOpeningMemoFile(err));
+                }
+            };
+
+            let memo_reader = MemoReader::new(memo_type.unwrap(), BufReader::new(memo_file))?;
             reader.memo_reader = Some(memo_reader);
         }
         Ok(reader)
@@ -183,10 +190,11 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     use std::fs::File;
     use std::io::{Seek, SeekFrom};
+
+    use super::*;
+
     #[test]
     fn pos_after_reading() {
         let file = File::open("tests/data/line.dbf").unwrap();

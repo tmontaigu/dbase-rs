@@ -2,41 +2,39 @@ use std::io::{Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
+use Error;
 use record::field::Date;
 use record::field::MemoFileType;
-use Error;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Version {
     FoxBase,
-    DBase3{has_memo: bool},
+    DBase3 { supports_memo: bool },
     VisualFoxPro,
-    Unknown,
+    DBase4 {supports_memo: bool},
+    FoxPro2{ supports_memo: bool },
+    Unknown(u8),
 }
 
 impl Version {
-    pub(crate) fn has_memo(&self) -> bool {
+    pub(crate) fn supported_memo_type(&self) -> Option<MemoFileType> {
         match self {
-             Version::FoxBase => false,
-             Version::DBase3{has_memo} => *has_memo,
-             Version::VisualFoxPro => true,
-             _ => panic!("unknown version")
-        }
-    }
-
-    pub(crate) fn memo_type(&self) -> MemoFileType {
-        match self {
-             Version::FoxBase => MemoFileType::FoxBaseMemo,
-             Version::DBase3{has_memo: _} => MemoFileType::DbaseMemo,
-             Version::VisualFoxPro => MemoFileType::FoxBaseMemo,
-             _ => panic!("unknown version")
+            Version::FoxBase => Some(MemoFileType::FoxBaseMemo),
+            Version::DBase3 { supports_memo: true } => Some(MemoFileType::DbaseMemo),
+            Version::DBase3 { supports_memo: false } => None,
+            Version::VisualFoxPro => Some(MemoFileType::FoxBaseMemo),
+            Version::DBase4{supports_memo: true} => Some(MemoFileType::DbaseMemo4),
+            Version::DBase4{supports_memo: false} => None,
+            Version::FoxPro2 { supports_memo: false } => None,
+            Version::FoxPro2 { supports_memo: true } => Some(MemoFileType::FoxBaseMemo),
+            _ => None
         }
     }
 
     pub(crate) fn is_visual_fox_pro(&self) -> bool {
         match self {
-             Version::VisualFoxPro => true,
-             _ => false
+            Version::VisualFoxPro => true,
+            _ => false
         }
     }
 }
@@ -44,10 +42,15 @@ impl Version {
 impl From<Version> for u8 {
     fn from(v: Version) -> u8 {
         match v {
-             Version::FoxBase => 0x02,
-             Version::DBase3{has_memo: false} => 0x03,
-             Version::DBase3{has_memo: true} => 0x83,
-             _ => panic!("unknown version")
+            Version::FoxBase => 0x02,
+            Version::DBase3 { supports_memo: false } => 0x03,
+            Version::DBase3 { supports_memo: true } => 0x83,
+            Version::VisualFoxPro => 0x30 ,
+            Version::DBase4 {supports_memo: true} => 0x8b,
+            Version::DBase4 {supports_memo: false} => 0x43,
+            Version::FoxPro2 { supports_memo: false } => 0xfb,
+            Version::FoxPro2 { supports_memo: true } => 0xf5,
+            Version::Unknown(v) => v
         }
     }
 }
@@ -56,13 +59,17 @@ impl From<u8> for Version {
     fn from(b: u8) -> Self {
         match b {
             0x02 => Version::FoxBase,
-            0x03 => Version::DBase3{has_memo: false},
-            0x83 => Version::DBase3{has_memo: true},
-            0x30 => Version::VisualFoxPro,
-            _ => {
-                println!("Unknown version byte: {}", b);
-                Version::Unknown
-            }
+            0x03 => Version::DBase3 { supports_memo: false },
+            0x83 => Version::DBase3 { supports_memo: true },
+            // Each version has different feature (varchar / autoincrement)
+            // but we don't support that for now
+            0x30 | 0x31 | 0x32=> Version::VisualFoxPro,
+            // Same here these different version num means that some features are different
+            0x8b | 0xcb => Version::DBase4 {supports_memo: true},
+            0x43 | 0x63 => Version::DBase4 {supports_memo: false},
+            0xfb => Version::FoxPro2 {supports_memo: false},
+            0xf5 => Version::FoxPro2 {supports_memo: true},
+            b => Version::Unknown(b)
         }
     }
 }
@@ -101,7 +108,7 @@ pub struct Header {
 impl Header {
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
-            file_type: Version::DBase3{has_memo: false},
+            file_type: Version::DBase3 { supports_memo: false },
             last_update: Date {
                 year: 1990,
                 month: 12,
@@ -194,10 +201,9 @@ impl Header {
 #[cfg(test)]
 mod test {
     use std::fs::File;
-
-    use super::*;
     use std::io::{Cursor, Seek, SeekFrom};
 
+    use super::*;
 
     #[test]
     fn pos_after_reading_header() {
