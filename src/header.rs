@@ -3,12 +3,14 @@ use std::io::{Read, Write};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::field::Date;
+use record::field::MemoFileType;
 use Error;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Version {
     FoxBase,
     DBase3{has_memo: bool},
+    VisualFoxPro,
     Unknown,
 }
 
@@ -17,7 +19,24 @@ impl Version {
         match self {
              Version::FoxBase => false,
              Version::DBase3{has_memo} => *has_memo,
+             Version::VisualFoxPro => true,
              _ => panic!("unknown version")
+        }
+    }
+
+    pub(crate) fn memo_type(&self) -> MemoFileType {
+        match self {
+             Version::FoxBase => MemoFileType::FoxBaseMemo,
+             Version::DBase3{has_memo: _} => MemoFileType::DbaseMemo,
+             Version::VisualFoxPro => MemoFileType::FoxBaseMemo,
+             _ => panic!("unknown version")
+        }
+    }
+
+    pub(crate) fn is_visual_fox_pro(&self) -> bool {
+        match self {
+             Version::VisualFoxPro => true,
+             _ => false
         }
     }
 }
@@ -39,6 +58,7 @@ impl From<u8> for Version {
             0x02 => Version::FoxBase,
             0x03 => Version::DBase3{has_memo: false},
             0x83 => Version::DBase3{has_memo: true},
+            0x30 => Version::VisualFoxPro,
             _ => {
                 println!("Unknown version byte: {}", b);
                 Version::Unknown

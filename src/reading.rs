@@ -9,7 +9,7 @@ use byteorder::ReadBytesExt;
 
 use header::Header;
 
-use record::field::{FieldValue, MemoReader};
+use record::field::{FieldValue, MemoFileType, MemoReader};
 use record::RecordFieldInfo;
 use Error;
 
@@ -50,20 +50,32 @@ impl<T: Read + Seek> Reader<T> {
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source)?;
+        let offset_to_first_record = if header.file_type.is_visual_fox_pro() {
+            header.offset_to_first_record - 263
+        } else {
+            header.offset_to_first_record
+        };
         let num_fields =
-            (header.offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>())
+            (offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>())
                 / RecordFieldInfo::SIZE;
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
-        for _ in 0..num_fields {
+        for i in 0..num_fields {
+            println!("{} / {}", i, num_fields);
             let info = RecordFieldInfo::read_from(&mut source)?;
+            println!("{:?}", info);
             fields_info.push(info);
         }
 
         let terminator = source.read_u8()?;
         if terminator != TERMINATOR_VALUE {
             panic!("unexpected terminator");
+        }
+
+        if header.file_type.is_visual_fox_pro() {
+            let mut backlink = [0u8; 263];
+            source.read_exact(&mut backlink)?;
         }
 
         Ok(Self {
@@ -115,12 +127,16 @@ impl Reader<BufReader<File>> {
         let p = path.as_ref().to_owned();
         let bufreader = BufReader::new(File::open(path)?);
         let mut reader = Reader::new(bufreader)?;
+        //TODO should probably have only 1 fn that returns an Option<MemoFileType>
         if reader.header.file_type.has_memo() {
-            // TODO its .dbt for dase & .fbt for fox pro
-            let memo_path = p.with_extension("dbt");
+            let memo_type = reader.header.file_type.memo_type();
+            let memo_path = match memo_type {
+                MemoFileType::DbaseMemo => p.with_extension("dbt"),
+                MemoFileType::FoxBaseMemo => p.with_extension("fpt")
+            };
             // TODO if this fails, the returned error is not enough explicit about the fact that 
             // the needed memo file could not be found
-            let memo_reader = MemoReader::read_from(BufReader::new(File::open(memo_path)?))?;
+            let memo_reader = MemoReader::new(memo_type, BufReader::new(File::open(memo_path)?))?;
             reader.memo_reader = Some(memo_reader);
         }
         Ok(reader)

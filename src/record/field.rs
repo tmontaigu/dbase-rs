@@ -1,15 +1,20 @@
-
 use std::fmt;
 use std::io::{Read, Write, Seek, SeekFrom};
 
 
 use std::str::FromStr;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
 use record::RecordFieldInfo;
 use Error;
 use std::convert::TryFrom;
+
+pub(crate) enum MemoFileType {
+    DbaseMemo,
+    FoxBaseMemo,
+}
+
 
 #[derive(Debug)]
 pub(crate) struct MemoHeader {
@@ -34,16 +39,18 @@ impl MemoHeader {
 }
 
 pub(crate) struct MemoReader<T: Read + Seek> {
+    memo_file_type: MemoFileType,
     header: MemoHeader,
     source: T,
     internal_buffer: Vec<u8>
 }
 
 impl<T: Read + Seek> MemoReader<T> {
-    pub(crate) fn read_from(mut src: T) -> std::io::Result<Self> {
+    pub(crate) fn new(memo_type: MemoFileType, mut src: T) -> std::io::Result<Self> {
         let header = MemoHeader::read_from(&mut src)?;
         let internal_buffer = vec![0u8; header.block_size as usize];
         Ok(Self {
+            memo_file_type: memo_type,
             header,
             source: src,
             internal_buffer,
@@ -53,26 +60,39 @@ impl<T: Read + Seek> MemoReader<T> {
     fn read_data_at(&mut self, index: u32) -> std::io::Result<&[u8]> {
         let byte_offset = index * u32::from(self.header.block_size);
         self.source.seek(SeekFrom::Start(u64::from(byte_offset)))?;
-        // TODO if the memo is fox base we can read the type & length
-        //let _type = self.source.read_u32::<LittleEndian>()?;
-        //println!("type: {}", _type);
-        //let length = self.source.read_u32::<LittleEndian>()?;
-        //println!("index: {}, offset: {}data len: {}",index, byte_offset, length);
-
-        // It seems like the last block of the memo can sometime be shorter than
-        // the expected block size
-        if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
-            if index != self.header.next_available_block_index - 1  &&
-               e.kind() != std::io::ErrorKind::UnexpectedEof {
-                return Err(e);
+        match self.memo_file_type {
+            MemoFileType::FoxBaseMemo => {
+                // TODO if the memo is fox base we can read the type & length
+                let _type = self.source.read_u32::<BigEndian>()?;
+                println!("type: {}", _type);
+                let length = self.source.read_u32::<BigEndian>()?;
+                println!("{} vs {}", length, self.internal_buffer.capacity());
+                if length as usize > self.internal_buffer.capacity() {
+                    self.source.read_exact(&mut self.internal_buffer)?;
+                    Ok(&self.internal_buffer)
+                }
+                else {
+                    self.source.read_exact(&mut self.internal_buffer[..length as usize])?;
+                    Ok(&self.internal_buffer[..length as usize])
+                }
             }
-        }
-        match self.internal_buffer.iter().position(|byte| *byte == 0x1A) {
-            Some(pos) => {
-                Ok(&self.internal_buffer[..pos])
+            MemoFileType::DbaseMemo => {
+                // It seems like the last block of the memo can sometime be shorter than
+                // the expected block size
+                if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
+                    if index != self.header.next_available_block_index - 1  &&
+                       e.kind() != std::io::ErrorKind::UnexpectedEof {
+                        return Err(e);
+                    }
+                }
+                match self.internal_buffer.iter().position(|byte| *byte == 0x1A) {
+                    Some(pos) => {
+                        Ok(&self.internal_buffer[..pos])
+                    }
+                    ,
+                    None => Ok(&self.internal_buffer)
+                }
             }
-            ,
-            None => Ok(&self.internal_buffer)
         }
     }
 }
@@ -294,9 +314,9 @@ impl FieldValue {
                     .as_mut()
                     .expect("A memo memo_reader was expected")
                     .read_data_at(index_in_memo)?;
-                FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
+                dbg!(FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string()))
             }
-            _ => panic!("unhandled type"),
+            x => panic!("unhandled type {:?}", x),
         };
         Ok(value)
     }
