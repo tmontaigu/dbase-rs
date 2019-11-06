@@ -1,18 +1,132 @@
-
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
+
 
 use std::str::FromStr;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
 use record::RecordFieldInfo;
 use Error;
 use std::convert::TryFrom;
 
+#[derive(PartialEq, Copy, Clone)]
+pub(crate) enum MemoFileType {
+    DbaseMemo,
+    DbaseMemo4,
+    FoxBaseMemo,
+}
+
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct MemoHeader {
+    next_available_block_index: u32,
+    block_size: u32,
+}
+
+impl MemoHeader {
+    pub(crate) fn read_from<R: Read>(src: &mut R, memo_type: MemoFileType) -> std::io::Result<Self> {
+        let next_available_block_index = src.read_u32::<LittleEndian>()?;
+        let block_size = match memo_type {
+            MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => {
+                match src.read_u16::<LittleEndian>()? {
+                    0 => 512,
+                    v => u32::from(v)
+                }
+            },
+            MemoFileType::FoxBaseMemo => { 
+                let _ = src.read_u16::<BigEndian>();
+                u32::from(src.read_u16::<BigEndian>()?)
+            }
+        };
+
+        Ok(Self {
+            next_available_block_index,
+            block_size
+        })
+    }
+}
+
+pub(crate) struct MemoReader<T: Read + Seek> {
+    memo_file_type: MemoFileType,
+    header: MemoHeader,
+    source: T,
+    internal_buffer: Vec<u8>
+}
+
+impl<T: Read + Seek> MemoReader<T> {
+    pub(crate) fn new(memo_type: MemoFileType, mut src: T) -> std::io::Result<Self> {
+        let header = MemoHeader::read_from(&mut src, memo_type)?;
+        let internal_buffer = vec![0u8; header.block_size as usize];
+        Ok(Self {
+            memo_file_type: memo_type,
+            header,
+            source: src,
+            internal_buffer,
+        })
+    }
+
+    fn read_data_at(&mut self, index: u32) -> std::io::Result<&[u8]> {
+        let byte_offset = index * u32::from(self.header.block_size);
+        self.source.seek(SeekFrom::Start(u64::from(byte_offset)))?;
+
+        match self.memo_file_type {
+            MemoFileType::FoxBaseMemo => {
+                let _type = self.source.read_u32::<BigEndian>()?;
+                let length = self.source.read_u32::<BigEndian>()?;
+                if length as usize > self.internal_buffer.len() {
+                    self.internal_buffer.resize(length as usize, 0);
+                }
+                let buf_slice = &mut self.internal_buffer[..length as usize];
+                self.source.read_exact(buf_slice)?;
+                match buf_slice.iter().rposition(|b| *b != 0) {
+                    Some(pos) => {
+                        Ok(&buf_slice[..pos + 1])
+                    },
+                    None => {
+                        if buf_slice.iter().all(|b| *b == 0) {
+                            Ok(&buf_slice[..0])
+                        } else {
+                            Ok(buf_slice)
+                        }
+                    }
+                }
+            }
+            MemoFileType::DbaseMemo4 => {
+                let _ = self.source.read_u32::<LittleEndian>()?;
+                let length = self.source.read_u32::<LittleEndian>()?;
+                self.source.read_exact(&mut self.internal_buffer[..length as usize])?;
+                match self.internal_buffer[..length as usize].iter().position(|b| *b == 0x1F) {
+                    Some(pos) => {
+                        Ok(&self.internal_buffer[..pos])
+                    }
+                    None => {
+                        Ok(&self.internal_buffer)
+                    }
+                }
+            }
+            MemoFileType::DbaseMemo => {
+                if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
+                    if index != self.header.next_available_block_index - 1  &&
+                       e.kind() != std::io::ErrorKind::UnexpectedEof {
+                        return Err(e);
+                    }
+                }
+                match self.internal_buffer.iter().position(|b| *b == 0x1A) {
+                    Some(pos) => {
+                        Ok(&self.internal_buffer[..pos])
+                    }
+                    ,
+                    None => Ok(&self.internal_buffer)
+                }
+            }
+        }
+    }
+}
+
 
 #[allow(dead_code)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FieldType {
     // dBASE III
     Character = 'C' as isize,
@@ -26,13 +140,10 @@ pub enum FieldType {
     Integer,
     // Unknown
     Double,
-    //Memo,
+    Memo,
     //General,
     //BinaryCharacter,
     //BinaryMemo,
-    //Picture,
-    //Varbinary,
-    //BinaryVarchar,
 }
 
 impl FieldType {
@@ -52,7 +163,7 @@ impl FieldType {
             'I' => Some(FieldType::Integer),
             // unknown version
             'B' => Some(FieldType::Double),
-            //'M' => Some(FieldType::Memo),
+            'M' => Some(FieldType::Memo),
             //'G' => Some(FieldType::General),
             //'C' => Some(FieldType::BinaryCharacter), ??
             //'M' => Some(FieldType::BinaryMemo),
@@ -73,7 +184,7 @@ impl TryFrom<char> for FieldType {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug,Copy, Clone, PartialEq)]
 pub struct Date {
     pub year: u32,
     pub month: u32,
@@ -105,8 +216,111 @@ impl Date {
             Ok(())
         }
     }
+
+    // https://en.wikipedia.org/wiki/Julian_day
+    // at "Julian or Gregorian calendar from Julian day number"
+    fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
+        const Y: i32 = 4716;
+        const J: i32 = 1401;
+        const M: i32 = 2;
+        const N: i32 = 12;
+        const R: i32 = 4;
+        const P: i32 = 1461;
+        const V: i32 = 3;
+        const U: i32 = 5;
+        const S: i32 = 153;
+        const W: i32 = 2;
+        const B: i32 = 274277;
+        const C: i32 = -38;
+
+
+        let f = jdn + J + ((4 * jdn + B) / 146097 * 3) / 4 + C;
+        let e = R * f + V;
+        let g = (e % P) / R;
+        let h = U * g + W;
+
+        let day = (h % S) / U + 1;
+        let month = ((h / S + M) % (N)) + 1;
+        let year = (e / P) - Y +(N + M - month) / N;
+
+        Date{
+            year: year as u32,
+            month: month as u32,
+            day: day as u32
+        }
+    }
+
+    fn to_julian_day_number(&self) -> i32 {
+        let (month, year) = if self.month > 2 {
+            (self.month - 3, self.year)
+        } else {
+            (self.month + 9, self.year - 1)
+        };
+
+        let century =  year / 100;
+        let decade = year - 100 * century;
+
+        ((146097 * century) / 4 + (1461 * decade) / 4 + (153 * month + 2) / 5 + self.day + 1721119) as i32
+    }
 }
 
+#[derive(Debug,Copy, Clone, PartialEq)]
+pub struct Time {
+    hours: u32,
+    minutes: u32,
+    seconds: u32
+}
+
+impl Time {
+    const HOURS_FACTOR: i32 = 3_600_000;
+    const MINUTES_FACTOR: i32 = 60_000;
+    const SECONDS_FACTOR: i32 = 1_000;
+
+    fn from_word(mut time_word: i32) -> Self {
+        let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
+        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
+        let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
+        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
+        let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
+        Self {
+            hours,
+            minutes,
+            seconds
+        }
+    }
+
+    fn to_time_word(&self) -> i32 {
+        let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
+        time_word += self.minutes * Self::MINUTES_FACTOR as u32;
+        time_word += self.seconds * Self::SECONDS_FACTOR as u32;
+        time_word as i32
+    }
+}
+
+#[derive(Debug,Copy, Clone, PartialEq)]
+pub struct DateTime {
+    date: Date,
+    time: Time
+}
+
+impl DateTime {
+    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
+        let julian_day_number = src.read_i32::<LittleEndian>()?;
+        let time_word = src.read_i32::<LittleEndian>()?;
+        let time = Time::from_word(time_word);
+        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
+        Ok(Self {
+            date,
+            time
+        })
+    }
+
+    fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
+        dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
+        dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
+        Ok(())
+    }
+}
 
 impl FromStr for Date {
     type Err = std::num::ParseIntError;
@@ -162,12 +376,16 @@ pub enum FieldValue {
     Float(Option<f32>),
     //Visual FoxPro fields
     Integer(i32),
+    Currency(f64),
+    DateTime(DateTime),
     Double(f64),
+    Memo(String),
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T: Read>(
+    pub(crate) fn read_from<T: Read + Seek>(
         mut source: &mut T,
+        memo_reader: &mut Option<MemoReader<T>>,
         field_info: &RecordFieldInfo,
     ) -> Result<Self, Error> {
         let value = match field_info.field_type {
@@ -213,7 +431,29 @@ impl FieldValue {
             }
             FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
             FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
-            _ => panic!("unhandled type"),
+            FieldType::Currency => FieldValue::Currency(source.read_f64::<LittleEndian>()?),
+            FieldType::DateTime => FieldValue::DateTime(DateTime::read_from(&mut source)?),
+            FieldType::Memo => {
+                let index_in_memo = 
+                if field_info.field_length > 4 {
+                    let string = read_string_of_len(&mut source, field_info.field_length)?;
+                    let trimmed_str = string.trim();
+                    if trimmed_str.is_empty() {
+                        return Ok(FieldValue::Memo(String::from("")));
+                    } else {
+                        trimmed_str.parse::<u32>()?
+                    }
+                } else {
+                    source.read_u32::<LittleEndian>()?
+                };
+
+                if let Some(memo_reader) = memo_reader {
+                    let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
+                    FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
+                } else {
+                    return Err(Error::MissingMemoFile)
+                }
+            },
         };
         Ok(value)
     }
@@ -227,6 +467,9 @@ impl FieldValue {
             FieldValue::Float(_) => FieldType::Float,
             FieldValue::Double(_) => FieldType::Double,
             FieldValue::Date(_) => FieldType::Date,
+            FieldValue::Memo(_) => FieldType::Memo,
+            FieldValue::Currency(_) => FieldType::Currency,
+            FieldValue::DateTime(_) => FieldType::DateTime
         }
     }
 
@@ -261,7 +504,14 @@ impl FieldValue {
             }
             FieldValue::Logical(_) => 1,
             FieldValue::Date(_) => 8,
-            _ => unimplemented!(),
+            FieldValue::Memo(text) => {
+                let str_bytes: &[u8] = text.as_ref();
+                str_bytes.len()
+            },
+            FieldValue::Integer(_) => std::mem::size_of::<i32>(),
+            FieldValue::Currency(_) => std::mem::size_of::<f64>(),
+            FieldValue::DateTime(_) =>  2 * std::mem::size_of::<i32>(),
+            FieldValue::Double(_) => std::mem::size_of::<f64>()
         }
     }
 
@@ -335,6 +585,17 @@ impl FieldValue {
                 dest.write_i32::<LittleEndian>(*i)?;
                 Ok(std::mem::size_of::<i32>())
             }
+            FieldValue::Memo(_text) => {
+                unimplemented!();
+            }
+            FieldValue::Currency(c) => {
+                dest.write_f64::<LittleEndian>(*c)?;
+                Ok(std::mem::size_of::<f64>())
+            }
+            FieldValue::DateTime(dt) => {
+                dt.write_to(&mut dest)?;
+                Ok(2 * std::mem::size_of::<LittleEndian>())
+            }
         }
     }
 }
@@ -400,7 +661,7 @@ mod test {
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
 
-        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Date(Some(read_date)) => {
                 assert_eq!(read_date.year, 2019);
                 assert_eq!(read_date.month, 1);
@@ -422,7 +683,7 @@ mod test {
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
 
 
-        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Date(maybe_date) => assert!(maybe_date.is_none()),
             _ => assert!(false, "Did not read a date ??"),
         }
@@ -442,7 +703,7 @@ mod test {
             create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
 
 
-        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Character(s) => {
                 assert_eq!(s, Some(String::from("Only ASCII")));
             }
@@ -464,12 +725,26 @@ mod test {
             create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
 
 
-        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Character(s) => {
                 assert_eq!(s, Some(String::from("🤔")));
             }
             _ => assert!(false, "Did not read a Character field ??"),
         }
+    }
+
+    #[test]
+    fn test_from_julian_day_number() {
+        let date = Date::julian_day_number_to_gregorian_date(2458685);
+        assert_eq!(date.year, 2019);
+        assert_eq!(date.month, 07);
+        assert_eq!(date.day, 20);
+    }
+
+    #[test]
+    fn test_to_julian_day_number() {
+        let date = Date{year: 2019, month: 07, day: 20};
+        assert_eq!(date.to_julian_day_number(), 2458685);
     }
 
     #[test]
@@ -485,7 +760,7 @@ mod test {
             create_temp_record_field_info(FieldType::Float, num_bytes_written as u8);
 
 
-        match FieldValue::read_from(&mut out, &record_info).unwrap() {
+        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Float(s) => {
                 assert_eq!(s, Some(12.43));
             }

@@ -8,7 +8,7 @@ use Error;
 use std::convert::TryFrom;
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct FieldFlags(u8);
 
 impl FieldFlags {
@@ -34,6 +34,7 @@ impl FieldFlags {
 }
 
 /// Struct giving the info for a record field
+#[derive(Debug)]
 pub struct RecordFieldInfo {
     /// The name of the field
     pub name: String,
