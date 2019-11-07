@@ -4,7 +4,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 
 pub mod field;
 use record::field::FieldType;
-use Error;
+use ::{Error, FieldValue};
 use std::convert::TryFrom;
 
 
@@ -144,6 +144,39 @@ impl RecordFieldInfo {
         }
     }
 }
+
+// Conversion trait implementations
+#[derive(Debug)]
+pub enum FieldConversionError {
+    FieldTypeNotAsExpected{actual: FieldType},
+    NoneValue,
+}
+
+impl TryFrom<FieldValue> for Option<String> {
+    type Error = FieldConversionError;
+
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        if let FieldValue::Character(maybe_str) = value{
+            Ok(maybe_str)
+        } else {
+            Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+        }
+    }
+}
+
+impl TryFrom<FieldValue> for String {
+    type Error = FieldConversionError;
+
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        if let Some(s) = Option::<String>::try_from(value)? {
+            Ok(s)
+        } else {
+            Err(FieldConversionError::NoneValue)
+        }
+    }
+}
+
+
 
 
 #[cfg(test)]

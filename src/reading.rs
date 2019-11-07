@@ -7,10 +7,11 @@ use std::path::Path;
 
 use byteorder::ReadBytesExt;
 
-use Error;
+use ::{Error, ReadableRecord};
 use header::Header;
 use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use record::RecordFieldInfo;
+use std::convert::TryFrom;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -19,6 +20,18 @@ pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 /// A .dbf file is composed of many records
 pub type Record = HashMap<String, FieldValue>;
 
+impl ReadableRecord for Record {
+    fn read_using<'a, T, I>(mut field_iterator: FieldIterator<'a, T, I>) -> Result<Self, Error>
+        where T: Read + Seek + 'a,
+              I: Iterator<Item=&'a RecordFieldInfo> {
+        let mut record = Self::new();
+        while let Some(result) = field_iterator.read_next_field() {
+            let (name, value) = result?;
+            record.insert(name.to_owned(), value);
+        }
+        Ok(record)
+    }
+}
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 pub struct Reader<T: Read + Seek> {
@@ -27,7 +40,6 @@ pub struct Reader<T: Read + Seek> {
     memo_reader: Option<MemoReader<T>>,
     header: Header,
     fields_info: Vec<RecordFieldInfo>,
-    current_record: u32,
 }
 
 impl<T: Read + Seek> Reader<T> {
@@ -80,12 +92,28 @@ impl<T: Read + Seek> Reader<T> {
             memo_reader: None,
             header,
             fields_info,
-            current_record: 0,
         })
     }
 
     pub fn header(&self) -> &Header {
         &self.header
+    }
+
+    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
+        RecordIterator {
+            reader: self,
+            record_type: std::marker::PhantomData,
+            current_record: 0
+        }
+    }
+
+    pub fn iter_records(&mut self) -> RecordIterator<T, Record> {
+        self.iter_records_as::<Record>()
+    }
+
+    pub fn read_as<R: ReadableRecord>(&mut self) -> Result<Vec<R>, Error> {
+        // We don't read the file terminator
+        self.iter_records_as::<R>().collect::<Result<Vec<R>, Error>>()
     }
 
     /// Make the `Reader` read the [Records](type.Record.html)
@@ -100,13 +128,9 @@ impl<T: Read + Seek> Reader<T> {
     /// let records = reader.read().unwrap();
     /// assert_eq!(records.len(), 1);
     /// ```
-    pub fn read(self) -> Result<Vec<Record>, Error> {
-        let mut records = Vec::<Record>::with_capacity(self.fields_info.len());
-        for record in self {
-            records.push(record?);
-        }
-        //let file_end = self.source.read_u16::<LittleEndian>()?;
-        Ok(records)
+    pub fn read(mut self) -> Result<Vec<Record>, Error> {
+        // We don't read the file terminator
+        self.iter_records().collect::<Result<Vec<Record>, Error>>()
     }
 }
 
@@ -151,29 +175,67 @@ impl Reader<BufReader<File>> {
 }
 
 
-impl<T: Read + Seek> Iterator for Reader<T> {
-    type Item = Result<Record, Error>;
+pub struct FieldIterator<'a, T: Read + Seek + 'a, I: Iterator<Item=&'a RecordFieldInfo>> {
+    source: &'a mut T,
+    fields_info: I,
+    memo_reader: &'a mut Option<MemoReader<T>>,
+}
 
-    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-        if self.current_record >= self.header.num_records {
-            None
+impl<'a, T: Read + Seek + 'a, I: Iterator<Item=&'a RecordFieldInfo>> FieldIterator<'a, T, I> {
+    pub fn read_next_field(&mut self) -> Option<Result<(&str, FieldValue), Error>> {
+        let field_info = self.fields_info.next()?;
+        let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
+            Err(e) => return Some(Err(e)),
+            Ok(value) => value
+        };
+        if field_info.name == "DeletionFlag" {
+            self.read_next_field()
         } else {
-            let mut record = Record::with_capacity(self.fields_info.len() as usize);
-            for field_info in &self.fields_info {
-                let value = match FieldValue::read_from(&mut self.source, &mut self.memo_reader, field_info) {
-                    Err(e) => return Some(Err(e)),
-                    Ok(value) => value,
-                };
+            Some(Ok((&field_info.name, value)))
+        }
+    }
 
-                if field_info.name != "DeletionFlag" {
-                    record.insert(field_info.name.clone(), value);
+    pub fn read_next_field_as<F>(&mut self) -> Option<Result<(&str, F), Error>>
+        where F: TryFrom<FieldValue>,
+              <F as TryFrom<FieldValue>>::Error: Into<Error> {
+
+        match self.read_next_field() {
+            Some(Ok((name, value))) => {
+                match F::try_from(value) {
+                    Err(e) => Some(Err(e.into())),
+                    Ok(v) => Some(Ok((name, v)))
                 }
-            }
-            self.current_record += 1;
-            Some(Ok(record))
+            },
+            Some(Err(e)) => Some(Err(e)),
+            None => None
         }
     }
 }
+
+pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
+    reader: &'a mut Reader<T>,
+    record_type: std::marker::PhantomData<R>,
+    current_record: u32,
+}
+
+impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R,> {
+    type Item = Result<R, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_record >= self.reader.header.num_records {
+            None
+        } else {
+            let iter = FieldIterator{
+                source: &mut self.reader.source,
+                fields_info: self.reader.fields_info.iter(),
+                memo_reader: &mut None
+            };
+            self.current_record += 1;
+            Some(R::read_using(iter))
+        }
+    }
+}
+
 
 /// One liner to read the content of a .dbf file
 ///

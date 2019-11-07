@@ -27,8 +27,8 @@
 //! You can also create a [Reader](reading/Reader.struct.html) and iterate over the records.
 //!
 //! ```
-//! let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
-//! for record_result in reader {
+//! let mut reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+//! for record_result in reader.iter_records() {
 //!     let record = record_result.unwrap();
 //!     for (name, value) in record {
 //!         println!("name: {}, value: {:?}", name, value);
@@ -46,6 +46,10 @@ pub use reading::{read, Reader, Record};
 pub use record::field::FieldValue;
 pub use record::FieldFlags;
 pub use writing::{write_to, write_to_path, Writer};
+pub use reading::FieldIterator;
+use std::io::{Seek, Read};
+pub use record::RecordFieldInfo;
+use record::FieldConversionError;
 
 mod header;
 mod reading;
@@ -69,7 +73,8 @@ pub enum Error {
     /// Happens when at least one field is a Memo type
     /// and the that additional memo file could not be found / was not given
     MissingMemoFile,
-    ErrorOpeningMemoFile(std::io::Error)
+    ErrorOpeningMemoFile(std::io::Error),
+    BadConversion(FieldConversionError)
 }
 
 impl From<std::io::Error> for Error {
@@ -88,4 +93,17 @@ impl From<std::num::ParseIntError> for Error {
     fn from(p: std::num::ParseIntError) -> Self {
         Error::ParseIntError(p)
     }
+}
+
+impl From<FieldConversionError> for Error {
+    fn from(e: FieldConversionError) -> Self {
+        Error::BadConversion(e)
+    }
+}
+
+pub trait ReadableRecord: Sized {
+    //TODO if the implementer of this trait does not read all fields, then we will have a problem
+    fn read_using<'a, T, I>(field_iterator: FieldIterator<'a, T, I>) -> Result<Self, Error>
+        where T: Read + Seek + 'a,
+              I: Iterator<Item=&'a RecordFieldInfo>;
 }
