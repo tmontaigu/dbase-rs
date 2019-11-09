@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
-use std::iter::{FusedIterator, FromIterator};
+use std::iter::FusedIterator;
 use std::path::Path;
 
 use byteorder::ReadBytesExt;
@@ -16,6 +16,8 @@ use record::RecordFieldInfo;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
+
+const BACKLINK_SIZE: u16 = 263;
 
 /// Type definition of a generic record.
 /// A .dbf file is composed of many records
@@ -64,7 +66,7 @@ impl<T: Read + Seek> Reader<T> {
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source)?;
         let offset_to_first_record = if header.file_type.is_visual_fox_pro() {
-            header.offset_to_first_record - 263
+            header.offset_to_first_record - BACKLINK_SIZE
         } else {
             header.offset_to_first_record
         };
@@ -83,8 +85,7 @@ impl<T: Read + Seek> Reader<T> {
         debug_assert_eq!(terminator, TERMINATOR_VALUE);
 
         if header.file_type.is_visual_fox_pro() {
-            let mut backlink = [0u8; 263];
-            source.read_exact(&mut backlink)?;
+            source.seek(SeekFrom::Current(i64::from(BACKLINK_SIZE)))?;
         }
 
         Ok(Self {
