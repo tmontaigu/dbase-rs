@@ -80,9 +80,7 @@ impl<T: Read + Seek> Reader<T> {
         }
 
         let terminator = source.read_u8()?;
-        if terminator != TERMINATOR_VALUE {
-            panic!("unexpected terminator");
-        }
+        debug_assert_eq!(terminator, TERMINATOR_VALUE);
 
         if header.file_type.is_visual_fox_pro() {
             let mut backlink = [0u8; 263];
