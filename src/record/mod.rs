@@ -37,15 +37,15 @@ impl FieldFlags {
 #[derive(Debug)]
 pub struct RecordFieldInfo {
     /// The name of the field
-    pub name: String,
+    pub(crate) name: String,
     /// The field type
-    pub field_type: FieldType,
-    pub displacement_field: [u8; 4],
-    pub field_length: u8,
-    pub num_decimal_places: u8,
-    pub flags: FieldFlags,
-    pub autoincrement_next_val: [u8; 5],
-    pub autoincrement_step: u8,
+    pub(crate) field_type: FieldType,
+    pub(crate) displacement_field: [u8; 4],
+    pub(crate) field_length: u8,
+    pub(crate) num_decimal_places: u8,
+    pub(crate) flags: FieldFlags,
+    pub(crate) autoincrement_next_val: [u8; 5],
+    pub(crate) autoincrement_step: u8,
 }
 
 
