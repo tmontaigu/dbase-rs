@@ -1,8 +1,10 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek};
+use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::iter::{FusedIterator, FromIterator};
 use std::path::Path;
 
 use byteorder::ReadBytesExt;
@@ -11,19 +13,18 @@ use ::{Error, ReadableRecord};
 use header::Header;
 use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use record::RecordFieldInfo;
-use std::convert::TryFrom;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
-/// Type definition of a record.
+/// Type definition of a generic record.
 /// A .dbf file is composed of many records
 pub type Record = HashMap<String, FieldValue>;
 
 impl ReadableRecord for Record {
-    fn read_using<'a, T, I>(mut field_iterator: FieldIterator<'a, T, I>) -> Result<Self, Error>
-        where T: Read + Seek + 'a,
-              I: Iterator<Item=&'a RecordFieldInfo> {
+    fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
+        where T: Read + Seek,
+              I: Iterator<Item=&'b RecordFieldInfo> {
         let mut record = Self::new();
         while let Some(result) = field_iterator.read_next_field() {
             let (name, value) = result?;
@@ -32,6 +33,7 @@ impl ReadableRecord for Record {
         Ok(record)
     }
 }
+
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 pub struct Reader<T: Read + Seek> {
@@ -103,7 +105,7 @@ impl<T: Read + Seek> Reader<T> {
         RecordIterator {
             reader: self,
             record_type: std::marker::PhantomData,
-            current_record: 0
+            current_record: 0,
         }
     }
 
@@ -174,15 +176,23 @@ impl Reader<BufReader<File>> {
     }
 }
 
-
-pub struct FieldIterator<'a, T: Read + Seek + 'a, I: Iterator<Item=&'a RecordFieldInfo>> {
+/// Iterator over the fields in a dBase record
+///
+/// This iterator only iterates over the fields contained in one record
+/// and will keep returning [None] when the last field was read.
+/// And will not go through the fields of the next record.
+pub struct FieldIterator<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> {
     source: &'a mut T,
     fields_info: I,
     memo_reader: &'a mut Option<MemoReader<T>>,
 }
 
-impl<'a, T: Read + Seek + 'a, I: Iterator<Item=&'a RecordFieldInfo>> FieldIterator<'a, T, I> {
-    pub fn read_next_field(&mut self) -> Option<Result<(&str, FieldValue), Error>> {
+impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterator<'a, 'b, T, I> {
+    /// Reads the next field and returns its name and value
+    ///
+    /// If the "DeletionFlag" field is present in the file it won't be returned
+    /// and instead go to the next field.
+    pub fn read_next_field(&mut self) -> Option<Result<(&'b str, FieldValue), Error>> {
         let field_info = self.fields_info.next()?;
         let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
             Err(e) => return Some(Err(e)),
@@ -195,43 +205,95 @@ impl<'a, T: Read + Seek + 'a, I: Iterator<Item=&'a RecordFieldInfo>> FieldIterat
         }
     }
 
-    pub fn read_next_field_as<F>(&mut self) -> Option<Result<(&str, F), Error>>
+    /// Reads the next field and tries to convert into the requested type
+    /// using [TryFrom]
+    ///
+    /// If the "DeletionFlag" field is present in the file it won't be returned
+    /// and instead go to the next field.
+    pub fn read_next_field_as<F>(&mut self) -> Option<Result<(&'b str, F), Error>>
         where F: TryFrom<FieldValue>,
               <F as TryFrom<FieldValue>>::Error: Into<Error> {
-
         match self.read_next_field() {
             Some(Ok((name, value))) => {
                 match F::try_from(value) {
                     Err(e) => Some(Err(e.into())),
                     Ok(v) => Some(Ok((name, v)))
                 }
-            },
+            }
             Some(Err(e)) => Some(Err(e)),
             None => None
         }
     }
+
+    //TODO TEST
+    /// Skips the next field of the record, useful if the field does not interest you
+    /// but the ones after do.
+    ///
+    /// Does nothing if the last field of the record was already skipped or read.
+    pub fn skip_next_field(&mut self) -> std::io::Result<()> {
+        match self.fields_info.next() {
+            None => Ok(()),
+            Some(field_info) => self.skip_field(field_info)
+        }
+    }
+
+    /// Skips all the remaining field of the record
+    ///
+    /// used internally to make sure the data stream is at the right position
+    /// when we will start reading the next record
+    ///
+    /// Does nothing if the last field of the record was already skipped or read.
+    fn skip_remaining_fields(&mut self) -> std::io::Result<()> {
+        while let Some(field_info) = self.fields_info.next() {
+            self.skip_field(field_info)?;
+        }
+        Ok(())
+    }
+
+    fn skip_field(&mut self, field_info: &RecordFieldInfo) -> std::io::Result<()> {
+        self.source.seek(SeekFrom::Current(i64::from(field_info.field_length)))?;
+        Ok(())
+    }
 }
 
+impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo> + 'b> Iterator for FieldIterator<'a, 'b, T, I> {
+    type Item = Result<(&'b str, FieldValue), Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_next_field()
+    }
+}
+
+impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo> + 'b> FusedIterator for FieldIterator<'a, 'b, T, I> {}
+
+
+/// Iterator over records contained in the dBase
 pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
     reader: &'a mut Reader<T>,
     record_type: std::marker::PhantomData<R>,
     current_record: u32,
 }
 
-impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R,> {
+impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R, > {
     type Item = Result<R, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_record >= self.reader.header.num_records {
             None
         } else {
-            let iter = FieldIterator{
+            let mut iter = FieldIterator {
                 source: &mut self.reader.source,
                 fields_info: self.reader.fields_info.iter(),
-                memo_reader: &mut None
+                memo_reader: &mut None,
             };
-            self.current_record += 1;
-            Some(R::read_using(iter))
+            let record = Some(R::read_using(&mut iter));
+
+            if let Err(e) = iter.skip_remaining_fields() {
+                Some(Err(e.into()))
+            } else {
+                self.current_record += 1;
+                record
+            }
         }
     }
 }
