@@ -4,7 +4,8 @@ const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 extern crate dbase;
 
 use std::collections::HashMap;
-use std::io::{Cursor, Seek, SeekFrom};
+use std::io::{Cursor, Seek, SeekFrom, Read};
+use dbase::{ReadableRecord, Error, FieldIterator, RecordFieldInfo};
 
 #[test]
 fn test_none_float() {
@@ -71,18 +72,43 @@ fn test_read_write_simple_file() {
     assert_eq!(records[0], expected_fields);
 }
 
+
+struct Album {
+    artist: String,
+    name: String,
+}
+
+impl ReadableRecord for Album {
+    fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
+        where T: Read + Seek,
+              I: Iterator<Item=&'b RecordFieldInfo> {
+        Ok(Self {
+            artist: field_iterator.read_next_field_as().unwrap()?.1,
+            name: field_iterator.read_next_field_as().unwrap()?.1
+        })
+    }
+}
+
 #[test]
 fn from_scratch() {
     let mut fst = dbase::Record::new();
     fst.insert(
-        "Name".to_string(),
+        "Artist".to_string(),
         dbase::FieldValue::from("Fallujah"),
+    );
+    fst.insert(
+        "Name".to_string(),
+        dbase::FieldValue::from("The Flesh Prevails")
     );
 
     let mut scnd = dbase::Record::new();
     scnd.insert(
-        "Name".to_string(),
+        "Artist".to_string(),
         dbase::FieldValue::from("Beyond Creation"),
+    );
+    scnd.insert(
+        "Name".to_string(),
+        dbase::FieldValue::from("Earthborn Evolution"),
     );
 
     let records = vec![fst, scnd];
@@ -97,12 +123,20 @@ fn from_scratch() {
 
     assert_eq!(read_records.len(), 2);
 
-    match read_records[0].get("Name").unwrap() {
+    match read_records[0].get("Artist").unwrap() {
         dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Fallujah"))),
         _ => assert!(false),
     }
-    match read_records[1].get("Name").unwrap() {
+    match read_records[0].get("Name").unwrap() {
+        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("The Flesh Prevails"))),
+        _ => assert!(false),
+    }
+    match read_records[1].get("Artist").unwrap() {
         dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Beyond Creation"))),
+        _ => assert!(false),
+    }
+    match read_records[1].get("Name").unwrap() {
+        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Earthborn Evolution"))),
         _ => assert!(false),
     }
 }

@@ -27,8 +27,8 @@
 //! You can also create a [Reader](reading/Reader.struct.html) and iterate over the records.
 //!
 //! ```
-//! let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
-//! for record_result in reader {
+//! let mut reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+//! for record_result in reader.iter_records() {
 //!     let record = record_result.unwrap();
 //!     for (name, value) in record {
 //!         println!("name: {}, value: {:?}", name, value);
@@ -42,9 +42,14 @@
 
 extern crate byteorder;
 
+use std::io::{Read, Seek};
+
 pub use reading::{read, Reader, Record};
+pub use reading::FieldIterator;
 pub use record::field::FieldValue;
+use record::FieldConversionError;
 pub use record::FieldFlags;
+pub use record::RecordFieldInfo;
 pub use writing::{write_to, write_to_path, Writer};
 
 mod header;
@@ -69,7 +74,8 @@ pub enum Error {
     /// Happens when at least one field is a Memo type
     /// and the that additional memo file could not be found / was not given
     MissingMemoFile,
-    ErrorOpeningMemoFile(std::io::Error)
+    ErrorOpeningMemoFile(std::io::Error),
+    BadConversion(FieldConversionError),
 }
 
 impl From<std::io::Error> for Error {
@@ -88,4 +94,23 @@ impl From<std::num::ParseIntError> for Error {
     fn from(p: std::num::ParseIntError) -> Self {
         Error::ParseIntError(p)
     }
+}
+
+impl From<FieldConversionError> for Error {
+    fn from(e: FieldConversionError) -> Self {
+        Error::BadConversion(e)
+    }
+}
+
+/// Trait to be implemented by structs that represent records read from a
+/// dBase file.
+///
+/// The field iterator gives access to methods that allow to read fields value
+/// or skip them.
+/// It is not required that the user reads / skips all the fields in a record,
+/// in other words: it is not required to consume the iterator.
+pub trait ReadableRecord: Sized {
+    fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
+        where T: Read + Seek,
+              I: Iterator<Item=&'b RecordFieldInfo>;
 }
