@@ -1,11 +1,12 @@
-const LINE_DBF: &str = "./tests/data/line.dbf";
-const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
-
 extern crate dbase;
 
 use std::collections::HashMap;
-use std::io::{Cursor, Seek, SeekFrom, Read};
-use dbase::{ReadableRecord, Error, FieldIterator, RecordFieldInfo};
+use std::io::{Cursor, Read, Seek, SeekFrom};
+
+use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, RecordFieldInfo, WritableRecord};
+
+const LINE_DBF: &str = "./tests/data/line.dbf";
+const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 
 #[test]
 fn test_none_float() {
@@ -58,24 +59,27 @@ fn test_read_write_simple_file() {
         dbase::FieldValue::Character(Some("linestring1".to_owned())),
     );
 
-    use std::fs::File;
-    let records = dbase::read(LINE_DBF).unwrap();
+    let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
+    let records = reader.read().unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
 
-    let file = File::create("lol.dbf").unwrap();
-    let writer = dbase::Writer::new(file);
-    writer.write(&records).unwrap();
+    let writer = TableWriterBuilder::from_reader(reader)
+        .build_with_dest(Cursor::new(Vec::<u8>::new()));
+    let mut dst = writer.write(records).unwrap();
+    dst.set_position(0);
 
-    let records = dbase::read("lol.dbf").unwrap();
+    let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
+    let records = reader.read().unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
 }
-
-
+#[derive(Debug, PartialEq, Clone)]
 struct Album {
     artist: String,
     name: String,
+    released: dbase::Date,
+    playtime: f64, // in seconds
 }
 
 impl ReadableRecord for Album {
@@ -83,61 +87,61 @@ impl ReadableRecord for Album {
         where T: Read + Seek,
               I: Iterator<Item=&'b RecordFieldInfo> {
         Ok(Self {
-            artist: field_iterator.read_next_field_as().unwrap()?.1,
-            name: field_iterator.read_next_field_as().unwrap()?.1
+            artist: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
+            name: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
+            released: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
+            playtime: dbg!(field_iterator.read_next_field_as().unwrap()?.1)
         })
+    }
+}
+
+impl WritableRecord for Album {
+    fn values_for_fields(self, _field_names: &[&str], values: &mut Vec<FieldValue>) {
+        values.push(FieldValue::Character(Some(self.artist)));
+        values.push(FieldValue::Character(Some(self.name)));
+        values.push(FieldValue::from(self.released));
+        values.push(FieldValue::Numeric(Some(self.playtime)));
     }
 }
 
 #[test]
 fn from_scratch() {
-    let mut fst = dbase::Record::new();
-    fst.insert(
-        "Artist".to_string(),
-        dbase::FieldValue::from("Fallujah"),
-    );
-    fst.insert(
-        "Name".to_string(),
-        dbase::FieldValue::from("The Flesh Prevails")
-    );
+    let writer = TableWriterBuilder::new()
+        .add_character_field("Artist".to_string(), 50)
+        .add_character_field("Name".to_string(), 50)
+        .add_date_field("Released".to_string())
+        .add_numeric_field("Playtime".to_string(), 10)
+        .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-    let mut scnd = dbase::Record::new();
-    scnd.insert(
-        "Artist".to_string(),
-        dbase::FieldValue::from("Beyond Creation"),
-    );
-    scnd.insert(
-        "Name".to_string(),
-        dbase::FieldValue::from("Earthborn Evolution"),
-    );
+    let records = vec![
+        Album {
+            artist: "Fallujah".to_string(),
+            name: "The Flesh Prevails".to_string(),
+            released: dbase::Date {
+                year: 2014,
+                month: 6,
+                day: 22,
+            },
+            playtime: 2481f64
+        },
+        Album {
+            artist: "Beyond Creation".to_string(),
+            name: "Earthborn Evolution".to_string(),
+            released: dbase::Date {
+                year: 2014,
+                month: 10,
+                day: 24,
+            },
+            playtime: 2481f64
+        },
+    ];
 
-    let records = vec![fst, scnd];
-
-    let cursor = Cursor::new(Vec::<u8>::new());
-    let writer = dbase::Writer::new(cursor);
-    let mut cursor = writer.write(&records).unwrap();
+    let mut cursor = writer.write(records.clone()).unwrap();
     cursor.seek(SeekFrom::Start(0)).unwrap();
 
-    let reader = dbase::Reader::new(cursor).unwrap();
-    let read_records = reader.read().unwrap();
+    let mut reader = dbase::Reader::new(cursor).unwrap();
+    let read_records = reader.read_as::<Album>().unwrap();
 
-    assert_eq!(read_records.len(), 2);
-
-    match read_records[0].get("Artist").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Fallujah"))),
-        _ => assert!(false),
-    }
-    match read_records[0].get("Name").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("The Flesh Prevails"))),
-        _ => assert!(false),
-    }
-    match read_records[1].get("Artist").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Beyond Creation"))),
-        _ => assert!(false),
-    }
-    match read_records[1].get("Name").unwrap() {
-        dbase::FieldValue::Character(s) => assert_eq!(s, &Some(String::from("Earthborn Evolution"))),
-        _ => assert!(false),
-    }
+    assert_eq!(read_records, records);
 }
 

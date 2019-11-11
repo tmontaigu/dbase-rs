@@ -1,12 +1,14 @@
+use std::convert::TryFrom;
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-pub mod field;
-use record::field::FieldType;
 use ::{Error, FieldValue};
-use std::convert::TryFrom;
+use record::field::FieldType;
 
+pub mod field;
+
+const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
 
 #[derive(Debug, Copy, Clone)]
 pub struct FieldFlags(u8);
@@ -130,9 +132,9 @@ impl RecordFieldInfo {
         Ok(())
     }
 
-    pub fn new_deletion_flag() -> Self {
+    pub(crate) fn new_deletion_flag() -> Self {
         Self {
-            name: "DeletionFlag".to_owned(),
+            name: DELETION_FLAG_NAME.to_owned(),
             field_type: FieldType::Character,
             displacement_field: [0u8; 4],
             field_length: 1,
@@ -143,50 +145,68 @@ impl RecordFieldInfo {
 
         }
     }
+
+    pub(crate) fn is_deletion_flag(&self) -> bool {
+        &self.name == DELETION_FLAG_NAME
+    }
 }
 
 // Conversion trait implementations
 #[derive(Debug)]
 pub enum FieldConversionError {
-    FieldTypeNotAsExpected{actual: FieldType},
+    FieldTypeNotAsExpected { actual: FieldType },
     NoneValue,
 }
 
-impl TryFrom<FieldValue> for Option<String> {
-    type Error = FieldConversionError;
 
-    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
-        if let FieldValue::Character(maybe_str) = value{
-            Ok(maybe_str)
-        } else {
-            Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+macro_rules! impl_try_from_field_value_for_ {
+    (FieldValue::$variant:ident => $out_type:ty) => {
+        impl TryFrom<FieldValue> for $out_type {
+            type Error = FieldConversionError;
+
+            fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+                if let FieldValue::$variant(v) = value {
+                    Ok(v)
+                } else {
+                     Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                }
+            }
         }
-    }
+    };
+     (FieldValue::$variant:ident(Some($v:ident)) => $out_type:ty) => {
+        impl TryFrom<FieldValue> for $out_type {
+            type Error = FieldConversionError;
+
+            fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+                match value {
+                    FieldValue::$variant(Some($v)) => Ok($v),
+                    FieldValue::$variant(None) => Err(FieldConversionError::NoneValue),
+                    _ => Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                }
+            }
+        }
+    };
 }
 
-impl TryFrom<FieldValue> for String {
-    type Error = FieldConversionError;
+impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
+impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
 
-    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
-        if let Some(s) = Option::<String>::try_from(value)? {
-            Ok(s)
-        } else {
-            Err(FieldConversionError::NoneValue)
-        }
-    }
-}
+impl_try_from_field_value_for_!(FieldValue::Date => Option<field::Date>);
+impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => field::Date);
 
-
+impl_try_from_field_value_for_!(FieldValue::Character => Option<String>);
+impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
 
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use header::Header;
-
-
     use std::fs::File;
     use std::io::{Cursor, Seek, SeekFrom};
+
+    use header::Header;
+
+    use super::*;
+
     #[test]
     fn test_record_info_read_writing() {
         let mut file = File::open("tests/data/line.dbf").unwrap();

@@ -17,7 +17,6 @@ pub(crate) enum MemoFileType {
     FoxBaseMemo,
 }
 
-
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct MemoHeader {
     next_available_block_index: u32,
@@ -125,7 +124,6 @@ impl<T: Read + Seek> MemoReader<T> {
 }
 
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FieldType {
     // dBASE III
@@ -168,6 +166,18 @@ impl FieldType {
             //'C' => Some(FieldType::BinaryCharacter), ??
             //'M' => Some(FieldType::BinaryMemo),
             _ => None,
+        }
+    }
+
+    pub(crate) fn size(self) -> Option<u8> {
+        match self {
+            FieldType::Logical => Some(1),
+            FieldType::Date => Some(8),
+            FieldType::Integer => Some(std::mem::size_of::<i32>() as u8),
+            FieldType::Currency => Some(std::mem::size_of::<f64>() as u8),
+            FieldType::DateTime => Some( 2 * std::mem::size_of::<i32>() as u8),
+            FieldType::Double => Some(std::mem::size_of::<f64>() as u8),
+            _ => None
         }
     }
 }
@@ -473,48 +483,6 @@ impl FieldValue {
         }
     }
 
-    pub(crate) fn size_in_bytes(&self) -> usize {
-        match self {
-            FieldValue::Character(value) => {
-                match value {
-                    Some(s) => {
-                        let str_bytes: &[u8] = s.as_ref();
-                        str_bytes.len()
-                    }
-                    None => 0
-                }
-            }
-            FieldValue::Numeric(value) => {
-                match value {
-                    Some(n) => {
-                        let s = n.to_string();
-                        s.len()
-                    }
-                    None => 0
-                }
-            },
-            FieldValue::Float(value) => {
-                match value {
-                    Some(f) => {
-                        let s = f.to_string();
-                        s.len()
-                    }
-                    None => 0
-                }
-            }
-            FieldValue::Logical(_) => 1,
-            FieldValue::Date(_) => 8,
-            FieldValue::Memo(text) => {
-                let str_bytes: &[u8] = text.as_ref();
-                str_bytes.len()
-            },
-            FieldValue::Integer(_) => std::mem::size_of::<i32>(),
-            FieldValue::Currency(_) => std::mem::size_of::<f64>(),
-            FieldValue::DateTime(_) =>  2 * std::mem::size_of::<i32>(),
-            FieldValue::Double(_) => std::mem::size_of::<f64>()
-        }
-    }
-
     pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<usize, Error> {
         match self {
             FieldValue::Character(value) => {
@@ -656,7 +624,7 @@ mod test {
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = date.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, date.size_in_bytes());
+        assert_eq!(num_bytes_written, FieldType::Date.size().unwrap() as usize);
 
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
@@ -677,7 +645,7 @@ mod test {
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = date.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, date.size_in_bytes());
+        assert_eq!(num_bytes_written, FieldType::Date.size().unwrap() as usize);
 
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
@@ -693,10 +661,8 @@ mod test {
     #[test]
     fn write_read_ascii_char() {
         let field = FieldValue::Character(Some(String::from("Only ASCII")));
-
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, field.size_in_bytes());
 
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =
@@ -718,7 +684,6 @@ mod test {
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, field.size_in_bytes());
 
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =
@@ -753,7 +718,6 @@ mod test {
 
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, field.size_in_bytes());
 
         out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =

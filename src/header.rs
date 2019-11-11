@@ -74,7 +74,7 @@ impl From<u8> for Version {
     }
 }
 
-
+#[derive(Debug)]
 pub struct TableFlags(u8);
 
 impl TableFlags {
@@ -91,7 +91,7 @@ impl TableFlags {
     }
 }
 
-
+#[derive(Debug)]
 pub struct Header {
     pub file_type: Version,
     pub last_update: Date,

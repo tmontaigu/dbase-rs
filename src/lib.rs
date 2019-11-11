@@ -42,20 +42,22 @@
 
 extern crate byteorder;
 
-use std::io::{Read, Seek};
-
-pub use reading::{read, Reader, Record};
-pub use reading::FieldIterator;
-pub use record::field::FieldValue;
-use record::FieldConversionError;
-pub use record::FieldFlags;
-pub use record::RecordFieldInfo;
-pub use writing::{write_to, write_to_path, Writer};
-
 mod header;
 mod reading;
 mod record;
 mod writing;
+
+
+use std::io::{Read, Seek};
+
+pub use reading::{read, Reader, Record};
+pub use reading::FieldIterator;
+pub use record::field::{FieldValue, Date, DateTime};
+use record::FieldConversionError;
+pub use record::FieldFlags;
+pub use record::RecordFieldInfo;
+pub use writing::{TableWriter, TableWriterBuilder};
+pub use writing::WritableRecord;
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]

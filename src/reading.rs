@@ -36,14 +36,15 @@ impl ReadableRecord for Record {
     }
 }
 
+
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
     source: T,
     memo_reader: Option<MemoReader<T>>,
-    header: Header,
-    fields_info: Vec<RecordFieldInfo>,
+    pub(crate) header: Header,
+    pub(crate) fields_info: Vec<RecordFieldInfo>,
 }
 
 impl<T: Read + Seek> Reader<T> {
@@ -64,7 +65,7 @@ impl<T: Read + Seek> Reader<T> {
     /// let reader = dbase::Reader::new(f).unwrap();
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
-        let header = Header::read_from(&mut source)?;
+        let header = dbg!(Header::read_from(&mut source)?);
         let offset_to_first_record = if header.file_type.is_visual_fox_pro() {
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
@@ -73,6 +74,7 @@ impl<T: Read + Seek> Reader<T> {
         let num_fields =
             (offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>())
                 / RecordFieldInfo::SIZE;
+
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
@@ -125,11 +127,11 @@ impl<T: Read + Seek> Reader<T> {
     /// use std::fs::File;
     ///
     /// let f = File::open("tests/data/line.dbf").unwrap();
-    /// let reader = dbase::Reader::new(f).unwrap();
+    /// let mut reader = dbase::Reader::new(f).unwrap();
     /// let records = reader.read().unwrap();
     /// assert_eq!(records.len(), 1);
     /// ```
-    pub fn read(mut self) -> Result<Vec<Record>, Error> {
+    pub fn read(&mut self) -> Result<Vec<Record>, Error> {
         // We don't read the file terminator
         self.iter_records().collect::<Result<Vec<Record>, Error>>()
     }
@@ -192,12 +194,15 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Option<Result<(&'b str, FieldValue), Error>> {
+        println!("Read next");
         let field_info = self.fields_info.next()?;
+        println!("Reading {}, len: {}", field_info.name, field_info.field_length);
         let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
             Err(e) => return Some(Err(e)),
             Ok(value) => value
         };
-        if field_info.name == "DeletionFlag" {
+        if &field_info.name == "DeletionFlag" {
+            println!("skiiping");
             self.read_next_field()
         } else {
             Some(Ok((&field_info.name, value)))
@@ -307,7 +312,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
 /// assert_eq!(records.len(), 1);
 /// ```
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
-    let reader = Reader::from_path(path)?;
+    let mut reader = Reader::from_path(path)?;
     reader.read()
 }
 
