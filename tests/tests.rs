@@ -88,10 +88,10 @@ impl ReadableRecord for Album {
         where T: Read + Seek,
               I: Iterator<Item=&'b RecordFieldInfo> {
         Ok(Self {
-            artist: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
-            name: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
-            released: dbg!(field_iterator.read_next_field_as().unwrap()?.1),
-            playtime: dbg!(field_iterator.read_next_field_as().unwrap()?.1)
+            artist: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
+            name: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
+            released: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
+            playtime: dbg!(field_iterator.read_next_field_as().unwrap()?.value)
         })
     }
 }

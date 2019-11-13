@@ -26,10 +26,10 @@ pub type Record = HashMap<String, FieldValue>;
 impl ReadableRecord for Record {
     fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
         where T: Read + Seek,
-              I: Iterator<Item=&'b RecordFieldInfo> {
+              I: Iterator<Item=&'b RecordFieldInfo> + 'b {
         let mut record = Self::new();
-        while let Some(result) = field_iterator.read_next_field() {
-            let (name, value) = result?;
+        for result in field_iterator {
+            let NamedValue{name, value} = result?;
             record.insert(name.to_owned(), value);
         }
         Ok(record)
@@ -182,10 +182,9 @@ impl Reader<BufReader<File>> {
 }
 
 pub struct NamedValue<'a, T> {
-    name: &'a str,
-    value: T
+    pub name: &'a str,
+    pub value: T
 }
-
 
 /// Iterator over the fields in a dBase record
 ///
@@ -203,7 +202,7 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
-    pub fn read_next_field(&mut self) -> Option<Result<(&'b str, FieldValue), Error>> {
+    pub fn read_next_field(&mut self) -> Option<Result<NamedValue<'b, FieldValue>, Error>> {
         let field_info = dbg!(self.fields_info.next()?);
         let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
             Err(e) => return Some(Err(e)),
@@ -212,7 +211,7 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
         if field_info.is_deletion_flag() {
             self.read_next_field()
         } else {
-            Some(Ok((&field_info.name, value)))
+            Some(Ok(NamedValue{name: &field_info.name, value}))
         }
     }
 
@@ -221,14 +220,14 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
-    pub fn read_next_field_as<F>(&mut self) -> Option<Result<(&'b str, F), Error>>
+    pub fn read_next_field_as<F>(&mut self) -> Option<Result<NamedValue<'b, F>, Error>>
         where F: TryFrom<FieldValue>,
               <F as TryFrom<FieldValue>>::Error: Into<Error> {
         match self.read_next_field() {
-            Some(Ok((name, value))) => {
+            Some(Ok(NamedValue{name, value})) => {
                 match F::try_from(value) {
                     Err(e) => Some(Err(e.into())),
-                    Ok(v) => Some(Ok((name, v)))
+                    Ok(v) => Some(Ok(NamedValue{name, value: v}))
                 }
             }
             Some(Err(e)) => Some(Err(e)),
@@ -268,7 +267,7 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
 }
 
 impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo> + 'b> Iterator for FieldIterator<'a, 'b, T, I> {
-    type Item = Result<(&'b str, FieldValue), Error>;
+    type Item = Result<NamedValue<'b, FieldValue>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next_field()
@@ -319,7 +318,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
 pub trait ReadableRecord: Sized {
     fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
         where T: Read + Seek,
-              I: Iterator<Item=&'b RecordFieldInfo>;
+              I: Iterator<Item=&'b RecordFieldInfo> + 'b;
 }
 
 /// One liner to read the content of a .dbf file
