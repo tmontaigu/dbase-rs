@@ -74,6 +74,7 @@ fn test_read_write_simple_file() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
 }
+
 #[derive(Debug, PartialEq, Clone)]
 struct Album {
     artist: String,
@@ -103,6 +104,7 @@ impl WritableRecord for Album {
         values.push(FieldValue::Numeric(Some(self.playtime)));
     }
 }
+
 
 #[test]
 fn from_scratch() {

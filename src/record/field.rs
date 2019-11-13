@@ -127,10 +127,10 @@ impl<T: Read + Seek> MemoReader<T> {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FieldType {
     // dBASE III
-    Character = 'C' as isize,
+    Character,
     Date,
-    Float = 'F' as isize,
-    Numeric = 'N' as isize,
+    Float,
+    Numeric,
     Logical,
     // Visual FoxPro
     Currency,
@@ -142,6 +142,24 @@ pub enum FieldType {
     //General,
     //BinaryCharacter,
     //BinaryMemo,
+}
+
+impl From<FieldType> for u8 {
+    fn from(t: FieldType) -> Self {
+        let v = match t {
+            FieldType::Character => 'C',
+            FieldType::Date => 'D',
+            FieldType::Float => 'F',
+            FieldType::Numeric => 'N',
+            FieldType::Logical => 'L',
+            FieldType::Currency => 'Y',
+            FieldType::DateTime => 'T',
+            FieldType::Integer => 'I',
+            FieldType::Double => 'B',
+            FieldType::Memo => 'M',
+        };
+        v as u8
+    }
 }
 
 impl FieldType {

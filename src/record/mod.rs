@@ -10,7 +10,7 @@ pub mod field;
 
 const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FieldFlags(u8);
 
 impl FieldFlags {
@@ -36,7 +36,7 @@ impl FieldFlags {
 }
 
 /// Struct giving the info for a record field
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RecordFieldInfo {
     /// The name of the field
     pub(crate) name: String,
@@ -70,7 +70,7 @@ impl RecordFieldInfo {
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
         let mut name = [0u8; 11];
         source.read_exact(&mut name)?;
-        let field_type = source.read_u8()?;
+        let field_type = dbg!(source.read_u8()?);
 
         let mut displacement_field = [0u8; 4];
         source.read_exact(&mut displacement_field)?;
@@ -110,15 +110,13 @@ impl RecordFieldInfo {
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
         let num_bytes = self.name.as_bytes().len();
         if num_bytes > 10 {
-            return Err(Error::FieldLengthTooLong);
+            return Err(Error::FieldNameTooLong);
         }
-        dest.write_all(&self.name.as_bytes()[0..num_bytes])?;
         let mut name_bytes = [0u8; 11];
-        name_bytes[10] = '\0' as u8;
-        dest.write_all(&name_bytes[0..11 - num_bytes])?;
+        name_bytes[..num_bytes].copy_from_slice(self.name.as_bytes());
+        dest.write_all(&name_bytes)?;
 
-        dest.write_u8(self.field_type as u8)?;
-
+        dest.write_u8(u8::from(self.field_type))?;
         dest.write_all(&self.displacement_field)?;
         dest.write_u8(self.field_length)?;
         dest.write_u8(self.num_decimal_places)?;
@@ -198,33 +196,28 @@ impl_try_from_field_value_for_!(FieldValue::Character => Option<String>);
 impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
 
 
+impl From<String> for FieldValue {
+    fn from(s: String) -> Self {
+        FieldValue::Character(Some(s))
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use std::fs::File;
-    use std::io::{Cursor, Seek, SeekFrom};
-
-    use header::Header;
-
     use super::*;
+    use std::io::Cursor;
 
     #[test]
-    fn test_record_info_read_writing() {
-        let mut file = File::open("tests/data/line.dbf").unwrap();
-        file.seek(SeekFrom::Start(Header::SIZE as u64)).unwrap();
+    fn write_read_field_info() {
+        let field_info = RecordFieldInfo::new(String::from("LICENSE"), FieldType::Character, 30);
+        let mut cursor = Cursor::new(Vec::<u8>::with_capacity(RecordFieldInfo::SIZE));
+        field_info.write_to(&mut cursor);
 
-        let mut record_info_bytes = [0u8; RecordFieldInfo::SIZE];
-        file.read_exact(&mut record_info_bytes).unwrap();
-        let mut cursor = Cursor::new(record_info_bytes);
+        cursor.set_position(0);
 
-        let records_info = RecordFieldInfo::read_from(&mut cursor).unwrap();
+        let read_field_info = RecordFieldInfo::read_from(&mut cursor).unwrap();
 
-
-        let mut out = Cursor::new(Vec::<u8>::with_capacity(RecordFieldInfo::SIZE));
-        records_info.write_to(&mut out).unwrap();
-
-        let bytes_written = out.into_inner();
-        assert_eq!(bytes_written.len(), record_info_bytes.len());
-        assert_eq!(bytes_written, record_info_bytes);
+        assert_eq!(read_field_info, field_info);
     }
 }
 

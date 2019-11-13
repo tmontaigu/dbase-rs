@@ -176,13 +176,7 @@ impl Header {
 
         // Reserved
         dest.write_u16::<LittleEndian>(0)?;
-
-        let byte_value = if self.is_transaction_incomplete {
-            1u8
-        } else {
-            0u8
-        };
-        dest.write_u8(byte_value)?;
+        dest.write_u8(u8::from(self.is_transaction_incomplete))?;
         dest.write_u8(self.encryption_flag)?;
 
         let _reserved = [0u8; 12];

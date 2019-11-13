@@ -9,7 +9,7 @@ use std::path::Path;
 
 use byteorder::ReadBytesExt;
 
-use ::{Error, ReadableRecord};
+use Error;
 use header::Header;
 use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use record::RecordFieldInfo;
@@ -78,7 +78,9 @@ impl<T: Read + Seek> Reader<T> {
 
         let mut fields_info = Vec::<RecordFieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(RecordFieldInfo::new_deletion_flag());
-        for _ in 0..num_fields {
+        dbg!(source.seek(SeekFrom::Current(0)).unwrap());
+        for i in 0..num_fields {
+            println!("{} / {}", i, num_fields);
             let info = RecordFieldInfo::read_from(&mut source)?;
             fields_info.push(info);
         }
@@ -98,10 +100,12 @@ impl<T: Read + Seek> Reader<T> {
         })
     }
 
+    /// Returns the header of the file
     pub fn header(&self) -> &Header {
         &self.header
     }
 
+    /// Creates an iterator of records of the type you want
     pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
         RecordIterator {
             reader: self,
@@ -177,6 +181,12 @@ impl Reader<BufReader<File>> {
     }
 }
 
+pub struct NamedValue<'a, T> {
+    name: &'a str,
+    value: T
+}
+
+
 /// Iterator over the fields in a dBase record
 ///
 /// This iterator only iterates over the fields contained in one record
@@ -194,15 +204,12 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b RecordFieldInfo>> FieldIterato
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Option<Result<(&'b str, FieldValue), Error>> {
-        println!("Read next");
-        let field_info = self.fields_info.next()?;
-        println!("Reading {}, len: {}", field_info.name, field_info.field_length);
+        let field_info = dbg!(self.fields_info.next()?);
         let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
             Err(e) => return Some(Err(e)),
             Ok(value) => value
         };
-        if &field_info.name == "DeletionFlag" {
-            println!("skiiping");
+        if field_info.is_deletion_flag() {
             self.read_next_field()
         } else {
             Some(Ok((&field_info.name, value)))
@@ -302,6 +309,18 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
     }
 }
 
+/// Trait to be implemented by structs that represent records read from a
+/// dBase file.
+///
+/// The field iterator gives access to methods that allow to read fields value
+/// or skip them.
+/// It is not required that the user reads / skips all the fields in a record,
+/// in other words: it is not required to consume the iterator.
+pub trait ReadableRecord: Sized {
+    fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
+        where T: Read + Seek,
+              I: Iterator<Item=&'b RecordFieldInfo>;
+}
 
 /// One liner to read the content of a .dbf file
 ///
@@ -315,6 +334,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
     let mut reader = Reader::from_path(path)?;
     reader.read()
 }
+
 
 #[cfg(test)]
 mod test {

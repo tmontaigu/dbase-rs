@@ -48,16 +48,10 @@ mod record;
 mod writing;
 
 
-use std::io::{Read, Seek};
-
-pub use reading::{read, Reader, Record};
-pub use reading::FieldIterator;
+pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
 pub use record::field::{FieldValue, Date, DateTime};
-use record::FieldConversionError;
-pub use record::FieldFlags;
-pub use record::RecordFieldInfo;
-pub use writing::{TableWriter, TableWriterBuilder};
-pub use writing::WritableRecord;
+pub use record::{RecordFieldInfo, FieldFlags, FieldConversionError};
+pub use writing::{TableWriter, TableWriterBuilder, WritableRecord};
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -71,13 +65,13 @@ pub enum Error {
     /// The Field as an invalid FieldType
     InvalidFieldType(char),
     InvalidDate,
-    FieldLengthTooLong,
     FieldNameTooLong,
     /// Happens when at least one field is a Memo type
     /// and the that additional memo file could not be found / was not given
     MissingMemoFile,
     ErrorOpeningMemoFile(std::io::Error),
     BadConversion(FieldConversionError),
+    EndOfRecord,
 }
 
 impl From<std::io::Error> for Error {
@@ -104,15 +98,41 @@ impl From<FieldConversionError> for Error {
     }
 }
 
-/// Trait to be implemented by structs that represent records read from a
-/// dBase file.
-///
-/// The field iterator gives access to methods that allow to read fields value
-/// or skip them.
-/// It is not required that the user reads / skips all the fields in a record,
-/// in other words: it is not required to consume the iterator.
-pub trait ReadableRecord: Sized {
-    fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
-        where T: Read + Seek,
-              I: Iterator<Item=&'b RecordFieldInfo>;
+
+
+#[macro_export]
+macro_rules! dbase_record {
+    (
+        struct $name:ident {
+            $( $field_name:ident: $field_type:ty),+
+            $(,)?
+        }
+    ) => {
+        struct $name {
+            $($field_name: $field_type),+
+        }
+
+        impl ReadableRecord for $name {
+                fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
+                    where T: Read + Seek,
+                          I: Iterator<Item=&'b RecordFieldInfo> {
+                          Ok(Self {
+                            $(
+                                $field_name: field_iterator
+                                    .read_next_field_as::<$field_type>()
+                                    .ok_or(Error::EndOfRecord)??
+                                    .1
+                            ),+
+                          })
+              }
+        }
+
+        impl WritableRecord for $name {
+             fn values_for_fields(self, _field_names: &[&str], values: &mut Vec<FieldValue>) {
+                $(
+                    values.push(FieldValue::from(self.$field_name));
+                )+
+             }
+        }
+    };
 }
