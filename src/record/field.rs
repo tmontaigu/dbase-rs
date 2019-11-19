@@ -292,64 +292,6 @@ impl Date {
     }
 }
 
-#[derive(Debug,Copy, Clone, PartialEq)]
-pub struct Time {
-    hours: u32,
-    minutes: u32,
-    seconds: u32
-}
-
-impl Time {
-    const HOURS_FACTOR: i32 = 3_600_000;
-    const MINUTES_FACTOR: i32 = 60_000;
-    const SECONDS_FACTOR: i32 = 1_000;
-
-    fn from_word(mut time_word: i32) -> Self {
-        let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
-        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
-        let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
-        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
-        let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
-        Self {
-            hours,
-            minutes,
-            seconds
-        }
-    }
-
-    fn to_time_word(&self) -> i32 {
-        let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
-        time_word += self.minutes * Self::MINUTES_FACTOR as u32;
-        time_word += self.seconds * Self::SECONDS_FACTOR as u32;
-        time_word as i32
-    }
-}
-
-#[derive(Debug,Copy, Clone, PartialEq)]
-pub struct DateTime {
-    date: Date,
-    time: Time
-}
-
-impl DateTime {
-    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
-        let julian_day_number = src.read_i32::<LittleEndian>()?;
-        let time_word = src.read_i32::<LittleEndian>()?;
-        let time = Time::from_word(time_word);
-        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
-        Ok(Self {
-            date,
-            time
-        })
-    }
-
-    fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
-        dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
-        dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
-        Ok(())
-    }
-}
-
 impl FromStr for Date {
     type Err = std::num::ParseIntError;
 
@@ -387,6 +329,67 @@ impl std::string::ToString for Date {
         }
         s.push_str(&day_str);
         s
+    }
+}
+
+// TODO new() fn that validates inputs
+#[derive(Debug,Copy, Clone, PartialEq)]
+pub struct Time {
+    hours: u32,
+    minutes: u32,
+    seconds: u32
+}
+
+impl Time {
+    const HOURS_FACTOR: i32 = 3_600_000;
+    const MINUTES_FACTOR: i32 = 60_000;
+    const SECONDS_FACTOR: i32 = 1_000;
+
+
+    fn from_word(mut time_word: i32) -> Self {
+        let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
+        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
+        let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
+        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
+        let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
+        Self {
+            hours,
+            minutes,
+            seconds
+        }
+    }
+
+    fn to_time_word(&self) -> i32 {
+        let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
+        time_word += self.minutes * Self::MINUTES_FACTOR as u32;
+        time_word += self.seconds * Self::SECONDS_FACTOR as u32;
+        time_word as i32
+    }
+}
+
+// TODO new() fn that validates inputs
+#[derive(Debug,Copy, Clone, PartialEq)]
+pub struct DateTime {
+    date: Date,
+    time: Time
+}
+
+impl DateTime {
+    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
+        let julian_day_number = src.read_i32::<LittleEndian>()?;
+        let time_word = src.read_i32::<LittleEndian>()?;
+        let time = Time::from_word(time_word);
+        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
+        Ok(Self {
+            date,
+            time
+        })
+    }
+
+    fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
+        dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
+        dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
+        Ok(())
     }
 }
 
@@ -501,41 +504,26 @@ impl FieldValue {
         }
     }
 
-    pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<usize, Error> {
+    pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<(), Error> {
         match self {
             FieldValue::Character(value) => {
-                match value {
-                    Some(s) => {
-                        let bytes = s.as_bytes();
-                        dest.write_all(&bytes)?;
-                        Ok(bytes.len())
-                    }
-                    None => Ok(0)
+                if let Some(s) = value {
+                    let bytes = s.as_bytes();
+                    dest.write_all(&bytes)?;
                 }
+                Ok(())
             }
             FieldValue::Numeric(value) => {
-                match value {
-                    Some(n) => {
-                        let str_rep = n.to_string();
-                        dest.write_all(&str_rep.as_bytes())?;
-                        Ok(str_rep.as_bytes().len())
-                    }
-                    None => {
-                        Ok(0)
-                    }
+                if let Some(n) = value {
+                    write!(dest, "{}", n)?;
                 }
+                Ok(())
             },
             FieldValue::Float(value) => {
-                match value {
-                    Some(f) => {
-                        let str_rep = f.to_string();
-                        dest.write_all(&str_rep.as_bytes())?;
-                        Ok(str_rep.as_bytes().len())
-                    }
-                    None => {
-                        Ok(0)
-                    }
+                if let Some(n) = value {
+                    write!(dest, "{}", n)?;
                 }
+                Ok(())
             }
             FieldValue::Logical(value) => {
                 if let Some(b) = value {
@@ -547,7 +535,7 @@ impl FieldValue {
                 } else {
                     dest.write_u8('?' as u8)?;
                 }
-                Ok(1)
+                Ok(())
             }
             FieldValue::Date(value) => {
                 match value {
@@ -555,32 +543,31 @@ impl FieldValue {
                         let date_str = d.to_string();
                         let date_str_bytes: &[u8] = date_str.as_ref();
                         dest.write_all(&date_str_bytes)?;
-                        Ok(date_str_bytes.len())
                     }
                     None => {
                         dest.write_all(&[' ' as u8; 8])?;
-                        Ok(8)
                     }
                 }
+                Ok(())
             }
             FieldValue::Double(d) => {
                 dest.write_f64::<LittleEndian>(*d)?;
-                Ok(std::mem::size_of::<f64>())
+                Ok(())
             }
             FieldValue::Integer(i) => {
                 dest.write_i32::<LittleEndian>(*i)?;
-                Ok(std::mem::size_of::<i32>())
+                Ok(())
             }
             FieldValue::Memo(_text) => {
                 unimplemented!();
             }
             FieldValue::Currency(c) => {
                 dest.write_f64::<LittleEndian>(*c)?;
-                Ok(std::mem::size_of::<f64>())
+                Ok(())
             }
             FieldValue::DateTime(dt) => {
                 dt.write_to(&mut dest)?;
-                Ok(2 * std::mem::size_of::<LittleEndian>())
+                Ok(())
             }
         }
     }
@@ -641,11 +628,11 @@ mod test {
         });
 
         let mut out = Cursor::new(Vec::<u8>::new());
-        let num_bytes_written = date.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, FieldType::Date.size().unwrap() as usize);
+        date.write_to(&mut out).unwrap();
+        assert_eq!(out.position(), u64::from(FieldType::Date.size().unwrap()));
 
-        out.seek(SeekFrom::Start(0)).unwrap();
-        let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
+        let record_info = create_temp_record_field_info(FieldType::Date, out.position() as u8);
+        out.set_position(0);
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Date(Some(read_date)) => {
@@ -662,11 +649,11 @@ mod test {
         let date = FieldValue::Date(None);
 
         let mut out = Cursor::new(Vec::<u8>::new());
-        let num_bytes_written = date.write_to(&mut out).unwrap();
-        assert_eq!(num_bytes_written, FieldType::Date.size().unwrap() as usize);
+        date.write_to(&mut out).unwrap();
+        assert_eq!(out.position(), u64::from(FieldType::Date.size().unwrap()));
 
-        out.seek(SeekFrom::Start(0)).unwrap();
-        let record_info = create_temp_record_field_info(FieldType::Date, num_bytes_written as u8);
+        let record_info = create_temp_record_field_info(FieldType::Date, out.position() as u8);
+        out.set_position(0);
 
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
@@ -680,11 +667,11 @@ mod test {
     fn write_read_ascii_char() {
         let field = FieldValue::Character(Some(String::from("Only ASCII")));
         let mut out = Cursor::new(Vec::<u8>::new());
-        let num_bytes_written = field.write_to(&mut out).unwrap();
+        field.write_to(&mut out).unwrap();
 
-        out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =
-            create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
+            create_temp_record_field_info(FieldType::Character, out.position() as u8);
+        out.set_position(0);
 
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
@@ -701,11 +688,11 @@ mod test {
         let field = FieldValue::Character(Some(String::from("🤔")));
 
         let mut out = Cursor::new(Vec::<u8>::new());
-        let num_bytes_written = field.write_to(&mut out).unwrap();
+        field.write_to(&mut out).unwrap();
 
-        out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =
-            create_temp_record_field_info(FieldType::Character, num_bytes_written as u8);
+            create_temp_record_field_info(FieldType::Character, out.position() as u8);
+        out.set_position(0);
 
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
@@ -737,9 +724,9 @@ mod test {
         let mut out = Cursor::new(Vec::<u8>::new());
         let num_bytes_written = field.write_to(&mut out).unwrap();
 
-        out.seek(SeekFrom::Start(0)).unwrap();
         let record_info =
-            create_temp_record_field_info(FieldType::Float, num_bytes_written as u8);
+            create_temp_record_field_info(FieldType::Float, out.position() as u8);
+        out.set_position(0);
 
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {

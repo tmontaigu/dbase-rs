@@ -1,9 +1,10 @@
+#[macro_use]
 extern crate dbase;
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, RecordFieldInfo, WritableRecord};
+use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, RecordFieldInfo, WritableRecord, Reader};
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
@@ -112,7 +113,7 @@ fn from_scratch() {
         .add_character_field("Artist".to_string(), 50)
         .add_character_field("Name".to_string(), 50)
         .add_date_field("Released".to_string())
-        .add_numeric_field("Playtime".to_string(), 10)
+        .add_numeric_field("Playtime".to_string(), 10, 2)
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
     let records = vec![
@@ -147,3 +148,49 @@ fn from_scratch() {
     assert_eq!(read_records, records);
 }
 
+dbase_record! {
+    #[derive(Clone, Debug, PartialEq)]
+    struct User {
+        first_name: String,
+        last_name: String
+    }
+}
+
+dbase_record! {
+    struct TestStructWithoutDerive {
+        this_should_compile: String
+    }
+}
+
+#[test]
+fn the_classical_user_record_example() {
+    let users = vec![
+        User {
+            first_name: "Ferrys".to_string(),
+            last_name: "Rust".to_string(),
+        },
+        User {
+            first_name: "Alex".to_string(),
+            last_name: "Rider".to_string(),
+        },
+        User {
+            first_name: "Jamie".to_string(),
+            last_name: "Oliver".to_string(),
+        }
+    ];
+
+    let writer = TableWriterBuilder::new()
+        .add_character_field("First Name".to_string(), 50)
+        .add_character_field("Last Name".to_string(), 50)
+        .build_with_dest(Cursor::new(Vec::<u8>::new()));
+
+    let mut cursor = writer.write(users.clone()).unwrap();
+
+    cursor.set_position(0);
+
+
+    let mut reader = Reader::new(cursor).unwrap();
+    let read_records = reader.read_as::<User>().unwrap();
+
+    assert_eq!(read_records, users);
+}

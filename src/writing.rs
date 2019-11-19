@@ -62,14 +62,17 @@ impl TableWriterBuilder {
         self
     }
 
-    //TODO num decimal places
-    pub fn add_numeric_field(mut self, name: String, length: u8) -> Self {
-        self.v.push(RecordFieldInfo::new(name, FieldType::Numeric, length));
+    pub fn add_numeric_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
+        let mut info = RecordFieldInfo::new(name, FieldType::Numeric, length);
+        info.num_decimal_places = num_decimals;
+        self.v.push(info);
         self
     }
 
-    pub fn add_float_field(mut self, name: String, length: u8) -> Self {
-        self.v.push(RecordFieldInfo::new(name, FieldType::Float, length));
+    pub fn add_float_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
+        let mut info = RecordFieldInfo::new(name, FieldType::Float, length);
+        info.num_decimal_places = num_decimals;
+        self.v.push(info);
         self
     }
 
@@ -105,7 +108,7 @@ pub struct TableWriter<W: Write> {
 }
 
 //TODO the header written should be constructed better
-// (choose the right vesion depending on fields ,etc)
+// (choose the right version depending on fields ,etc)
 impl<W: Write> TableWriter<W> {
     fn new(dst: W, fields_info: Vec<RecordFieldInfo>) -> Self {
         let biggest_field = fields_info
@@ -150,7 +153,6 @@ impl<W: Write> TableWriter<W> {
         for record in records {
             self.dst.write_u8(' ' as u8)?; // DeletionFlag
             record.values_for_fields(&field_names, &mut self.fields_values);
-            println!("Will Write: {:?}", self.fields_values);
             if self.fields_values.len() != self.fields_info.len() {
                 panic!("Number of fields_value given does no match what was expected, got {} expected: {}", self.fields_info.len(), self.fields_values.len());
             }
@@ -162,16 +164,35 @@ impl<W: Write> TableWriter<W> {
                 }
 
                 field_value.write_to(&mut self.buffer)?;
-                let field_bytes = self.buffer.get_ref();
-                let bytes_written = self.buffer.position();
-                let bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
-                println!("bytes_written {}, field length {}, bytes tp pad {}", bytes_written, field_info.field_length, bytes_to_pad);
+
+                let mut bytes_written = self.buffer.position();
+                let mut bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
                 if bytes_to_pad > 0 {
+                    if field_info.field_type == FieldType::Float ||
+                        field_info.field_type == FieldType::Numeric {
+                        // FIXME Depending on the locale, the dot might not be the delimiter for floating point
+                        //  but we are not yet ready to handle correctly codepages, etc
+                        let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == '.' as u8);
+                        if maybe_dot_pos.is_none() {
+                            write!(self.buffer, ".")?;
+                            bytes_written = self.buffer.position();
+                            maybe_dot_pos = Some(bytes_written as usize)
+                        }
+                        let dot_pos = maybe_dot_pos.unwrap();
+                        let missing_decimals = field_info.num_decimal_places - (bytes_written - dot_pos as u64) as u8;
+                        for _ in 0..missing_decimals {
+                            write!(self.buffer, "0")?;
+                        }
+                        bytes_written = self.buffer.position();
+                        bytes_to_pad =  i64::from(field_info.field_length) - bytes_written as i64;
+                    }
+                    let field_bytes = self.buffer.get_ref();
                     self.dst.write_all(&field_bytes[..bytes_written as usize])?;
                     self.dst.write_all(&pad_buf[..bytes_to_pad as usize])?;
                 } else {
                     // The current field value size exceeds the one one set
                     // when creating the writer, we just crop
+                    let field_bytes = self.buffer.get_ref();
                     self.dst.write_all(&field_bytes[..field_info.field_length as usize])?;
                 }
             }
