@@ -103,11 +103,14 @@ impl From<FieldConversionError> for Error {
 #[macro_export]
 macro_rules! dbase_record {
     (
+        $(#[derive($($derives:meta),*)])?
         struct $name:ident {
             $( $field_name:ident: $field_type:ty),+
             $(,)?
         }
     ) => {
+
+        $(#[derive($($derives),*)])?
         struct $name {
             $($field_name: $field_type),+
         }
@@ -121,7 +124,7 @@ macro_rules! dbase_record {
                                 $field_name: field_iterator
                                     .read_next_field_as::<$field_type>()
                                     .ok_or(Error::EndOfRecord)??
-                                    .1
+                                    .value
                             ),+
                           })
               }
