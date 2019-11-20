@@ -8,7 +8,7 @@ use crate::record::field::{FieldValue};
 use header::Header;
 use reading::TERMINATOR_VALUE;
 use record::field::FieldType;
-use record::RecordFieldInfo;
+use record::FieldInfo;
 use std::path::Path;
 use std::fs::File;
 
@@ -28,7 +28,7 @@ impl FieldName {
 }
 
 pub struct TableWriterBuilder {
-    v: Vec<RecordFieldInfo>
+    v: Vec<FieldInfo>
 }
 
 //TODO check len of name, create add method for other types
@@ -53,24 +53,24 @@ impl TableWriterBuilder {
     }
 
     pub fn add_character_field(mut self, name: String, length: u8) -> Self {
-        self.v.push(RecordFieldInfo::new(name, FieldType::Character, length));
+        self.v.push(FieldInfo::new(name, FieldType::Character, length));
         self
     }
 
     pub fn add_date_field(mut self, name: String) -> Self {
-        self.v.push(RecordFieldInfo::new(name, FieldType::Date, FieldType::Date.size().unwrap()));
+        self.v.push(FieldInfo::new(name, FieldType::Date, FieldType::Date.size().unwrap()));
         self
     }
 
     pub fn add_numeric_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
-        let mut info = RecordFieldInfo::new(name, FieldType::Numeric, length);
+        let mut info = FieldInfo::new(name, FieldType::Numeric, length);
         info.num_decimal_places = num_decimals;
         self.v.push(info);
         self
     }
 
     pub fn add_float_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
-        let mut info = RecordFieldInfo::new(name, FieldType::Float, length);
+        let mut info = FieldInfo::new(name, FieldType::Float, length);
         info.num_decimal_places = num_decimals;
         self.v.push(info);
         self
@@ -102,7 +102,7 @@ impl WritableRecord for Record {
 
 pub struct TableWriter<W: Write> {
     dst: W,
-    fields_info: Vec<RecordFieldInfo>,
+    fields_info: Vec<FieldInfo>,
     buffer: Cursor<Vec<u8>>,
     fields_values: Vec<FieldValue>,
 }
@@ -110,7 +110,7 @@ pub struct TableWriter<W: Write> {
 //TODO the header written should be constructed better
 // (choose the right version depending on fields ,etc)
 impl<W: Write> TableWriter<W> {
-    fn new(dst: W, fields_info: Vec<RecordFieldInfo>) -> Self {
+    fn new(dst: W, fields_info: Vec<FieldInfo>) -> Self {
         let biggest_field = fields_info
             .iter()
             .map(|info| info.field_length)
@@ -128,7 +128,7 @@ impl<W: Write> TableWriter<W> {
 
     pub fn write<R: WritableRecord>(mut self, records: Vec<R>) -> Result<W, Error> {
         let offset_to_first_record =
-            dbg!(Header::SIZE + (self.fields_info.len() * RecordFieldInfo::SIZE) + std::mem::size_of::<u8>());
+            dbg!(Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>());
         let size_of_record = self.fields_info
             .iter()
             .fold(0u16, |s, ref info| s + info.field_length as u16);

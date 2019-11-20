@@ -50,7 +50,7 @@ mod writing;
 
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
 pub use record::field::{FieldValue, Date, DateTime};
-pub use record::{RecordFieldInfo, FieldFlags, FieldConversionError};
+pub use record::{FieldInfo, FieldFlags, FieldConversionError};
 pub use writing::{TableWriter, TableWriterBuilder, WritableRecord};
 
 /// Errors that may happen when reading a .dbf
@@ -118,7 +118,7 @@ macro_rules! dbase_record {
         impl ReadableRecord for $name {
                 fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
                     where T: Read + Seek,
-                          I: Iterator<Item=&'b RecordFieldInfo> + 'b {
+                          I: Iterator<Item=&'b FieldInfo> + 'b {
                           Ok(Self {
                             $(
                                 $field_name: field_iterator

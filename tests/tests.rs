@@ -4,7 +4,7 @@ extern crate dbase;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, RecordFieldInfo, WritableRecord, Reader};
+use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader};
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
@@ -87,7 +87,7 @@ struct Album {
 impl ReadableRecord for Album {
     fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
         where T: Read + Seek,
-              I: Iterator<Item=&'b RecordFieldInfo> {
+              I: Iterator<Item=&'b FieldInfo> {
         Ok(Self {
             artist: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
             name: dbg!(field_iterator.read_next_field_as().unwrap()?.value),

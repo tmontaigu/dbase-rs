@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
-use record::RecordFieldInfo;
+use record::FieldInfo;
 use Error;
 use std::convert::TryFrom;
 
@@ -417,7 +417,7 @@ impl FieldValue {
     pub(crate) fn read_from<T: Read + Seek>(
         mut source: &mut T,
         memo_reader: &mut Option<MemoReader<T>>,
-        field_info: &RecordFieldInfo,
+        field_info: &FieldInfo,
     ) -> Result<Self, Error> {
         let value = match field_info.field_type {
             FieldType::Logical => match source.read_u8()? as char {
@@ -606,8 +606,8 @@ mod test {
 
     use record::FieldFlags;
     use std::io::{Cursor, Seek, SeekFrom};
-    fn create_temp_record_field_info(field_type: FieldType, len: u8) -> RecordFieldInfo {
-        RecordFieldInfo {
+    fn create_temp_record_field_info(field_type: FieldType, len: u8) -> FieldInfo {
+        FieldInfo {
             name: "".to_owned(),
             field_type,
             displacement_field: [0u8; 4],

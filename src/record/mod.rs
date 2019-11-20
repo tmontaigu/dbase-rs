@@ -37,7 +37,7 @@ impl FieldFlags {
 
 /// Struct giving the info for a record field
 #[derive(Debug, PartialEq)]
-pub struct RecordFieldInfo {
+pub struct FieldInfo {
     /// The name of the field
     pub(crate) name: String,
     /// The field type
@@ -51,7 +51,7 @@ pub struct RecordFieldInfo {
 }
 
 
-impl RecordFieldInfo {
+impl FieldInfo {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn new(name: String, field_type: FieldType, length: u8) -> Self {
@@ -209,13 +209,13 @@ mod test {
 
     #[test]
     fn write_read_field_info() {
-        let field_info = RecordFieldInfo::new(String::from("LICENSE"), FieldType::Character, 30);
-        let mut cursor = Cursor::new(Vec::<u8>::with_capacity(RecordFieldInfo::SIZE));
+        let field_info = FieldInfo::new(String::from("LICENSE"), FieldType::Character, 30);
+        let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
         field_info.write_to(&mut cursor);
 
         cursor.set_position(0);
 
-        let read_field_info = RecordFieldInfo::read_from(&mut cursor).unwrap();
+        let read_field_info = FieldInfo::read_from(&mut cursor).unwrap();
 
         assert_eq!(read_field_info, field_info);
     }
