@@ -115,7 +115,7 @@ impl<W: Write> TableWriter<W> {
             .iter()
             .map(|info| info.field_length)
             .max()
-            .unwrap();
+            .unwrap_or(0);
         let buffer = Cursor::new(vec![0u8; biggest_field as usize]);
         let fields_values = Vec::<FieldValue>::with_capacity(fields_info.len() as usize);
         Self {
