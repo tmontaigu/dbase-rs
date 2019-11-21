@@ -1,17 +1,19 @@
-use serde::Deserialize;
-use serde::de;
-use std::io::{Read, Seek};
-use serde::de::{Visitor, DeserializeOwned};
-
-use crate::FieldIterator;
-use ::{FieldInfo, ReadableRecord};
-use crate::Error;
 use std::fmt::Display;
+use std::io::{Read, Seek};
+
+use serde::de;
+use serde::de::{DeserializeOwned, Visitor};
+use serde::Deserialize;
 use serde::export::Formatter;
+
+use ::{FieldInfo, ReadableRecord};
 use Reader;
 
-pub struct Deserializer<'a: 'b, 'b,  T: Read + Seek, I: Iterator<Item=&'b FieldInfo>> {
-    field_iterator: &'b mut FieldIterator<'a, 'b, T, I>
+use crate::Error;
+use crate::FieldIterator;
+
+pub struct Deserializer<'a, T: Read + Seek> {
+    field_iterator: &'a mut FieldIterator<'a, T>
 }
 /*
 impl<S: DeserializeOwned> ReadableRecord for S  {
@@ -36,6 +38,7 @@ impl Display for Error {
         write!(f, "{:?}", self)
     }
 }
+
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         "fuckyou"
@@ -48,7 +51,7 @@ impl serde::de::Error for Error {
     }
 }
 
-impl<'de, 'a, T: Read + Seek, I: Iterator<Item=&'de FieldInfo>> de::Deserializer<'de> for &'a mut Deserializer<'de, 'de, T, I> {
+impl<'de, 'a, T: Read + Seek> de::Deserializer<'de> for &'a mut Deserializer<'de, T> {
     type Error = Error; //TODO
 
     fn deserialize_any<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where

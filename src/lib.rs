@@ -117,9 +117,9 @@ macro_rules! dbase_record {
         }
 
         impl ReadableRecord for $name {
-                fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
-                    where T: Read + Seek,
-                          I: Iterator<Item=&'b FieldInfo> + 'b {
+                fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
+                    where T: Read + Seek
+                {
                           Ok(Self {
                             $(
                                 $field_name: field_iterator
