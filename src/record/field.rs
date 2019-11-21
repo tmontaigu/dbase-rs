@@ -214,12 +214,36 @@ impl TryFrom<char> for FieldType {
 
 #[derive(Debug,Copy, Clone, PartialEq)]
 pub struct Date {
-    pub year: u32,
-    pub month: u32,
-    pub day: u32,
+    year: u32,
+    month: u32,
+    day: u32,
 }
 
 impl Date {
+    pub fn new(day: u32, month: u32, year: u32) -> Result<Self, Error> {
+        if month > 12 || day > 31 || year < 1900 || year > 2155 {
+            Err(Error::InvalidDate)
+        } else {
+            Ok(( Self {
+                year,
+                month,
+                day
+            }))
+        }
+    }
+
+    pub fn year(&self) -> u32 {
+        self.year
+    }
+
+    pub fn month(&self) -> u32 {
+        self.month
+    }
+
+    pub fn day(&self) -> u32 {
+        self.day
+    }
+
     pub(crate) fn from_bytes(bytes: [u8; 3]) -> Self {
         Self {
             year: 1900u32 + bytes[0] as u32,
@@ -229,20 +253,10 @@ impl Date {
     }
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
-        self.validate()?;
         dest.write_u8((self.year - 1900) as u8)?;
         dest.write_u8(self.month as u8)?;
         dest.write_u8(self.day as u8)?;
         Ok(())
-    }
-
-    // Does some extremely basic checks
-    fn validate(&self) -> Result<(), Error> {
-        if self.month > 12 || self.day > 31 || self.year < 1900 || self.year > 2155 {
-            Err(Error::InvalidDate)
-        } else {
-            Ok(())
-        }
     }
 
     // https://en.wikipedia.org/wiki/Julian_day
@@ -599,6 +613,16 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+
+use serde::de::Deserialize;
+use serde::Deserializer;
+
+impl<'de> Deserialize<'de> for FieldValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
+        D: Deserializer<'de> {
+        unimplemented!()
+    }
+}
 
 #[cfg(test)]
 mod test {

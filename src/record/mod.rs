@@ -10,6 +10,22 @@ pub mod field;
 
 const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
 
+#[derive(Debug)]
+pub struct FieldName(String);
+
+impl TryFrom<&str> for FieldName {
+    type Error = &'static str;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
+        if name.as_bytes().len() > 11 {
+            Err("FieldName byte representation cannot exceed 11 bytes")
+        } else {
+            Ok(Self { 0: name.to_string() })
+        }
+    }
+}
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FieldFlags(u8);
 
@@ -54,9 +70,9 @@ pub struct FieldInfo {
 impl FieldInfo {
     pub(crate) const SIZE: usize = 32;
 
-    pub(crate) fn new(name: String, field_type: FieldType, length: u8) -> Self {
+    pub(crate) fn new(name: FieldName, field_type: FieldType, length: u8) -> Self {
         Self {
-            name,
+            name: name.0,
             field_type,
             displacement_field: [0u8; 4],
             field_length: length,
@@ -195,6 +211,8 @@ impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => field::Date);
 impl_try_from_field_value_for_!(FieldValue::Character => Option<String>);
 impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
 
+impl_try_from_field_value_for_!(FieldValue::Logical => Option<bool>);
+impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
 
 impl From<String> for FieldValue {
     fn from(s: String) -> Self {
@@ -209,7 +227,7 @@ mod test {
 
     #[test]
     fn write_read_field_info() {
-        let field_info = FieldInfo::new(String::from("LICENSE"), FieldType::Character, 30);
+        let field_info = FieldInfo::new(FieldName::try_from("LICENSE").unwrap(), FieldType::Character, 30);
         let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
         field_info.write_to(&mut cursor).unwrap();
 

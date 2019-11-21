@@ -6,6 +6,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader, FieldValueCollector, FieldName};
 use dbase::Error::FieldNameTooLong;
+use std::convert::TryInto;
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
@@ -111,31 +112,23 @@ impl WritableRecord for Album {
 #[test]
 fn from_scratch() {
     let writer = TableWriterBuilder::new()
-        .add_character_field("Artist".to_string(), 50)
-        .add_character_field("Name".to_string(), 50)
-        .add_date_field("Released".to_string())
-        .add_numeric_field("Playtime".to_string(), 10, 2)
+        .add_character_field("Artist".try_into().unwrap(), 50)
+        .add_character_field("Name".try_into().unwrap(), 50)
+        .add_date_field("Released".try_into().unwrap())
+        .add_numeric_field("Playtime".try_into().unwrap(), 10, 2)
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
     let records = vec![
         Album {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
-            released: dbase::Date {
-                year: 2014,
-                month: 6,
-                day: 22,
-            },
+            released: dbase::Date::new(22,6,2014).unwrap(),
             playtime: 2481f64
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
-            released: dbase::Date {
-                year: 2014,
-                month: 10,
-                day: 24,
-            },
+            released: dbase::Date::new(24, 10, 2014).unwrap(),
             playtime: 2481f64
         },
     ];
@@ -181,8 +174,8 @@ fn the_classical_user_record_example() {
     ];
 
     let writer = TableWriterBuilder::new()
-        .add_character_field("First Name".to_string(), 50)
-        .add_character_field("Last Name".to_string(), 50)
+        .add_character_field("First Name".try_into().unwrap(), 50)
+        .add_character_field("Last Name".try_into().unwrap(), 50)
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
     let mut cursor = writer.write(users.clone()).unwrap();

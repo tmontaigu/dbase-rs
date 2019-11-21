@@ -9,7 +9,7 @@ use {Error, Record};
 use header::Header;
 use reading::TERMINATOR_VALUE;
 use record::field::FieldType;
-use record::FieldInfo;
+use record::{FieldInfo, FieldName};
 
 use crate::record::field::FieldValue;
 use std::convert::TryFrom;
@@ -17,19 +17,6 @@ use std::convert::TryFrom;
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
-pub struct FieldName(String);
-
-impl TryFrom<&str> for FieldName {
-    type Error = &'static str;
-
-    fn try_from(name: &str) -> Result<Self, Self::Error> {
-        if name.as_bytes().len() > 11 {
-            Ok(Self { 0: name.to_string() })
-        } else {
-            Err("FieldName byte representation cannot exceed 11 bytes")
-        }
-    }
-}
 
 pub struct TableWriterBuilder {
     v: Vec<FieldInfo>
@@ -56,24 +43,24 @@ impl TableWriterBuilder {
         }
     }
 
-    pub fn add_character_field(mut self, name: String, length: u8) -> Self {
+    pub fn add_character_field(mut self, name: FieldName, length: u8) -> Self {
         self.v.push(FieldInfo::new(name, FieldType::Character, length));
         self
     }
 
-    pub fn add_date_field(mut self, name: String) -> Self {
+    pub fn add_date_field(mut self, name: FieldName) -> Self {
         self.v.push(FieldInfo::new(name, FieldType::Date, FieldType::Date.size().unwrap()));
         self
     }
 
-    pub fn add_numeric_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
+    pub fn add_numeric_field(mut self, name: FieldName, length: u8, num_decimals: u8) -> Self {
         let mut info = FieldInfo::new(name, FieldType::Numeric, length);
         info.num_decimal_places = num_decimals;
         self.v.push(info);
         self
     }
 
-    pub fn add_float_field(mut self, name: String, length: u8, num_decimals: u8) -> Self {
+    pub fn add_float_field(mut self, name: FieldName, length: u8, num_decimals: u8) -> Self {
         let mut info = FieldInfo::new(name, FieldType::Float, length);
         info.num_decimal_places = num_decimals;
         self.v.push(info);

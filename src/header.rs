@@ -109,11 +109,8 @@ impl Header {
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
             file_type: Version::DBase3 { supports_memo: false },
-            last_update: Date {
-                year: 1990,
-                month: 12,
-                day: 25,
-            }, //FIXME use chrono crate
+            // FIXME find way to get date::now()
+            last_update: Date::new( 25, 12, 1990).unwrap(),
             num_records,
             offset_to_first_record: offset,
             size_of_record: size_of_records,

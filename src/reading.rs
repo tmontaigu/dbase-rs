@@ -22,7 +22,7 @@ const BACKLINK_SIZE: u16 = 263;
 /// Type definition of a generic record.
 /// A .dbf file is composed of many records
 pub type Record = HashMap<String, FieldValue>;
-
+//TODO we'll need to wrap this in our struct because serde derives Deserialaze & Serialize for HashMap
 impl ReadableRecord for Record {
     fn read_using<'a, 'b, T, I>(field_iterator: &mut FieldIterator<'a, 'b, T, I>) -> Result<Self, Error>
         where T: Read + Seek,

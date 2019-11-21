@@ -41,17 +41,18 @@
 //https://dbfviewer.com/dbf-file-structure/
 
 extern crate byteorder;
+extern crate serde;
 
 mod header;
 mod reading;
 mod record;
 mod writing;
-
+mod de;
 
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
 pub use record::field::{FieldValue, Date, DateTime};
-pub use record::{FieldInfo, FieldFlags, FieldConversionError};
-pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldValueCollector, FieldName};
+pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
+pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldValueCollector};
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -72,6 +73,7 @@ pub enum Error {
     ErrorOpeningMemoFile(std::io::Error),
     BadConversion(FieldConversionError),
     EndOfRecord,
+    Message(String),
 }
 
 impl From<std::io::Error> for Error {
@@ -97,7 +99,6 @@ impl From<FieldConversionError> for Error {
         Error::BadConversion(e)
     }
 }
-
 
 
 #[macro_export]
