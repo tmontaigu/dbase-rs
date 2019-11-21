@@ -181,6 +181,9 @@ impl Reader<BufReader<File>> {
     }
 }
 
+
+/// Simple struct to wrap together the value with the name
+/// of the field it belongs to
 pub struct NamedValue<'a, T> {
     pub name: &'a str,
     pub value: T
@@ -235,7 +238,6 @@ impl<'a, 'b, T: Read + Seek, I: Iterator<Item=&'b FieldInfo>> FieldIterator<'a, 
         }
     }
 
-    //TODO TEST
     /// Skips the next field of the record, useful if the field does not interest you
     /// but the ones after do.
     ///

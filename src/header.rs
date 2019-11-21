@@ -101,7 +101,7 @@ pub struct Header {
     pub is_transaction_incomplete: bool,
     pub encryption_flag: u8,
     pub table_flags: TableFlags,
-    pub code_page_mark: u8, //FIXME is the "language driver id" instead ?
+    pub code_page_mark: u8,
 }
 
 

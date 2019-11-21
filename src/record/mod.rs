@@ -211,7 +211,7 @@ mod test {
     fn write_read_field_info() {
         let field_info = FieldInfo::new(String::from("LICENSE"), FieldType::Character, 30);
         let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
-        field_info.write_to(&mut cursor);
+        field_info.write_to(&mut cursor).unwrap();
 
         cursor.set_position(0);
 
