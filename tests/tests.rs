@@ -4,7 +4,8 @@ extern crate dbase;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader};
+use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader, FieldValueCollector, FieldName};
+use dbase::Error::FieldNameTooLong;
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
@@ -98,7 +99,7 @@ impl ReadableRecord for Album {
 }
 
 impl WritableRecord for Album {
-    fn values_for_fields(self, _field_names: &[&str], values: &mut Vec<FieldValue>) {
+    fn values_for_fields(self, _field_names: &[&str], values: &mut FieldValueCollector) {
         values.push(FieldValue::Character(Some(self.artist)));
         values.push(FieldValue::Character(Some(self.name)));
         values.push(FieldValue::from(self.released));

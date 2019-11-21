@@ -1,26 +1,30 @@
 //! Module with all structs & functions charged of writing .dbf file content
-use std::io::{Cursor, Write, BufWriter};
+use std::fs::File;
+use std::io::{BufWriter, Cursor, Write};
+use std::path::Path;
 
 use byteorder::WriteBytesExt;
 
 use {Error, Record};
-use crate::record::field::{FieldValue};
 use header::Header;
 use reading::TERMINATOR_VALUE;
 use record::field::FieldType;
 use record::FieldInfo;
-use std::path::Path;
-use std::fs::File;
+
+use crate::record::field::FieldValue;
+use std::convert::TryFrom;
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
 pub struct FieldName(String);
 
-impl FieldName {
-    pub fn new(name: String) -> Result<Self, &'static str> {
+impl TryFrom<&str> for FieldName {
+    type Error = &'static str;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
         if name.as_bytes().len() > 11 {
-            Ok(Self { 0: name })
+            Ok(Self { 0: name.to_string() })
         } else {
             Err("FieldName byte representation cannot exceed 11 bytes")
         }
@@ -86,14 +90,54 @@ impl TableWriterBuilder {
     }
 }
 
+#[derive(Debug)]
+enum FieldValueCollectorError {
+    TooManyValuePushed,
+    NotEnoughValuePushed,
+}
+
+pub struct FieldValueCollector {
+    values: Vec<FieldValue>,
+    num_values_max: usize,
+    tried_to_push_more: bool,
+}
+
+impl FieldValueCollector {
+    fn new(num_values_max: usize) -> Self {
+        Self {
+            values: Vec::<FieldValue>::with_capacity(num_values_max),
+            num_values_max,
+            tried_to_push_more: false,
+        }
+    }
+
+    pub fn push(&mut self, value: FieldValue) {
+        if self.values.len() < self.num_values_max {
+            self.values.push(value);
+        } else {
+            self.tried_to_push_more = true;
+        }
+    }
+
+    fn drain(&mut self) -> Result<std::vec::Drain<FieldValue>, FieldValueCollectorError> {
+        if self.values.len() < self.num_values_max {
+            Err(FieldValueCollectorError::NotEnoughValuePushed)
+        } else if self.tried_to_push_more {
+            Err(FieldValueCollectorError::TooManyValuePushed)
+        } else {
+            Ok(self.values.drain(..))
+        }
+    }
+}
+
 pub trait WritableRecord {
-    fn values_for_fields(self, field_names: &[&str], values: &mut Vec<FieldValue>);
+    fn values_for_fields(self, field_names: &[&str], values: &mut FieldValueCollector);
 }
 
 impl WritableRecord for Record {
-    fn values_for_fields(mut self, field_names: &[&str], values: &mut Vec<FieldValue>) {
+    fn values_for_fields(mut self, field_names: &[&str], values_collector: &mut FieldValueCollector) {
         for name in field_names {
-            values.push(self
+            values_collector.push(self
                 .remove(*name)
                 .expect(&format!("Expected field with name '{}' to be in the record", name)));
         }
@@ -104,7 +148,6 @@ pub struct TableWriter<W: Write> {
     dst: W,
     fields_info: Vec<FieldInfo>,
     buffer: Cursor<Vec<u8>>,
-    fields_values: Vec<FieldValue>,
 }
 
 //TODO the header written should be constructed better
@@ -117,12 +160,10 @@ impl<W: Write> TableWriter<W> {
             .max()
             .unwrap_or(0);
         let buffer = Cursor::new(vec![0u8; biggest_field as usize]);
-        let fields_values = Vec::<FieldValue>::with_capacity(fields_info.len() as usize);
         Self {
             dst,
             fields_info,
             buffer,
-            fields_values,
         }
     }
 
@@ -148,15 +189,13 @@ impl<W: Write> TableWriter<W> {
         for field_info in &self.fields_info {
             field_names.push(&field_info.name);
         }
-
+        let mut field_value_collector = FieldValueCollector::new(self.fields_info.len());
         let pad_buf = [' ' as u8; std::u8::MAX as usize];
         for record in records {
             self.dst.write_u8(' ' as u8)?; // DeletionFlag
-            record.values_for_fields(&field_names, &mut self.fields_values);
-            if self.fields_values.len() != self.fields_info.len() {
-                panic!("Number of fields_value given does no match what was expected, got {} expected: {}", self.fields_info.len(), self.fields_values.len());
-            }
-            for (field_value, field_info) in self.fields_values.drain(..self.fields_info.len()).zip(&self.fields_info) {
+            record.values_for_fields(&field_names, &mut field_value_collector);
+            let values_and_info = field_value_collector.drain().unwrap().zip(&self.fields_info);
+            for (field_value, field_info) in values_and_info {
                 self.buffer.set_position(0);
                 if field_value.field_type() != field_info.field_type {
                     panic!("FieldType for field '{}' is expected to be '{:?}', but we were given a '{:?}'",
@@ -184,7 +223,7 @@ impl<W: Write> TableWriter<W> {
                             write!(self.buffer, "0")?;
                         }
                         bytes_written = self.buffer.position();
-                        bytes_to_pad =  i64::from(field_info.field_length) - bytes_written as i64;
+                        bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
                     }
                     let field_bytes = self.buffer.get_ref();
                     self.dst.write_all(&field_bytes[..bytes_written as usize])?;
@@ -196,7 +235,6 @@ impl<W: Write> TableWriter<W> {
                     self.dst.write_all(&field_bytes[..field_info.field_length as usize])?;
                 }
             }
-            self.fields_values.clear();
         }
         self.dst.write_u8(FILE_TERMINATOR)?;
         Ok(self.dst)

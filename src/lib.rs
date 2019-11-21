@@ -51,7 +51,7 @@ mod writing;
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
 pub use record::field::{FieldValue, Date, DateTime};
 pub use record::{FieldInfo, FieldFlags, FieldConversionError};
-pub use writing::{TableWriter, TableWriterBuilder, WritableRecord};
+pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldValueCollector, FieldName};
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -131,7 +131,7 @@ macro_rules! dbase_record {
         }
 
         impl WritableRecord for $name {
-             fn values_for_fields(self, _field_names: &[&str], values: &mut Vec<FieldValue>) {
+             fn values_for_fields(self, _field_names: &[&str], values: &mut dbase::FieldValueCollector) {
                 $(
                     values.push(FieldValue::from(self.$field_name));
                 )+
