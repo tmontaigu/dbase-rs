@@ -4,6 +4,9 @@ use std::io::{Read, Write, Seek, SeekFrom};
 
 use std::str::FromStr;
 
+use serde::de::{Deserialize, Visitor};
+use serde::Deserializer;
+use serde::export::Formatter;
 use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
 use record::FieldInfo;
@@ -217,6 +220,27 @@ pub struct Date {
     year: u32,
     month: u32,
     day: u32,
+}
+
+impl<'de> Deserialize<'de> for Date {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
+        D: Deserializer<'de> {
+        struct DateVisitor;
+        impl<'de> Visitor<'de> for DateVisitor {
+            type Value = Date;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct Date")
+            }
+
+            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where
+                E: serde::de::Error, {
+                let string = String::from_utf8(v).unwrap();
+                Ok(Date::from_str(&string).unwrap())
+            }
+        }
+        deserializer.deserialize_byte_buf(DateVisitor)
+    }
 }
 
 impl Date {
@@ -613,16 +637,6 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-
-use serde::de::Deserialize;
-use serde::Deserializer;
-
-impl<'de> Deserialize<'de> for FieldValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
-        D: Deserializer<'de> {
-        unimplemented!()
-    }
-}
 
 #[cfg(test)]
 mod test {

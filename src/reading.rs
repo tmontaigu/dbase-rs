@@ -13,6 +13,7 @@ use Error;
 use header::Header;
 use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use record::FieldInfo;
+use std::collections::hash_map::RandomState;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -21,22 +22,65 @@ const BACKLINK_SIZE: u16 = 263;
 
 /// Type definition of a generic record.
 /// A .dbf file is composed of many records
-pub type Record = HashMap<String, FieldValue>;
+#[derive(Debug, PartialEq)]
+pub struct Record {
+   map: HashMap<String, FieldValue>
+}
 
-//TODO we'll need to wrap this in our struct because serde derives Deserialaze & Serialize for HashMap
 impl ReadableRecord for Record {
     fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
         where T: Read + Seek
     {
-        let mut record = Self::new();
+        let mut map = HashMap::<String, FieldValue>::new();
         for result in field_iterator {
             let NamedValue { name, value } = result?;
-            record.insert(name.to_owned(), value);
+            map.insert(name.to_owned(), value);
         }
-        Ok(record)
+        Ok(Self {
+            map
+        })
     }
 }
 
+impl Record {
+    pub fn insert(&mut self, field_name: String, value: FieldValue) -> Option<FieldValue>{
+        self.map.insert(field_name, value)
+    }
+
+    pub fn get(&self, field_name: &str) -> Option<&FieldValue> {
+        self.map.get(field_name)
+    }
+
+    pub(crate) fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
+        self.map.remove(field_name)
+    }
+}
+
+
+impl IntoIterator for Record {
+    type Item = (String, FieldValue);
+    type IntoIter = std::collections::hash_map::IntoIter<String, FieldValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.into_iter()
+    }
+}
+
+impl Default for Record {
+    fn default() -> Self {
+        Self {
+            map: Default::default()
+        }
+    }
+}
+
+impl From<HashMap<String, FieldValue>> for Record {
+    fn from(map: HashMap<String, FieldValue, RandomState>) -> Self {
+        Self {
+            map
+        }
+    }
+}
 
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
@@ -196,9 +240,9 @@ pub struct NamedValue<'a, T> {
 /// and will keep returning [None] when the last field was read.
 /// And will not go through the fields of the next record.
 pub struct FieldIterator<'a, T: Read + Seek> {
-    source: &'a mut T,
-    fields_info: std::slice::Iter<'a, FieldInfo>,
-    memo_reader: &'a mut Option<MemoReader<T>>,
+    pub(crate) source: &'a mut T,
+    pub(crate) fields_info: std::slice::Iter<'a, FieldInfo>,
+    pub(crate) memo_reader: &'a mut Option<MemoReader<T>>,
 }
 
 impl<'a, T: Read + Seek> FieldIterator<'a, T> {
@@ -239,6 +283,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         }
     }
 
+
     /// Skips the next field of the record, useful if the field does not interest you
     /// but the ones after do.
     ///
@@ -261,6 +306,25 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             self.skip_field(field_info)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn read_next_field_raw(&mut self) -> Option<Result<Vec<u8>, Error>> {
+        match self.fields_info.next() {
+            Some(field_info) => {
+                println!("read_raw {} -> {}", field_info.name, field_info.field_length);
+                if field_info.is_deletion_flag() {
+                    self.skip_field(field_info).unwrap(); // FIXME
+                    self.read_next_field_raw()
+                } else {
+                    let mut buf = vec![0u8; field_info.field_length as usize];
+                    match self.source.read_exact(&mut buf) {
+                        Err(e) => Some(Err(e.into())),
+                        Ok(_) => Some(Ok(buf))
+                    }
+                }
+            }
+            None => None
+        }
     }
 
     fn skip_field(&mut self, field_info: &FieldInfo) -> std::io::Result<()> {
@@ -319,7 +383,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
 /// It is not required that the user reads / skips all the fields in a record,
 /// in other words: it is not required to consume the iterator.
 pub trait ReadableRecord: Sized {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
+    fn read_using<'a, 'b, T>(field_iterator: &'a mut FieldIterator<'b, T>) -> Result<Self, Error>
         where T: Read + Seek;
 }
 

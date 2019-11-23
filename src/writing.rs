@@ -67,6 +67,11 @@ impl TableWriterBuilder {
         self
     }
 
+    pub fn add_logical_field(mut self, name: FieldName) -> Self {
+        self.v.push(FieldInfo::new(name, FieldType::Logical, FieldType::Logical.size().unwrap()));
+        self
+    }
+
     pub fn build_with_dest<W: Write>(self, dst: W) -> TableWriter<W> {
         TableWriter::new(dst, self.v)
     }

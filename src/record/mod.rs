@@ -172,7 +172,6 @@ pub enum FieldConversionError {
     NoneValue,
 }
 
-
 macro_rules! impl_try_from_field_value_for_ {
     (FieldValue::$variant:ident => $out_type:ty) => {
         impl TryFrom<FieldValue> for $out_type {
@@ -205,6 +204,9 @@ macro_rules! impl_try_from_field_value_for_ {
 impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
 impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
 
+impl_try_from_field_value_for_!(FieldValue::Float => Option<f32>);
+impl_try_from_field_value_for_!(FieldValue::Float(Some(v)) => f32);
+
 impl_try_from_field_value_for_!(FieldValue::Date => Option<field::Date>);
 impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => field::Date);
 
@@ -217,6 +219,24 @@ impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
 impl From<String> for FieldValue {
     fn from(s: String) -> Self {
         FieldValue::Character(Some(s))
+    }
+}
+
+impl From<f64> for FieldValue {
+    fn from(v: f64) -> Self {
+        FieldValue::Numeric(Some(v))
+    }
+}
+
+impl From<f32> for FieldValue {
+    fn from(v: f32) -> Self {
+        FieldValue::Float(Some(v))
+    }
+}
+
+impl From<bool> for FieldValue {
+    fn from(b: bool) -> FieldValue {
+        FieldValue::Logical(Some(b))
     }
 }
 
