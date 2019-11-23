@@ -41,12 +41,15 @@
 //https://dbfviewer.com/dbf-file-structure/
 
 extern crate byteorder;
+#[cfg(feature = "serde")]
 extern crate serde;
 
 mod header;
 mod reading;
 mod record;
 mod writing;
+
+#[cfg(feature = "serde")]
 mod de;
 
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
