@@ -5,28 +5,18 @@ extern crate serde;
 #[cfg(feature = "serde")]
 mod serde_tests {
 
-    use serde::Deserialize;
-    use dbase::{FieldValueCollector, TableWriterBuilder, Reader, FieldName};
-    use std::io::Cursor;
+    use serde::{Deserialize, Serialize};
+    use dbase::{TableWriterBuilder, Reader, FieldName, Error, FieldValue, FieldWriter};
+    use std::io::{Cursor, Write};
     use std::convert::TryFrom;
 
-    #[derive(Deserialize, Clone, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
     struct DeserializableRecord {
         name: String,
         price: f64,
         date: dbase::Date,
         available: bool,
         score: f32,
-    }
-
-    impl dbase::WritableRecord for DeserializableRecord {
-        fn values_for_fields(self, field_names: &[&str], values: &mut FieldValueCollector) {
-            values.push(self.name.into());
-            values.push(self.price.into());
-            values.push(self.date.into());
-            values.push(self.available.into());
-            values.push(self.score.into());
-        }
     }
 
     #[test]
@@ -49,7 +39,7 @@ mod serde_tests {
             .add_float_field(FieldName::try_from("score").unwrap(), 7, 5)
             .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-        let mut cursor = writer.write(records.clone()).unwrap();
+        let mut cursor = writer.write(&records).unwrap();
         cursor.set_position(0);
 
         let mut reader = Reader::new(cursor).unwrap();

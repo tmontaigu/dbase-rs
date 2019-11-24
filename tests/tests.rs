@@ -1,11 +1,9 @@
 #[macro_use]
 extern crate dbase;
 
-use std::collections::HashMap;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader, FieldValueCollector, FieldName, Date, TableWriter, Record};
-use dbase::Error::FieldNameTooLong;
+use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader, FieldName, Date, TableWriter, Record, FieldWriter};
 use std::convert::{TryInto, TryFrom};
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
@@ -69,7 +67,7 @@ fn test_read_write_simple_file() {
 
     let writer = TableWriterBuilder::from_reader(reader)
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
-    let mut dst = writer.write(records).unwrap();
+    let mut dst = writer.write(&records).unwrap();
     dst.set_position(0);
 
     let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
@@ -83,7 +81,8 @@ struct Album {
     artist: String,
     name: String,
     released: dbase::Date,
-    playtime: f64, // in seconds
+    playtime: f64, // in seconds,
+    available: bool,
 }
 
 impl ReadableRecord for Album {
@@ -91,20 +90,23 @@ impl ReadableRecord for Album {
         where T: Read + Seek
     {
         Ok(Self {
-            artist: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
-            name: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
-            released: dbg!(field_iterator.read_next_field_as().unwrap()?.value),
-            playtime: dbg!(field_iterator.read_next_field_as().unwrap()?.value)
+            artist: field_iterator.read_next_field_as().unwrap()?.value,
+            name: field_iterator.read_next_field_as().unwrap()?.value,
+            released: field_iterator.read_next_field_as().unwrap()?.value,
+            playtime: field_iterator.read_next_field_as().unwrap()?.value,
+            available: field_iterator.read_next_field_as().unwrap()?.value,
         })
     }
 }
 
 impl WritableRecord for Album {
-    fn values_for_fields(self, _field_names: &[&str], values: &mut FieldValueCollector) {
-        values.push(FieldValue::Character(Some(self.artist)));
-        values.push(FieldValue::Character(Some(self.name)));
-        values.push(FieldValue::from(self.released));
-        values.push(FieldValue::Numeric(Some(self.playtime)));
+    fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
+        field_writer.write_next_field_value(&self.artist)?;
+        field_writer.write_next_field_value(&self.name)?;
+        field_writer.write_next_field_value(&self.released)?;
+        field_writer.write_next_field_value(&self.playtime)?;
+        field_writer.write_next_field_value(&self.available)?;
+        Ok(())
     }
 }
 
@@ -116,6 +118,7 @@ fn from_scratch() {
         .add_character_field("Name".try_into().unwrap(), 50)
         .add_date_field("Released".try_into().unwrap())
         .add_numeric_field("Playtime".try_into().unwrap(), 10, 2)
+        .add_logical_field(FieldName::try_from("Available").unwrap())
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
     let records = vec![
@@ -123,17 +126,19 @@ fn from_scratch() {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
             released: dbase::Date::new(22,6,2014).unwrap(),
-            playtime: 2481f64
+            playtime: 2481f64,
+            available: false
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
             released: dbase::Date::new(24, 10, 2014).unwrap(),
-            playtime: 2481f64
+            playtime: 2481f64,
+            available: true
         },
     ];
 
-    let mut cursor = writer.write(records.clone()).unwrap();
+    let mut cursor = writer.write(&records).unwrap();
     cursor.seek(SeekFrom::Start(0)).unwrap();
 
     let mut reader = dbase::Reader::new(cursor).unwrap();
@@ -146,7 +151,7 @@ dbase_record! {
     #[derive(Clone, Debug, PartialEq)]
     struct User {
         first_name: String,
-        last_name: String
+        last_name: String,
     }
 }
 
@@ -178,7 +183,7 @@ fn the_classical_user_record_example() {
         .add_character_field("Last Name".try_into().unwrap(), 50)
         .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-    let mut cursor = writer.write(users.clone()).unwrap();
+    let mut cursor = writer.write(&users).unwrap();
 
     cursor.set_position(0);
 
@@ -188,4 +193,3 @@ fn the_classical_user_record_example() {
 
     assert_eq!(read_records, users);
 }
-

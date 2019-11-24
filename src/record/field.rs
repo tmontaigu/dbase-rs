@@ -9,6 +9,7 @@ use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 use record::FieldInfo;
 use Error;
 use std::convert::TryFrom;
+use writing::WriteableDbaseField;
 
 #[derive(PartialEq, Copy, Clone)]
 pub(crate) enum MemoFileType {
@@ -32,8 +33,8 @@ impl MemoHeader {
                     0 => 512,
                     v => u32::from(v)
                 }
-            },
-            MemoFileType::FoxBaseMemo => { 
+            }
+            MemoFileType::FoxBaseMemo => {
                 let _ = src.read_u16::<BigEndian>();
                 u32::from(src.read_u16::<BigEndian>()?)
             }
@@ -41,7 +42,7 @@ impl MemoHeader {
 
         Ok(Self {
             next_available_block_index,
-            block_size
+            block_size,
         })
     }
 }
@@ -50,7 +51,7 @@ pub(crate) struct MemoReader<T: Read + Seek> {
     memo_file_type: MemoFileType,
     header: MemoHeader,
     source: T,
-    internal_buffer: Vec<u8>
+    internal_buffer: Vec<u8>,
 }
 
 impl<T: Read + Seek> MemoReader<T> {
@@ -81,7 +82,7 @@ impl<T: Read + Seek> MemoReader<T> {
                 match buf_slice.iter().rposition(|b| *b != 0) {
                     Some(pos) => {
                         Ok(&buf_slice[..pos + 1])
-                    },
+                    }
                     None => {
                         if buf_slice.iter().all(|b| *b == 0) {
                             Ok(&buf_slice[..0])
@@ -106,8 +107,8 @@ impl<T: Read + Seek> MemoReader<T> {
             }
             MemoFileType::DbaseMemo => {
                 if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
-                    if index != self.header.next_available_block_index - 1  &&
-                       e.kind() != std::io::ErrorKind::UnexpectedEof {
+                    if index != self.header.next_available_block_index - 1 &&
+                        e.kind() != std::io::ErrorKind::UnexpectedEof {
                         return Err(e);
                     }
                 }
@@ -115,7 +116,6 @@ impl<T: Read + Seek> MemoReader<T> {
                     Some(pos) => {
                         Ok(&self.internal_buffer[..pos])
                     }
-                    ,
                     None => Ok(&self.internal_buffer)
                 }
             }
@@ -193,7 +193,7 @@ impl FieldType {
             FieldType::Date => Some(8),
             FieldType::Integer => Some(std::mem::size_of::<i32>() as u8),
             FieldType::Currency => Some(std::mem::size_of::<f64>() as u8),
-            FieldType::DateTime => Some( 2 * std::mem::size_of::<i32>() as u8),
+            FieldType::DateTime => Some(2 * std::mem::size_of::<i32>() as u8),
             FieldType::Double => Some(std::mem::size_of::<f64>() as u8),
             _ => None
         }
@@ -212,7 +212,7 @@ impl TryFrom<char> for FieldType {
 }
 
 
-#[derive(Debug,Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Date {
     year: u32,
     month: u32,
@@ -224,7 +224,6 @@ mod de {
     use super::*;
     use serde::de::{Deserialize, Visitor};
     use serde::Deserializer;
-    use serde::export::Formatter;
 
     impl<'de> Deserialize<'de> for Date {
         fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
@@ -248,16 +247,32 @@ mod de {
     }
 }
 
+
+#[cfg(feature = "serde")]
+mod ser {
+    use super::*;
+
+    use serde::ser::Serialize;
+    use serde::Serializer;
+
+    impl Serialize for Date {
+        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
+            S: Serializer {
+            serializer.serialize_bytes(self.to_string().as_bytes())
+        }
+    }
+}
+
 impl Date {
     pub fn new(day: u32, month: u32, year: u32) -> Result<Self, Error> {
         if month > 12 || day > 31 || year < 1900 || year > 2155 {
             Err(Error::InvalidDate)
         } else {
-            Ok(( Self {
+            Ok(Self {
                 year,
                 month,
-                day
-            }))
+                day,
+            })
         }
     }
 
@@ -312,12 +327,12 @@ impl Date {
 
         let day = (h % S) / U + 1;
         let month = ((h / S + M) % (N)) + 1;
-        let year = (e / P) - Y +(N + M - month) / N;
+        let year = (e / P) - Y + (N + M - month) / N;
 
-        Date{
+        Date {
             year: year as u32,
             month: month as u32,
-            day: day as u32
+            day: day as u32,
         }
     }
 
@@ -328,7 +343,7 @@ impl Date {
             (self.month + 9, self.year - 1)
         };
 
-        let century =  year / 100;
+        let century = year / 100;
         let decade = year - 100 * century;
 
         ((146097 * century) / 4 + (1461 * decade) / 4 + (153 * month + 2) / 5 + self.day + 1721119) as i32
@@ -376,11 +391,11 @@ impl std::string::ToString for Date {
 }
 
 // TODO new() fn that validates inputs
-#[derive(Debug,Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Time {
     hours: u32,
     minutes: u32,
-    seconds: u32
+    seconds: u32,
 }
 
 impl Time {
@@ -398,7 +413,7 @@ impl Time {
         Self {
             hours,
             minutes,
-            seconds
+            seconds,
         }
     }
 
@@ -411,10 +426,10 @@ impl Time {
 }
 
 // TODO new() fn that validates inputs
-#[derive(Debug,Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DateTime {
     date: Date,
-    time: Time
+    time: Time,
 }
 
 impl DateTime {
@@ -425,7 +440,7 @@ impl DateTime {
         let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
         Ok(Self {
             date,
-            time
+            time,
         })
     }
 
@@ -435,6 +450,7 @@ impl DateTime {
         Ok(())
     }
 }
+
 
 
 /// Enum where each variant stores the record value
@@ -464,9 +480,10 @@ impl FieldValue {
     ) -> Result<Self, Error> {
         let value = match field_info.field_type {
             FieldType::Logical => match source.read_u8()? as char {
-                ' ' => FieldValue::Logical(None),
-                '1' | '0' | 'T' | 't' | 'Y' | 'y'| 'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(true)),
-                _ => FieldValue::Logical(Some(false)),
+                ' ' | '?' => FieldValue::Logical(None),
+                '1' | '0' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
+                'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(false)),
+                _ => FieldValue::Logical(None)
             },
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
@@ -494,7 +511,7 @@ impl FieldValue {
                 } else {
                     FieldValue::Float(Some(trimmed_value.parse::<f32>()?))
                 }
-            },
+            }
             FieldType::Date => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
                 if value.chars().all(|c| c == ' ') {
@@ -508,26 +525,26 @@ impl FieldValue {
             FieldType::Currency => FieldValue::Currency(source.read_f64::<LittleEndian>()?),
             FieldType::DateTime => FieldValue::DateTime(DateTime::read_from(&mut source)?),
             FieldType::Memo => {
-                let index_in_memo = 
-                if field_info.field_length > 4 {
-                    let string = read_string_of_len(&mut source, field_info.field_length)?;
-                    let trimmed_str = string.trim();
-                    if trimmed_str.is_empty() {
-                        return Ok(FieldValue::Memo(String::from("")));
+                let index_in_memo =
+                    if field_info.field_length > 4 {
+                        let string = read_string_of_len(&mut source, field_info.field_length)?;
+                        let trimmed_str = string.trim();
+                        if trimmed_str.is_empty() {
+                            return Ok(FieldValue::Memo(String::from("")));
+                        } else {
+                            trimmed_str.parse::<u32>()?
+                        }
                     } else {
-                        trimmed_str.parse::<u32>()?
-                    }
-                } else {
-                    source.read_u32::<LittleEndian>()?
-                };
+                        source.read_u32::<LittleEndian>()?
+                    };
 
                 if let Some(memo_reader) = memo_reader {
                     let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
                     FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
                 } else {
-                    return Err(Error::MissingMemoFile)
+                    return Err(Error::MissingMemoFile);
                 }
-            },
+            }
         };
         Ok(value)
     }
@@ -546,71 +563,62 @@ impl FieldValue {
             FieldValue::DateTime(_) => FieldType::DateTime
         }
     }
+}
 
-    pub(crate) fn write_to<T: Write>(&self, mut dest: T) -> Result<(), Error> {
+impl WriteableDbaseField for FieldValue {
+    fn field_type(&self) -> FieldType {
+        self.field_type()
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         match self {
             FieldValue::Character(value) => {
                 if let Some(s) = value {
-                    let bytes = s.as_bytes();
-                    dest.write_all(&bytes)?;
+                    <&str as WriteableDbaseField>::write_to(&s.as_str(), dst)?;
                 }
                 Ok(())
             }
             FieldValue::Numeric(value) => {
                 if let Some(n) = value {
-                    write!(dest, "{}", n)?;
+                    <f64 as WriteableDbaseField>::write_to(n, dst)?;
                 }
                 Ok(())
-            },
+            }
             FieldValue::Float(value) => {
                 if let Some(n) = value {
-                    write!(dest, "{}", n)?;
+                    write!(dst, "{}", n)?;
                 }
                 Ok(())
             }
             FieldValue::Logical(value) => {
-                if let Some(b) = value {
-                    if *b {
-                        dest.write_u8('t' as u8)?;
-                    } else {
-                        dest.write_u8('f' as u8)?;
-                    }
-                } else {
-                    dest.write_u8('?' as u8)?;
-                }
-                Ok(())
+                <Option<bool> as WriteableDbaseField>::write_to(value, dst)
             }
             FieldValue::Date(value) => {
                 match value {
                     Some(d) => {
-                        let date_str = d.to_string();
-                        let date_str_bytes: &[u8] = date_str.as_ref();
-                        dest.write_all(&date_str_bytes)?;
+                        <Date as WriteableDbaseField>::write_to(&d, dst)?;
                     }
                     None => {
-                        dest.write_all(&[' ' as u8; 8])?;
+                        dst.write_all(&[' ' as u8; 8])?;
                     }
                 }
                 Ok(())
             }
             FieldValue::Double(d) => {
-                dest.write_f64::<LittleEndian>(*d)?;
+                dst.write_f64::<LittleEndian>(*d)?;
                 Ok(())
             }
             FieldValue::Integer(i) => {
-                dest.write_i32::<LittleEndian>(*i)?;
-                Ok(())
+                dst.write_i32::<LittleEndian>(*i)
             }
             FieldValue::Memo(_text) => {
                 unimplemented!();
             }
             FieldValue::Currency(c) => {
-                dest.write_f64::<LittleEndian>(*c)?;
-                Ok(())
+                dst.write_f64::<LittleEndian>(*c)
             }
             FieldValue::DateTime(dt) => {
-                dt.write_to(&mut dest)?;
-                Ok(())
+                dt.write_to(dst)
             }
         }
     }
@@ -642,6 +650,84 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+impl WriteableDbaseField for f64 {
+    fn field_type(&self) -> FieldType {
+        FieldType::Numeric
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        write!(dst, "{}", self)
+    }
+}
+
+impl WriteableDbaseField for f32 {
+    fn field_type(&self) -> FieldType {
+        FieldType::Float
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        write!(dst, "{}", self)
+    }
+}
+
+impl WriteableDbaseField for &str {
+    fn field_type(&self) -> FieldType {
+        FieldType::Character
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        dst.write_all(self.as_bytes())
+    }
+}
+
+impl WriteableDbaseField for String {
+    fn field_type(&self) -> FieldType {
+        FieldType::Character
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        self.as_str().write_to(dst)
+    }
+}
+
+impl WriteableDbaseField for Date {
+    fn field_type(&self) -> FieldType {
+        FieldType::Date
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        write!(dst, "{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
+}
+
+
+impl WriteableDbaseField for bool {
+    fn field_type(&self) -> FieldType {
+        FieldType::Logical
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if *self {
+            write!(dst, "{}", 't')
+        } else {
+            write!(dst, "{}", 'f')
+        }
+    }
+}
+
+impl WriteableDbaseField for Option<bool> {
+    fn field_type(&self) -> FieldType {
+        FieldType::Logical
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if let Some(value) = self {
+            value.write_to(dst)
+        } else {
+            write!(dst, "?")
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -649,6 +735,7 @@ mod test {
 
     use record::FieldFlags;
     use std::io::{Cursor, Seek, SeekFrom};
+
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> FieldInfo {
         FieldInfo {
             name: "".to_owned(),
@@ -756,7 +843,7 @@ mod test {
 
     #[test]
     fn test_to_julian_day_number() {
-        let date = Date{year: 2019, month: 07, day: 20};
+        let date = Date { year: 2019, month: 07, day: 20 };
         assert_eq!(date.to_julian_day_number(), 2458685);
     }
 
@@ -765,7 +852,7 @@ mod test {
         let field = FieldValue::Float(Some(12.43));
 
         let mut out = Cursor::new(Vec::<u8>::new());
-        let num_bytes_written = field.write_to(&mut out).unwrap();
+        field.write_to(&mut out).unwrap();
 
         let record_info =
             create_temp_record_field_info(FieldType::Float, out.position() as u8);

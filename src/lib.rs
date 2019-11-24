@@ -51,11 +51,14 @@ mod writing;
 
 #[cfg(feature = "serde")]
 mod de;
+#[cfg(feature = "serde")]
+mod ser;
 
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
 pub use record::field::{FieldValue, Date, DateTime};
 pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
-pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldValueCollector};
+pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldWriter};
+use std::fmt::{Display, Formatter};
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -76,6 +79,7 @@ pub enum Error {
     ErrorOpeningMemoFile(std::io::Error),
     BadConversion(FieldConversionError),
     EndOfRecord,
+    MissingFields, // FIXME find something better ?
     Message(String),
 }
 
@@ -103,6 +107,31 @@ impl From<FieldConversionError> for Error {
     }
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        match self {
+            Error::Message(ref msg) => {msg},
+            Error::IoError(_) => {"A std::io::Error occured"},
+            Error::ParseFloatError(_) => {"Failed to parse a float"},
+            Error::ParseIntError(_) => {"Failed to parse an int"},
+            Error::InvalidFieldType(_) => {"The field type is invalid"},
+            Error::InvalidDate => {"The date is invalid"},
+            Error::FieldNameTooLong => {"The Field name is too long to fit"},
+            Error::MissingMemoFile => {"A memo file was expected but could not be found"},
+            Error::ErrorOpeningMemoFile(_) => {"An error occured when trying to open the memo file"},
+            Error::BadConversion(_) => {"BadConvertion"},
+            Error::EndOfRecord => {"EndOfRecord"},
+            Error::MissingFields => {"Missing at least one field"},
+        }
+    }
+}
 
 #[macro_export]
 macro_rules! dbase_record {
@@ -123,23 +152,25 @@ macro_rules! dbase_record {
                 fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
                     where T: Read + Seek
                 {
-                          Ok(Self {
-                            $(
-                                $field_name: field_iterator
-                                    .read_next_field_as::<$field_type>()
-                                    .ok_or(Error::EndOfRecord)??
-                                    .value
-                            ),+
-                          })
+                  Ok(Self {
+                    $(
+                        $field_name: field_iterator
+                            .read_next_field_as::<$field_type>()
+                            .ok_or(Error::EndOfRecord)??
+                            .value
+                    ),+
+                  })
               }
         }
 
-        impl WritableRecord for $name {
-             fn values_for_fields(self, _field_names: &[&str], values: &mut dbase::FieldValueCollector) {
+       impl WritableRecord for $name {
+             fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
                 $(
-                    values.push(FieldValue::from(self.$field_name));
+                    field_writer.write_next_field_value(&self.$field_name)?;
                 )+
+                Ok(())
              }
         }
+
     };
 }

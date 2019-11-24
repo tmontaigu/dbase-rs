@@ -20,6 +20,18 @@ pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
 const BACKLINK_SIZE: u16 = 263;
 
+/// Trait to be implemented by structs that represent records read from a
+/// dBase file.
+///
+/// The field iterator gives access to methods that allow to read fields value
+/// or skip them.
+/// It is not required that the user reads / skips all the fields in a record,
+/// in other words: it is not required to consume the iterator.
+pub trait ReadableRecord: Sized {
+    fn read_using<'a, 'b, T>(field_iterator: &'a mut FieldIterator<'b, T>) -> Result<Self, Error>
+        where T: Read + Seek;
+}
+
 /// Type definition of a generic record.
 /// A .dbf file is composed of many records
 #[derive(Debug, PartialEq)]
@@ -51,11 +63,10 @@ impl Record {
         self.map.get(field_name)
     }
 
-    pub(crate) fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
+    pub fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
         self.map.remove(field_name)
     }
 }
-
 
 impl IntoIterator for Record {
     type Item = (String, FieldValue);
@@ -110,7 +121,7 @@ impl<T: Read + Seek> Reader<T> {
     /// let reader = dbase::Reader::new(f).unwrap();
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
-        let header = dbg!(Header::read_from(&mut source)?);
+        let header = Header::read_from(&mut source)?;
         let offset_to_first_record = if header.file_type.is_visual_fox_pro() {
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
@@ -123,9 +134,7 @@ impl<T: Read + Seek> Reader<T> {
 
         let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(FieldInfo::new_deletion_flag());
-        dbg!(source.seek(SeekFrom::Current(0)).unwrap());
-        for i in 0..num_fields {
-            println!("{} / {}", i, num_fields);
+        for _ in 0..num_fields {
             let info = FieldInfo::read_from(&mut source)?;
             fields_info.push(info);
         }
@@ -241,7 +250,7 @@ pub struct NamedValue<'a, T> {
 /// And will not go through the fields of the next record.
 pub struct FieldIterator<'a, T: Read + Seek> {
     pub(crate) source: &'a mut T,
-    pub(crate) fields_info: std::slice::Iter<'a, FieldInfo>,
+    pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     pub(crate) memo_reader: &'a mut Option<MemoReader<T>>,
 }
 
@@ -251,7 +260,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Option<Result<NamedValue<'a, FieldValue>, Error>> {
-        let field_info = dbg!(self.fields_info.next()?);
+        let field_info = self.fields_info.next()?;
         let value = match FieldValue::read_from(self.source, self.memo_reader, field_info) {
             Err(e) => return Some(Err(e)),
             Ok(value) => value
@@ -308,13 +317,17 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         Ok(())
     }
 
+    /// Reads the raw bytes of the next field without doing any filtering or trimming
+    #[cfg(feature = "serde")]
     pub(crate) fn read_next_field_raw(&mut self) -> Option<Result<Vec<u8>, Error>> {
         match self.fields_info.next() {
             Some(field_info) => {
-                println!("read_raw {} -> {}", field_info.name, field_info.field_length);
                 if field_info.is_deletion_flag() {
-                    self.skip_field(field_info).unwrap(); // FIXME
-                    self.read_next_field_raw()
+                    if let Err(e) = self.skip_field(field_info) {
+                        Some(Err(e.into()))
+                    } else {
+                        self.read_next_field_raw()
+                    }
                 } else {
                     let mut buf = vec![0u8; field_info.field_length as usize];
                     match self.source.read_exact(&mut buf) {
@@ -327,6 +340,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         }
     }
 
+    /// Advance the source to skip the field
     fn skip_field(&mut self, field_info: &FieldInfo) -> std::io::Result<()> {
         self.source.seek(SeekFrom::Current(i64::from(field_info.field_length)))?;
         Ok(())
@@ -360,7 +374,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
         } else {
             let mut iter = FieldIterator {
                 source: &mut self.reader.source,
-                fields_info: self.reader.fields_info.iter(),
+                fields_info: self.reader.fields_info.iter().peekable(),
                 memo_reader: &mut None,
             };
             let record = Some(R::read_using(&mut iter));
@@ -375,17 +389,6 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
     }
 }
 
-/// Trait to be implemented by structs that represent records read from a
-/// dBase file.
-///
-/// The field iterator gives access to methods that allow to read fields value
-/// or skip them.
-/// It is not required that the user reads / skips all the fields in a record,
-/// in other words: it is not required to consume the iterator.
-pub trait ReadableRecord: Sized {
-    fn read_using<'a, 'b, T>(field_iterator: &'a mut FieldIterator<'b, T>) -> Result<Self, Error>
-        where T: Read + Seek;
-}
 
 /// One liner to read the content of a .dbf file
 ///

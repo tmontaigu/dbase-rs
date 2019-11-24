@@ -1,18 +1,13 @@
 use std::fmt::Display;
 use std::io::{Read, Seek};
 
-use serde::{de, Deserializer};
+use serde::Deserializer;
 use serde::de::{DeserializeOwned, Visitor, DeserializeSeed, SeqAccess};
-use serde::Deserialize;
-use serde::export::Formatter;
 
-use ::{FieldInfo, ReadableRecord};
-use Reader;
+use ::ReadableRecord;
 
 use crate::Error;
 use crate::FieldIterator;
-use record::field::MemoReader;
-use serde::de::value::MapAccessDeserializer;
 
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
@@ -20,64 +15,69 @@ impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<<T as DeserializeSeed<'de>>::Value>, Self::Error> where
         T: DeserializeSeed<'de> {
-        seed.deserialize(&mut **self).map(Some)
-        //unimplemented!()
+        if self.fields_info.peek().is_none() {
+            Ok(None)
+        } else {
+            seed.deserialize(&mut **self).map(Some)
+        }
     }
 }
 
 
+//TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
+//  We probably can also deserialize tuple struct, etc
 impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T> {
     type Error = Error;
 
-    fn deserialize_any<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_any<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+       unimplemented!("Dbase cannot deserialize any")
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_as::<bool>().unwrap().unwrap().value;
+        let value = self.read_next_field_as::<bool>().ok_or(Error::EndOfRecord)??.value;
         visitor.visit_bool(value)
     }
 
-    fn deserialize_i8<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_i8<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize i8")
     }
 
-    fn deserialize_i16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_i16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize i16")
     }
 
-    fn deserialize_i32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_i32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize i23")
     }
 
-    fn deserialize_i64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_i64<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize i64")
     }
 
-    fn deserialize_u8<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_u8<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize u8")
     }
 
-    fn deserialize_u16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_u16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize u16")
     }
 
-    fn deserialize_u32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_u32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize u32")
     }
 
-    fn deserialize_u64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_u64<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize u64")
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
@@ -92,14 +92,14 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         visitor.visit_f64(value)
     }
 
-    fn deserialize_char<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_char<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize char")
     }
 
-    fn deserialize_str<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_str<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize str")
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
@@ -108,9 +108,9 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         visitor.visit_string(value)
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize bytes")
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
@@ -119,87 +119,79 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         visitor.visit_byte_buf(value)
     }
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_option<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize option") // TODO I think we can
     }
 
-    fn deserialize_unit<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_unit<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize unit")
     }
 
-    fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_unit_struct<V>(self, _name: &'static str, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize unit struct")
     }
 
-    fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize newtype struct")
     }
 
-    fn deserialize_seq<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_seq<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize sequence")
     }
 
-    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_tuple<V>(self, _len: usize, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize tuple")
     }
 
-    fn deserialize_tuple_struct<V>(self, name: &'static str, len: usize, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_tuple_struct<V>(self, _name: &'static str, _len: usize, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize tuple struct")
     }
 
-    fn deserialize_map<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_map<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize map")
     }
 
-    fn deserialize_struct<V>(self, name: &'static str, fields: &'static [&'static str], visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_struct<V>(self, _name: &'static str, _fields: &'static [&'static str], visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        println!("deserialize_struct: {:?}, {:?}", name, fields);
         visitor.visit_seq(self)
     }
 
-    fn deserialize_enum<V>(self, name: &'static str, variants: &'static [&'static str], visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_enum<V>(self, _name: &'static str, _variants: &'static [&'static str], _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize enum")
     }
 
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_identifier<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize identifiers")
     }
 
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_ignored_any<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!()
+        unimplemented!("DBase cannot deserialize ignored any")
     }
 }
 
 
 impl<S: DeserializeOwned> ReadableRecord for S {
-
     fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error> where T: Read + Seek {
         S::deserialize(field_iterator)
     }
 }
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for Error {
-    fn description(&self) -> &str {
-        "fuckyou"
-    }
-}
+//
+//impl std::error::Error for Error {
+//    fn description(&self) -> &str {
+//        "fuckyou"
+//    }
+//}
 
 impl serde::de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {

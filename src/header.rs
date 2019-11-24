@@ -31,6 +31,13 @@ impl Version {
         }
     }
 
+    pub(crate) fn is_dbase(&self) -> bool {
+       match self {
+           Version::DBase3 {supports_memo: _} | Version::DBase4 {supports_memo: _} => true,
+           _ => false
+       }
+    }
+
     pub(crate) fn is_visual_fox_pro(&self) -> bool {
         match self {
             Version::VisualFoxPro => true,
