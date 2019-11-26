@@ -734,7 +734,7 @@ mod test {
     use super::*;
 
     use record::FieldFlags;
-    use std::io::{Cursor, Seek, SeekFrom};
+    use std::io::Cursor;
 
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> FieldInfo {
         FieldInfo {

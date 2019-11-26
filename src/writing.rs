@@ -63,7 +63,14 @@ impl TableWriterBuilder {
     }
 
     pub fn add_logical_field(mut self, name: FieldName) -> Self {
-        self.v.push(FieldInfo::new(name, FieldType::Logical, FieldType::Logical.size().unwrap()));
+        self.v.push(
+            FieldInfo::new(
+                name,
+                FieldType::Logical,
+                FieldType::Logical
+                    .size()
+                    .expect("Internal error Logical field date should be known"))
+        );
         self
     }
 
@@ -109,7 +116,9 @@ pub trait WritableRecord {
 impl WritableRecord for Record {
     fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
         while let Some(name ) = field_writer.next_field_name() {
-            let value = self.get(name).unwrap(); //FIXME
+            let value = self.get(name)
+                .ok_or_else(||
+                    Error::Message(format!("Could not find field named '{}' in the record map", name)))?;
             field_writer.write_next_field_value(value)?;
         }
         Ok(())
@@ -131,8 +140,11 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
             if field_value.field_type() != field_info.field_type {
-                panic!("FieldType for field '{}' is expected to be '{:?}', but we were given a '{:?}'",
-                       field_info.name, field_info.field_type, field_value.field_type());
+                return Err(Error::BadFieldType {
+                    expected: field_info.field_type,
+                    got: field_value.field_type(),
+                    field_name: field_info.name.to_owned()
+                });
             }
 
             field_value.write_to(&mut self.buffer)?;
@@ -142,8 +154,8 @@ impl<'a, W: Write> FieldWriter<'a, W> {
             if bytes_to_pad > 0 {
                 if field_info.field_type == FieldType::Float ||
                     field_info.field_type == FieldType::Numeric {
-                    // FIXME Depending on the locale, the dot might not be the delimiter for floating point
-                    //  but we are not yet ready to handle correctly codepages, etc
+                    // Depending on the locale, the dot might not be the delimiter for floating point
+                    // but we are not yet ready to handle correctly codepages, etc
                     let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == '.' as u8);
                     if maybe_dot_pos.is_none() {
                         write!(self.buffer, ".")?;

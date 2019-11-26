@@ -3,7 +3,7 @@ extern crate dbase;
 
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, FieldValue, ReadableRecord, FieldInfo, WritableRecord, Reader, FieldName, Date, TableWriter, Record, FieldWriter};
+use dbase::{Error, TableWriterBuilder, FieldIterator, ReadableRecord, WritableRecord, Reader, FieldName, Record, FieldWriter};
 use std::convert::{TryInto, TryFrom};
 
 const LINE_DBF: &str = "./tests/data/line.dbf";

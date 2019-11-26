@@ -59,6 +59,7 @@ pub use record::field::{FieldValue, Date, DateTime};
 pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
 pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldWriter};
 use std::fmt::{Display, Formatter};
+use record::field::FieldType;
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -80,6 +81,7 @@ pub enum Error {
     BadConversion(FieldConversionError),
     EndOfRecord,
     MissingFields, // FIXME find something better ?
+    BadFieldType{expected: FieldType, got: FieldType, field_name: String},
     Message(String),
 }
 
@@ -129,6 +131,9 @@ impl std::error::Error for Error {
             Error::BadConversion(_) => {"BadConvertion"},
             Error::EndOfRecord => {"EndOfRecord"},
             Error::MissingFields => {"Missing at least one field"},
+            Error::BadFieldType { expected: e, got: g, field_name: n } => {
+                stringify!("For field named '{}', expected field_type: {}, but was give: {}", n, e, g)
+            }
         }
     }
 }
