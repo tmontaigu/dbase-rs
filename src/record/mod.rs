@@ -86,7 +86,7 @@ impl FieldInfo {
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
         let mut name = [0u8; 11];
         source.read_exact(&mut name)?;
-        let field_type = dbg!(source.read_u8()?);
+        let field_type = source.read_u8()?;
 
         let mut displacement_field = [0u8; 4];
         source.read_exact(&mut displacement_field)?;

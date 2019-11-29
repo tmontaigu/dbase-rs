@@ -3,6 +3,8 @@ use std::io::Write;
 
 use writing::FieldWriter;
 use ::{Error, WritableRecord};
+use record::field::FieldType;
+use Date;
 
 
 impl<T> WritableRecord for T
@@ -80,12 +82,23 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+        if let Some(field_info) = self.fields_info.peek() {
+            match field_info.field_type {
+                FieldType::Character => self.write_next_field_value::<Option<String>>(&None),
+                FieldType::Numeric => self.write_next_field_value::<Option<f64>>(&None),
+                FieldType::Float => self.write_next_field_value::<Option<f32>>(&None),
+                FieldType::Date => self.write_next_field_value::<Option<Date>>(&None),
+                FieldType::Logical => self.write_next_field_value::<Option<bool>>(&None),
+                _ => Err(Error::Message(format!("FieldType {:?} cannot store None values", field_info.field_type)))
+            }
+        } else {
+            Err(Error::EndOfRecord)
+        }
     }
 
-    fn serialize_some<T: ?Sized>(self, _value: &T) -> Result<Self::Ok, Self::Error> where
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> where
         T: Serialize {
-        unimplemented!()
+        value.serialize(self)
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {

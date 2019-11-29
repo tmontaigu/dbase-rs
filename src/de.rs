@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom};
 
 use serde::Deserializer;
 use serde::de::{DeserializeOwned, Visitor, DeserializeSeed, SeqAccess};
@@ -8,6 +8,7 @@ use ::ReadableRecord;
 
 use crate::Error;
 use crate::FieldIterator;
+use FieldValue;
 
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
@@ -119,9 +120,24 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         visitor.visit_byte_buf(value)
     }
 
-    fn deserialize_option<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_option<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize option") // TODO I think we can
+        //FIXME this is actually terrible, this means we read the field twice
+        // Would just peeking the first fex bytes and checking they are not padding bytes ?
+        let value: FieldValue = self.peek_next_field()?.value;
+        match value {
+            FieldValue::Character(Some(_)) => visitor.visit_some(self),
+            FieldValue::Logical(Some(_)) => visitor.visit_some(self),
+            FieldValue::Numeric(Some(_)) => visitor.visit_some(self),
+            FieldValue::Float(Some(_)) => visitor.visit_some(self),
+            FieldValue::Date(Some(_)) => visitor.visit_some(self),
+            FieldValue::Character(None) => visitor.visit_none(),
+            FieldValue::Logical(None) => visitor.visit_none(),
+            FieldValue::Numeric(None) => visitor.visit_none(),
+            FieldValue::Float(None) => visitor.visit_none(),
+            FieldValue::Date(None) => visitor.visit_none(),
+            _ => visitor.visit_some(self)
+        }
     }
 
     fn deserialize_unit<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
@@ -186,12 +202,6 @@ impl<S: DeserializeOwned> ReadableRecord for S {
         S::deserialize(field_iterator)
     }
 }
-//
-//impl std::error::Error for Error {
-//    fn description(&self) -> &str {
-//        "fuckyou"
-//    }
-//}
 
 impl serde::de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
