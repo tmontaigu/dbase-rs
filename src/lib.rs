@@ -119,18 +119,18 @@ impl Display for Error {
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         match self {
-            Error::Message(ref msg) => {msg},
-            Error::IoError(_) => {"A std::io::Error occured"},
-            Error::ParseFloatError(_) => {"Failed to parse a float"},
-            Error::ParseIntError(_) => {"Failed to parse an int"},
-            Error::InvalidFieldType(_) => {"The field type is invalid"},
-            Error::InvalidDate => {"The date is invalid"},
-            Error::FieldNameTooLong => {"The Field name is too long to fit"},
-            Error::MissingMemoFile => {"A memo file was expected but could not be found"},
-            Error::ErrorOpeningMemoFile(_) => {"An error occured when trying to open the memo file"},
-            Error::BadConversion(_) => {"BadConvertion"},
-            Error::EndOfRecord => {"EndOfRecord"},
-            Error::MissingFields => {"Missing at least one field"},
+            Error::Message(ref msg) => { msg }
+            Error::IoError(_) => { "A std::io::Error occurred" }
+            Error::ParseFloatError(_) => { "Failed to parse a float" }
+            Error::ParseIntError(_) => { "Failed to parse an int" }
+            Error::InvalidFieldType(_) => { "The field type is invalid" }
+            Error::InvalidDate => { "The date is invalid" }
+            Error::FieldNameTooLong => { "The Field name is too long to fit" }
+            Error::MissingMemoFile => { "A memo file was expected but could not be found" }
+            Error::ErrorOpeningMemoFile(_) => { "An error occurred when trying to open the memo file" }
+            Error::BadConversion(_) => { "BadConversion" }
+            Error::EndOfRecord => { "EndOfRecord" }
+            Error::MissingFields => { "Missing at least one field" }
             Error::BadFieldType { expected: e, got: g, field_name: n } => {
                 stringify!("For field named '{}', expected field_type: {}, but was give: {}", n, e, g)
             }

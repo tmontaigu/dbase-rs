@@ -96,12 +96,15 @@ mod private {
     impl_sealed_for!(bool);
     impl_sealed_for!(Option<bool>);
     impl_sealed_for!(std::string::String);
+    impl_sealed_for!(Option<std::string::String>);
     impl_sealed_for!(&str);
     impl_sealed_for!(f64);
     impl_sealed_for!(f32);
+    impl_sealed_for!(Option<f64>);
+    impl_sealed_for!(Option<f32>);
     impl_sealed_for!(crate::record::field::Date);
+    impl_sealed_for!(Option<crate::record::field::Date>);
     impl_sealed_for!(crate::record::field::FieldValue);
-
 }
 
 pub trait WriteableDbaseField: private::Sealed {

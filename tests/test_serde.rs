@@ -4,11 +4,25 @@ extern crate serde;
 
 #[cfg(feature = "serde")]
 mod serde_tests {
+    use std::convert::TryFrom;
+    use std::io::{Cursor, Write};
 
     use serde::{Deserialize, Serialize};
-    use dbase::{TableWriterBuilder, Reader, FieldName, Error, FieldValue, FieldWriter};
-    use std::io::{Cursor, Write};
-    use std::convert::TryFrom;
+    use serde::export::fmt::Debug;
+
+    use dbase::{Error, FieldName, FieldValue, FieldWriter, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
+
+    fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(records: &Vec<R>, writer_builder: TableWriterBuilder) {
+        let writer = writer_builder.build_with_dest(Cursor::new(Vec::<u8>::new()));
+
+        let mut dst = writer.write(records).unwrap();
+        dst.set_position(0);
+
+        let mut reader = Reader::new(dst).unwrap();
+        let read_records = reader.read_as::<R>().unwrap();
+
+        assert_eq!(&read_records, records);
+    }
 
     #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
     struct DeserializableRecord {
@@ -20,7 +34,7 @@ mod serde_tests {
     }
 
     #[test]
-    fn test_deserialize() {
+    fn test_serde_roundtrip() {
         let records = vec![
             DeserializableRecord {
                 name: "Holy Fawn".to_string(),
@@ -31,19 +45,70 @@ mod serde_tests {
             }
         ];
 
-        let writer = TableWriterBuilder::new()
+        let writer_builder = TableWriterBuilder::new()
             .add_character_field(FieldName::try_from("name").unwrap(), 25)
             .add_numeric_field(FieldName::try_from("price").unwrap(), 7, 4)
             .add_date_field(FieldName::try_from("date").unwrap())
             .add_logical_field(FieldName::try_from("available").unwrap())
-            .add_float_field(FieldName::try_from("score").unwrap(), 7, 5)
-            .build_with_dest(Cursor::new(Vec::<u8>::new()));
+            .add_float_field(FieldName::try_from("score").unwrap(), 7, 5);
 
-        let mut cursor = writer.write(&records).unwrap();
-        cursor.set_position(0);
+        write_read_compare(&records, writer_builder);
+    }
 
-        let mut reader = Reader::new(cursor).unwrap();
-        let r = reader.read_as::<DeserializableRecord>().unwrap();
-        assert_eq!(r, records);
+    #[test]
+    fn test_serde_optional_types() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Record {
+            opt_bool: Option<bool>
+        }
+
+        let writer_builder = TableWriterBuilder::new()
+            .add_logical_field(FieldName::try_from("opt_bool").unwrap());
+
+        let records = vec![
+            Record {
+                opt_bool: Some(true)
+            },
+            Record {
+                opt_bool: Some(false)
+            },
+            Record {
+                opt_bool: None
+            }
+        ];
+        write_read_compare(&records, writer_builder);
+    }
+
+    #[test]
+    fn test_serde_tuple() {
+        type TupleRecord = (String, f64);
+
+
+        let writer_builder = TableWriterBuilder::new()
+            .add_character_field(FieldName::try_from("Name").unwrap(), 50)
+            .add_numeric_field(FieldName::try_from("Price").unwrap(), 20, 6);
+
+        let records = vec![
+            ("Companion 50".to_string(), 525.32f64),
+            ("Companion 20".to_string(), 125.99f64)
+        ];
+        write_read_compare(&records, writer_builder);
+    }
+
+    #[test]
+    fn test_serde_tuple_struct() {
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct Record(bool, dbase::Date);
+
+
+        let writer_builder = TableWriterBuilder::new()
+            .add_logical_field(FieldName::try_from("bool").unwrap())
+            .add_date_field(FieldName::try_from("date").unwrap());
+
+        let records = vec![
+            Record { 0: true, 1: dbase::Date::new(12, 10, 2012).unwrap() },
+            Record { 0: false, 1: dbase::Date::new(12, 11, 2005).unwrap() },
+        ];
+        write_read_compare(&records, writer_builder);
     }
 }

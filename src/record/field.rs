@@ -198,6 +198,15 @@ impl FieldType {
             _ => None
         }
     }
+    pub(crate) fn pad_byte(&self) -> Option<u8> {
+        match *self {
+            FieldType::Character |
+            FieldType::Numeric |
+            FieldType::Float |
+            FieldType::Logical => Some(' ' as u8),
+            _ => None
+        }
+    }
 }
 
 impl TryFrom<char> for FieldType {
@@ -565,6 +574,7 @@ impl FieldValue {
     }
 }
 
+//TODO rename to WritableDBaseField ?
 impl WriteableDbaseField for FieldValue {
     fn field_type(&self) -> FieldType {
         self.field_type()
@@ -630,7 +640,6 @@ impl fmt::Display for FieldValue {
     }
 }
 
-
 impl From<&str> for FieldValue {
     fn from(s: &str) -> Self {
         FieldValue::Character(Some(String::from(s)))
@@ -660,6 +669,20 @@ impl WriteableDbaseField for f64 {
     }
 }
 
+impl WriteableDbaseField for Option<f64> {
+    fn field_type(&self) -> FieldType {
+        FieldType::Numeric
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if let Some(f) = self {
+            <f64 as WriteableDbaseField>::write_to(f, dst)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 impl WriteableDbaseField for f32 {
     fn field_type(&self) -> FieldType {
         FieldType::Float
@@ -667,6 +690,20 @@ impl WriteableDbaseField for f32 {
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         write!(dst, "{}", self)
+    }
+}
+
+impl WriteableDbaseField for Option<f32> {
+    fn field_type(&self) -> FieldType {
+        FieldType::Float
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if let Some(v) = self {
+            <f32 as WriteableDbaseField>::write_to(v, dst)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -690,6 +727,20 @@ impl WriteableDbaseField for String {
     }
 }
 
+impl WriteableDbaseField for Option<String> {
+    fn field_type(&self) -> FieldType {
+        FieldType::Character
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if let Some(s) = self {
+            <String as WriteableDbaseField>::write_to(s, dst)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 impl WriteableDbaseField for Date {
     fn field_type(&self) -> FieldType {
         FieldType::Date
@@ -697,6 +748,20 @@ impl WriteableDbaseField for Date {
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         write!(dst, "{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
+}
+
+impl WriteableDbaseField for Option<Date> {
+    fn field_type(&self) -> FieldType {
+        FieldType::Date
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        if let Some(d) = self {
+            <Date as WriteableDbaseField>::write_to(d, dst)
+        } else {
+            Ok(())
+        }
     }
 }
 
