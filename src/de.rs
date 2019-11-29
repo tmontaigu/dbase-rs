@@ -160,14 +160,14 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         unimplemented!("DBase cannot deserialize sequence")
     }
 
-    fn deserialize_tuple<V>(self, _len: usize, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize tuple")
+        visitor.visit_seq(self)
     }
 
-    fn deserialize_tuple_struct<V>(self, _name: &'static str, _len: usize, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_tuple_struct<V>(self, _name: &'static str, _len: usize, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize tuple struct")
+        visitor.visit_seq(self)
     }
 
     fn deserialize_map<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
