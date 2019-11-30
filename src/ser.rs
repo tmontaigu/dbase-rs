@@ -106,16 +106,16 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+        unimplemented!("dBase cannot serialize unit struct")
     }
 
     fn serialize_unit_variant(self, _name: &'static str, _variant_index: u32, _variant: &'static str) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+        unimplemented!("dBase cannot serialize unit_variant")
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(self, _name: &'static str, _value: &T) -> Result<Self::Ok, Self::Error> where
+    fn serialize_newtype_struct<T: ?Sized>(self, _name: &'static str, value: &T) -> Result<Self::Ok, Self::Error> where
         T: Serialize {
-        unimplemented!()
+        value.serialize(self)
     }
 
     fn serialize_newtype_variant<T: ?Sized>(self, _name: &'static str, _variant_index: u32, _variant: &'static str, _value: &T) -> Result<Self::Ok, Self::Error> where

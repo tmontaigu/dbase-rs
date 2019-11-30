@@ -83,7 +83,6 @@ mod serde_tests {
     fn test_serde_tuple() {
         type TupleRecord = (String, f64);
 
-
         let writer_builder = TableWriterBuilder::new()
             .add_character_field(FieldName::try_from("Name").unwrap(), 50)
             .add_numeric_field(FieldName::try_from("Price").unwrap(), 20, 6);
@@ -100,7 +99,6 @@ mod serde_tests {
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct Record(bool, dbase::Date);
 
-
         let writer_builder = TableWriterBuilder::new()
             .add_logical_field(FieldName::try_from("bool").unwrap())
             .add_date_field(FieldName::try_from("date").unwrap());
@@ -110,5 +108,66 @@ mod serde_tests {
             Record { 0: false, 1: dbase::Date::new(12, 11, 2005).unwrap() },
         ];
         write_read_compare(&records, writer_builder);
+    }
+
+    #[test]
+    fn test_serde_new_type_struct() {
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct Name(String);
+
+        let writer_builder = TableWriterBuilder::new()
+            .add_character_field(FieldName::try_from("character").unwrap(), 50);
+
+        let records = vec![
+            Name("Sinmara".to_string())
+        ];
+        write_read_compare(&records, writer_builder);
+    }
+
+    #[test]
+    fn test_serialize_not_enough_fields() {
+        #[derive(Serialize)]
+        struct Record {
+            yes: bool
+        }
+
+        let records = vec![
+            Record {yes: false}
+        ];
+
+        let writer = TableWriterBuilder::new()
+            .add_logical_field(FieldName::try_from("yes").unwrap())
+            .add_character_field(FieldName::try_from("not present").unwrap(), 50)
+            .build_with_dest(Cursor::new(Vec::<u8>::new()));
+
+
+        let result = writer.write(&records);
+
+        match result {
+            Err(Error::NotEnoughFields) => assert!(true),
+            _ => assert!(false)
+        }
+    }
+
+    #[test]
+    fn test_serialize_not_too_many_fields() {
+        #[derive(Serialize)]
+        struct Record {
+            yes: bool,
+        }
+
+        let records = vec![
+            Record { yes: false }
+        ];
+
+        let writer = TableWriterBuilder::new()
+            .build_with_dest(Cursor::new(Vec::<u8>::new()));
+
+        let result = writer.write(&records);
+
+        match result {
+            Err(Error::EndOfRecord) => assert!(true),
+            _ => assert!(false)
+        }
     }
 }

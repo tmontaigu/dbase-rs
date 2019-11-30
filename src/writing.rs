@@ -107,7 +107,7 @@ mod private {
     impl_sealed_for!(crate::record::field::FieldValue);
 }
 
-pub trait WriteableDbaseField: private::Sealed {
+pub trait WritableDbaseField: private::Sealed {
     fn field_type(&self) -> FieldType;
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()>;
 }
@@ -139,7 +139,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         self.fields_info.peek().map(|info| info.name.as_str())
     }
 
-    pub fn write_next_field_value<T: WriteableDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
+    pub fn write_next_field_value<T: WritableDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
             if field_value.field_type() != field_info.field_type {
@@ -266,7 +266,7 @@ impl<W: Write> TableWriter<W> {
             }
             record.write_using(&mut field_writer)?;
             if !field_writer.all_fields_were_written() {
-                return Err(Error::MissingFields);
+                return Err(Error::NotEnoughFields);
             }
             field_writer.fields_info = self.fields_info.iter().peekable();
         }

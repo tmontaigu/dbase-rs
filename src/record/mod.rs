@@ -9,6 +9,7 @@ use record::field::FieldType;
 pub mod field;
 
 const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
+const FIELD_NAME_LENGTH: usize = 11;
 
 #[derive(Debug)]
 pub struct FieldName(String);
@@ -17,7 +18,7 @@ impl TryFrom<&str> for FieldName {
     type Error = &'static str;
 
     fn try_from(name: &str) -> Result<Self, Self::Error> {
-        if name.as_bytes().len() > 11 {
+        if name.as_bytes().len() > FIELD_NAME_LENGTH {
             Err("FieldName byte representation cannot exceed 11 bytes")
         } else {
             Ok(Self { 0: name.to_string() })
@@ -84,7 +85,7 @@ impl FieldInfo {
     }
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
-        let mut name = [0u8; 11];
+        let mut name = [0u8; FIELD_NAME_LENGTH];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
 
@@ -125,11 +126,8 @@ impl FieldInfo {
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
         let num_bytes = self.name.as_bytes().len();
-        if num_bytes > 10 {
-            return Err(Error::FieldNameTooLong);
-        }
-        let mut name_bytes = [0u8; 11];
-        name_bytes[..num_bytes].copy_from_slice(self.name.as_bytes());
+        let mut name_bytes = [0u8; FIELD_NAME_LENGTH];
+        name_bytes[..num_bytes.min(FIELD_NAME_LENGTH)].copy_from_slice(self.name.as_bytes());
         dest.write_all(&name_bytes)?;
 
         dest.write_u8(u8::from(self.field_type))?;

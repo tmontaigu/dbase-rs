@@ -26,7 +26,6 @@ impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
 
 
 //TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
-//  We probably can also deserialize tuple struct, etc
 impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T> {
     type Error = Error;
 
@@ -123,7 +122,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
     fn deserialize_option<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
         //FIXME this is actually terrible, this means we read the field twice
-        // Would just peeking the first fex bytes and checking they are not padding bytes ?
+        // Would just peeking the first fex bytes and checking they are not padding bytes be better ?
         let value: FieldValue = self.peek_next_field()?.value;
         match value {
             FieldValue::Character(Some(_)) => visitor.visit_some(self),
@@ -152,7 +151,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
 
     fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize newtype struct")
+        _visitor.visit_seq(self)
     }
 
     fn deserialize_seq<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where

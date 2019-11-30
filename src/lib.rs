@@ -80,7 +80,7 @@ pub enum Error {
     ErrorOpeningMemoFile(std::io::Error),
     BadConversion(FieldConversionError),
     EndOfRecord,
-    MissingFields, // FIXME find something better ?
+    NotEnoughFields,
     BadFieldType{expected: FieldType, got: FieldType, field_name: String},
     Message(String),
 }
@@ -130,7 +130,7 @@ impl std::error::Error for Error {
             Error::ErrorOpeningMemoFile(_) => { "An error occurred when trying to open the memo file" }
             Error::BadConversion(_) => { "BadConversion" }
             Error::EndOfRecord => { "EndOfRecord" }
-            Error::MissingFields => { "Missing at least one field" }
+            Error::NotEnoughFields => { "Missing at least one field" }
             Error::BadFieldType { expected: e, got: g, field_name: n } => {
                 stringify!("For field named '{}', expected field_type: {}, but was give: {}", n, e, g)
             }

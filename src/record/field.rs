@@ -9,7 +9,7 @@ use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 use record::FieldInfo;
 use Error;
 use std::convert::TryFrom;
-use writing::WriteableDbaseField;
+use writing::WritableDbaseField;
 
 #[derive(PartialEq, Copy, Clone)]
 pub(crate) enum MemoFileType {
@@ -574,8 +574,7 @@ impl FieldValue {
     }
 }
 
-//TODO rename to WritableDBaseField ?
-impl WriteableDbaseField for FieldValue {
+impl WritableDbaseField for FieldValue {
     fn field_type(&self) -> FieldType {
         self.field_type()
     }
@@ -584,13 +583,13 @@ impl WriteableDbaseField for FieldValue {
         match self {
             FieldValue::Character(value) => {
                 if let Some(s) = value {
-                    <&str as WriteableDbaseField>::write_to(&s.as_str(), dst)?;
+                    <&str as WritableDbaseField>::write_to(&s.as_str(), dst)?;
                 }
                 Ok(())
             }
             FieldValue::Numeric(value) => {
                 if let Some(n) = value {
-                    <f64 as WriteableDbaseField>::write_to(n, dst)?;
+                    <f64 as WritableDbaseField>::write_to(n, dst)?;
                 }
                 Ok(())
             }
@@ -601,12 +600,12 @@ impl WriteableDbaseField for FieldValue {
                 Ok(())
             }
             FieldValue::Logical(value) => {
-                <Option<bool> as WriteableDbaseField>::write_to(value, dst)
+                <Option<bool> as WritableDbaseField>::write_to(value, dst)
             }
             FieldValue::Date(value) => {
                 match value {
                     Some(d) => {
-                        <Date as WriteableDbaseField>::write_to(&d, dst)?;
+                        <Date as WritableDbaseField>::write_to(&d, dst)?;
                     }
                     None => {
                         dst.write_all(&[' ' as u8; 8])?;
@@ -659,7 +658,7 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-impl WriteableDbaseField for f64 {
+impl WritableDbaseField for f64 {
     fn field_type(&self) -> FieldType {
         FieldType::Numeric
     }
@@ -669,21 +668,21 @@ impl WriteableDbaseField for f64 {
     }
 }
 
-impl WriteableDbaseField for Option<f64> {
+impl WritableDbaseField for Option<f64> {
     fn field_type(&self) -> FieldType {
         FieldType::Numeric
     }
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         if let Some(f) = self {
-            <f64 as WriteableDbaseField>::write_to(f, dst)
+            <f64 as WritableDbaseField>::write_to(f, dst)
         } else {
             Ok(())
         }
     }
 }
 
-impl WriteableDbaseField for f32 {
+impl WritableDbaseField for f32 {
     fn field_type(&self) -> FieldType {
         FieldType::Float
     }
@@ -693,21 +692,21 @@ impl WriteableDbaseField for f32 {
     }
 }
 
-impl WriteableDbaseField for Option<f32> {
+impl WritableDbaseField for Option<f32> {
     fn field_type(&self) -> FieldType {
         FieldType::Float
     }
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         if let Some(v) = self {
-            <f32 as WriteableDbaseField>::write_to(v, dst)
+            <f32 as WritableDbaseField>::write_to(v, dst)
         } else {
             Ok(())
         }
     }
 }
 
-impl WriteableDbaseField for &str {
+impl WritableDbaseField for &str {
     fn field_type(&self) -> FieldType {
         FieldType::Character
     }
@@ -717,7 +716,7 @@ impl WriteableDbaseField for &str {
     }
 }
 
-impl WriteableDbaseField for String {
+impl WritableDbaseField for String {
     fn field_type(&self) -> FieldType {
         FieldType::Character
     }
@@ -727,21 +726,21 @@ impl WriteableDbaseField for String {
     }
 }
 
-impl WriteableDbaseField for Option<String> {
+impl WritableDbaseField for Option<String> {
     fn field_type(&self) -> FieldType {
         FieldType::Character
     }
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         if let Some(s) = self {
-            <String as WriteableDbaseField>::write_to(s, dst)
+            <String as WritableDbaseField>::write_to(s, dst)
         } else {
             Ok(())
         }
     }
 }
 
-impl WriteableDbaseField for Date {
+impl WritableDbaseField for Date {
     fn field_type(&self) -> FieldType {
         FieldType::Date
     }
@@ -751,14 +750,14 @@ impl WriteableDbaseField for Date {
     }
 }
 
-impl WriteableDbaseField for Option<Date> {
+impl WritableDbaseField for Option<Date> {
     fn field_type(&self) -> FieldType {
         FieldType::Date
     }
 
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
         if let Some(d) = self {
-            <Date as WriteableDbaseField>::write_to(d, dst)
+            <Date as WritableDbaseField>::write_to(d, dst)
         } else {
             Ok(())
         }
@@ -766,7 +765,7 @@ impl WriteableDbaseField for Option<Date> {
 }
 
 
-impl WriteableDbaseField for bool {
+impl WritableDbaseField for bool {
     fn field_type(&self) -> FieldType {
         FieldType::Logical
     }
@@ -780,7 +779,7 @@ impl WriteableDbaseField for bool {
     }
 }
 
-impl WriteableDbaseField for Option<bool> {
+impl WritableDbaseField for Option<bool> {
     fn field_type(&self) -> FieldType {
         FieldType::Logical
     }
