@@ -3,8 +3,11 @@ use std::io::{Read, Write};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use Error;
-use record::field::Date;
-use record::field::MemoFileType;
+use record::field::{MemoFileType, Date};
+
+use chrono;
+use record::field::FieldType::DateTime;
+use chrono::Datelike;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Version {
@@ -116,8 +119,7 @@ impl Header {
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
             file_type: Version::DBase3 { supports_memo: false },
-            // FIXME find way to get date::now()
-            last_update: Date::new( 25, 12, 1990).unwrap(),
+            last_update: chrono::Utc::now().date().into(),
             num_records,
             offset_to_first_record: offset,
             size_of_record: size_of_records,

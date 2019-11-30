@@ -10,6 +10,7 @@ use record::FieldInfo;
 use Error;
 use std::convert::TryFrom;
 use writing::WritableDbaseField;
+use chrono::Datelike;
 
 #[derive(PartialEq, Copy, Clone)]
 pub(crate) enum MemoFileType {
@@ -396,6 +397,16 @@ impl std::string::ToString for Date {
         }
         s.push_str(&day_str);
         s
+    }
+}
+
+impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
+    fn from(d: chrono::Date<Tz>) -> Self {
+        Self {
+            year: d.year() as u32,
+            month: d.month(),
+            day: d.day()
+        }
     }
 }
 

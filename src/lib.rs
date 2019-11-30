@@ -41,6 +41,7 @@
 //https://dbfviewer.com/dbf-file-structure/
 
 extern crate byteorder;
+extern crate chrono;
 #[cfg(feature = "serde")]
 extern crate serde;
 
