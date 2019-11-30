@@ -340,18 +340,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         }
     }
 
-
-    /// Advance the source to skip the field
-    fn skip_field(&mut self, field_info: &FieldInfo) -> std::io::Result<()> {
-        self.source.seek(SeekFrom::Current(i64::from(field_info.field_length)))?;
-        Ok(())
-    }
-
-    fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<NamedValue<'a, FieldValue>, Error> {
-        let value = FieldValue::read_from(self.source, self.memo_reader, field_info)?;
-        Ok(NamedValue { name: &field_info.name, value })
-    }
-
+    #[cfg(feature = "serde")]
     pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, Error> {
         let mut field_info = *self.fields_info.peek().ok_or(Error::EndOfRecord)?;
         if field_info.is_deletion_flag() {
@@ -362,6 +351,17 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         let value = self.read_field(field_info)?;
         self.source.seek(SeekFrom::Current(-i64::from(field_info.field_length)))?;
         Ok(value)
+    }
+
+    /// Advance the source to skip the field
+    fn skip_field(&mut self, field_info: &FieldInfo) -> std::io::Result<()> {
+        self.source.seek(SeekFrom::Current(i64::from(field_info.field_length)))?;
+        Ok(())
+    }
+
+    fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<NamedValue<'a, FieldValue>, Error> {
+        let value = FieldValue::read_from(self.source, self.memo_reader, field_info)?;
+        Ok(NamedValue { name: &field_info.name, value })
     }
 }
 

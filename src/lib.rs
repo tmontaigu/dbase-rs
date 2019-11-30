@@ -132,8 +132,8 @@ impl std::error::Error for Error {
             Error::BadConversion(_) => { "BadConversion" }
             Error::EndOfRecord => { "EndOfRecord" }
             Error::NotEnoughFields => { "Missing at least one field" }
-            Error::BadFieldType { expected: e, got: g, field_name: n } => {
-                stringify!("For field named '{}', expected field_type: {}, but was give: {}", n, e, g)
+            Error::BadFieldType { expected: _, got: _, field_name: _ } => {
+                "The Given type does not match the expected field type"
             }
         }
     }

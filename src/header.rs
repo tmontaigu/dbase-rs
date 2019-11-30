@@ -6,8 +6,6 @@ use Error;
 use record::field::{MemoFileType, Date};
 
 use chrono;
-use record::field::FieldType::DateTime;
-use chrono::Datelike;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Version {

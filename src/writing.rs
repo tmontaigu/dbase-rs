@@ -15,17 +15,18 @@ use record::{FieldInfo, FieldName, field::FieldType};
 const FILE_TERMINATOR: u8 = 0x1A;
 
 pub struct TableWriterBuilder {
-    v: Vec<FieldInfo>
+    v: Vec<FieldInfo>,
+    hdr: Option<Header>,
 }
 
 impl TableWriterBuilder {
     pub fn new() -> Self {
         Self {
-            v: vec![]
+            v: vec![],
+            hdr: None
         }
     }
 
-    //TODO the header should/must be reused
     pub fn from_reader<T: std::io::Read + std::io::Seek>(reader: crate::reading::Reader<T>) -> Self {
         let mut fields_info = reader.fields_info;
         if let Some(i) = fields_info.first() {
@@ -34,7 +35,8 @@ impl TableWriterBuilder {
             }
         }
         Self {
-            v: fields_info
+            v: fields_info,
+            hdr: Some(reader.header)
         }
     }
 
@@ -75,7 +77,7 @@ impl TableWriterBuilder {
     }
 
     pub fn build_with_dest<W: Write>(self, dst: W) -> TableWriter<W> {
-        TableWriter::new(dst, self.v)
+        TableWriter::new(dst, self.v, self.hdr)
     }
 
     pub fn build_with_file_dest<P: AsRef<Path>>(self, path: P) -> std::io::Result<TableWriter<BufWriter<File>>> {
@@ -224,30 +226,22 @@ impl<'a, W: Write> FieldWriter<'a, W> {
 pub struct TableWriter<W: Write> {
     dst: W,
     fields_info: Vec<FieldInfo>,
+    /// contains the header of the input file
+    /// if this writer was created form a reader
+    origin_header: Option<Header>,
 }
 
-//TODO the header written should be constructed better
-// (choose the right version depending on fields ,etc)
 impl<W: Write> TableWriter<W> {
-    fn new(dst: W, fields_info: Vec<FieldInfo>) -> Self {
+    fn new(dst: W, fields_info: Vec<FieldInfo>, origin_header: Option<Header>) -> Self {
         Self {
             dst,
             fields_info,
+            origin_header
         }
     }
 
     pub fn write<R: WritableRecord>(mut self, records: &Vec<R>) -> Result<W, Error> {
-        let offset_to_first_record =
-            Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
-        let size_of_record = self.fields_info
-            .iter()
-            .fold(0u16, |s, ref info| s + info.field_length as u16);
-        let header = Header::new(
-            records.len() as u32,
-            offset_to_first_record as u16,
-            size_of_record,
-        );
-
+        let header = self.build_header(records.len());
         header.write_to(&mut self.dst)?;
         for record_info in &self.fields_info {
             record_info.write_to(&mut self.dst)?;
@@ -273,6 +267,26 @@ impl<W: Write> TableWriter<W> {
 
         self.dst.write_u8(FILE_TERMINATOR)?;
         Ok(self.dst)
+    }
+
+    fn build_header(&self, num_records: usize) -> Header {
+        let offset_to_first_record =
+            Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
+        let size_of_record = self.fields_info
+            .iter()
+            .fold(0u16, |s, ref info| s + info.field_length as u16);
+
+        let mut header = Header::new(
+            num_records as u32,
+            offset_to_first_record as u16,
+            size_of_record,
+        );
+
+        if let Some(ref hdr) = self.origin_header {
+            header.code_page_mark = hdr.code_page_mark;
+            header.file_type = hdr.file_type;
+        }
+        header
     }
 }
 

@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 
 use serde::Deserializer;
 use serde::de::{DeserializeOwned, Visitor, DeserializeSeed, SeqAccess};

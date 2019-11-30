@@ -199,15 +199,6 @@ impl FieldType {
             _ => None
         }
     }
-    pub(crate) fn pad_byte(&self) -> Option<u8> {
-        match *self {
-            FieldType::Character |
-            FieldType::Numeric |
-            FieldType::Float |
-            FieldType::Logical => Some(' ' as u8),
-            _ => None
-        }
-    }
 }
 
 impl TryFrom<char> for FieldType {
