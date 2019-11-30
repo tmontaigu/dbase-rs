@@ -1,16 +1,15 @@
 extern crate dbase;
 #[cfg(feature = "serde")]
-extern crate serde;
+extern crate serde_derive;
 
-#[cfg(feature = "serde")]
 mod serde_tests {
     use std::convert::TryFrom;
     use std::io::{Cursor, Write};
 
-    use serde::{Deserialize, Serialize};
-    use serde::export::fmt::Debug;
+    use serde_derive::{Deserialize, Serialize};
 
     use dbase::{Error, FieldName, FieldValue, FieldWriter, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
+    use std::fmt::Debug;
 
     fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(records: &Vec<R>, writer_builder: TableWriterBuilder) {
         let writer = writer_builder.build_with_dest(Cursor::new(Vec::<u8>::new()));
