@@ -1,14 +1,46 @@
+use std::convert::TryFrom;
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-pub mod field;
-use record::field::FieldType;
 use ::{Error, FieldValue};
-use std::convert::TryFrom;
+use record::field::FieldType;
+
+pub mod field;
+
+const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
+const FIELD_NAME_LENGTH: usize = 11;
+
+#[derive(Debug)]
+/// Wrapping struct to create a FieldName from a String.
+///
+/// FieldNames in the dBase format cannot exceed 11 bytes (not char).
+///
+/// # Examples
+///
+/// ```
+/// use dbase::FieldName;
+/// use std::convert::TryFrom;
+///
+/// let name = FieldName::try_from("Small Name");
+/// assert!(name.is_ok())
+/// ```
+pub struct FieldName(String);
+
+impl TryFrom<&str> for FieldName {
+    type Error = &'static str;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
+        if name.as_bytes().len() > FIELD_NAME_LENGTH {
+            Err("FieldName byte representation cannot exceed 11 bytes")
+        } else {
+            Ok(Self { 0: name.to_string() })
+        }
+    }
+}
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FieldFlags(u8);
 
 impl FieldFlags {
@@ -34,8 +66,8 @@ impl FieldFlags {
 }
 
 /// Struct giving the info for a record field
-#[derive(Debug)]
-pub struct RecordFieldInfo {
+#[derive(Debug, PartialEq)]
+pub struct FieldInfo {
     /// The name of the field
     pub(crate) name: String,
     /// The field type
@@ -49,12 +81,12 @@ pub struct RecordFieldInfo {
 }
 
 
-impl RecordFieldInfo {
+impl FieldInfo {
     pub(crate) const SIZE: usize = 32;
 
-    pub(crate) fn new(name: String, field_type: FieldType, length: u8) -> Self {
+    pub(crate) fn new(name: FieldName, field_type: FieldType, length: u8) -> Self {
         Self {
-            name,
+            name: name.0,
             field_type,
             displacement_field: [0u8; 4],
             field_length: length,
@@ -66,7 +98,7 @@ impl RecordFieldInfo {
     }
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
-        let mut name = [0u8; 11];
+        let mut name = [0u8; FIELD_NAME_LENGTH];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
 
@@ -107,16 +139,11 @@ impl RecordFieldInfo {
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
         let num_bytes = self.name.as_bytes().len();
-        if num_bytes > 10 {
-            return Err(Error::FieldLengthTooLong);
-        }
-        dest.write_all(&self.name.as_bytes()[0..num_bytes])?;
-        let mut name_bytes = [0u8; 11];
-        name_bytes[10] = '\0' as u8;
-        dest.write_all(&name_bytes[0..11 - num_bytes])?;
+        let mut name_bytes = [0u8; FIELD_NAME_LENGTH];
+        name_bytes[..num_bytes.min(FIELD_NAME_LENGTH)].copy_from_slice(self.name.as_bytes());
+        dest.write_all(&name_bytes)?;
 
-        dest.write_u8(self.field_type as u8)?;
-
+        dest.write_u8(u8::from(self.field_type))?;
         dest.write_all(&self.displacement_field)?;
         dest.write_u8(self.field_length)?;
         dest.write_u8(self.num_decimal_places)?;
@@ -130,9 +157,9 @@ impl RecordFieldInfo {
         Ok(())
     }
 
-    pub fn new_deletion_flag() -> Self {
+    pub(crate) fn new_deletion_flag() -> Self {
         Self {
-            name: "DeletionFlag".to_owned(),
+            name: DELETION_FLAG_NAME.to_owned(),
             field_type: FieldType::Character,
             displacement_field: [0u8; 4],
             field_length: 1,
@@ -143,68 +170,104 @@ impl RecordFieldInfo {
 
         }
     }
+
+    pub(crate) fn is_deletion_flag(&self) -> bool {
+        &self.name == DELETION_FLAG_NAME
+    }
 }
 
-// Conversion trait implementations
+/// Errors that can happen when trying to convert a FieldValue into
+/// a more concrete type
 #[derive(Debug)]
 pub enum FieldConversionError {
-    FieldTypeNotAsExpected{actual: FieldType},
+    FieldTypeNotAsExpected { actual: FieldType },
     NoneValue,
 }
 
-impl TryFrom<FieldValue> for Option<String> {
-    type Error = FieldConversionError;
+macro_rules! impl_try_from_field_value_for_ {
+    (FieldValue::$variant:ident => $out_type:ty) => {
+        impl TryFrom<FieldValue> for $out_type {
+            type Error = FieldConversionError;
 
-    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
-        if let FieldValue::Character(maybe_str) = value{
-            Ok(maybe_str)
-        } else {
-            Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+            fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+                if let FieldValue::$variant(v) = value {
+                    Ok(v)
+                } else {
+                     Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                }
+            }
         }
+    };
+     (FieldValue::$variant:ident(Some($v:ident)) => $out_type:ty) => {
+        impl TryFrom<FieldValue> for $out_type {
+            type Error = FieldConversionError;
+
+            fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+                match value {
+                    FieldValue::$variant(Some($v)) => Ok($v),
+                    FieldValue::$variant(None) => Err(FieldConversionError::NoneValue),
+                    _ => Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                }
+            }
+        }
+    };
+}
+
+impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
+impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
+
+impl_try_from_field_value_for_!(FieldValue::Float => Option<f32>);
+impl_try_from_field_value_for_!(FieldValue::Float(Some(v)) => f32);
+
+impl_try_from_field_value_for_!(FieldValue::Date => Option<field::Date>);
+impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => field::Date);
+
+impl_try_from_field_value_for_!(FieldValue::Character => Option<String>);
+impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
+
+impl_try_from_field_value_for_!(FieldValue::Logical => Option<bool>);
+impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
+
+impl From<String> for FieldValue {
+    fn from(s: String) -> Self {
+        FieldValue::Character(Some(s))
     }
 }
 
-impl TryFrom<FieldValue> for String {
-    type Error = FieldConversionError;
-
-    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
-        if let Some(s) = Option::<String>::try_from(value)? {
-            Ok(s)
-        } else {
-            Err(FieldConversionError::NoneValue)
-        }
+impl From<f64> for FieldValue {
+    fn from(v: f64) -> Self {
+        FieldValue::Numeric(Some(v))
     }
 }
 
+impl From<f32> for FieldValue {
+    fn from(v: f32) -> Self {
+        FieldValue::Float(Some(v))
+    }
+}
 
-
+impl From<bool> for FieldValue {
+    fn from(b: bool) -> FieldValue {
+        FieldValue::Logical(Some(b))
+    }
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use header::Header;
+    use std::io::Cursor;
 
-
-    use std::fs::File;
-    use std::io::{Cursor, Seek, SeekFrom};
     #[test]
-    fn test_record_info_read_writing() {
-        let mut file = File::open("tests/data/line.dbf").unwrap();
-        file.seek(SeekFrom::Start(Header::SIZE as u64)).unwrap();
+    fn write_read_field_info() {
+        let field_info = FieldInfo::new(FieldName::try_from("LICENSE").unwrap(), FieldType::Character, 30);
+        let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
+        field_info.write_to(&mut cursor).unwrap();
 
-        let mut record_info_bytes = [0u8; RecordFieldInfo::SIZE];
-        file.read_exact(&mut record_info_bytes).unwrap();
-        let mut cursor = Cursor::new(record_info_bytes);
+        cursor.set_position(0);
 
-        let records_info = RecordFieldInfo::read_from(&mut cursor).unwrap();
+        let read_field_info = FieldInfo::read_from(&mut cursor).unwrap();
 
-
-        let mut out = Cursor::new(Vec::<u8>::with_capacity(RecordFieldInfo::SIZE));
-        records_info.write_to(&mut out).unwrap();
-
-        let bytes_written = out.into_inner();
-        assert_eq!(bytes_written.len(), record_info_bytes.len());
-        assert_eq!(bytes_written, record_info_bytes);
+        assert_eq!(read_field_info, field_info);
     }
 }
 

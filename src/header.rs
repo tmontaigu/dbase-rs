@@ -3,9 +3,11 @@ use std::io::{Read, Write};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use Error;
-use record::field::Date;
-use record::field::MemoFileType;
+use record::field::{MemoFileType, Date};
 
+use chrono;
+
+/// Known version of dBase files
 #[derive(Debug, Copy, Clone)]
 pub enum Version {
     FoxBase,
@@ -29,6 +31,13 @@ impl Version {
             Version::FoxPro2 { supports_memo: true } => Some(MemoFileType::FoxBaseMemo),
             _ => None
         }
+    }
+
+    pub(crate) fn is_dbase(&self) -> bool {
+       match self {
+           Version::DBase3 {supports_memo: _} | Version::DBase4 {supports_memo: _} => true,
+           _ => false
+       }
     }
 
     pub(crate) fn is_visual_fox_pro(&self) -> bool {
@@ -74,7 +83,7 @@ impl From<u8> for Version {
     }
 }
 
-
+#[derive(Debug)]
 pub struct TableFlags(u8);
 
 impl TableFlags {
@@ -91,7 +100,9 @@ impl TableFlags {
     }
 }
 
-
+/// Definition of the header struct stored at the beginning
+/// of each dBase file
+#[derive(Debug)]
 pub struct Header {
     pub file_type: Version,
     pub last_update: Date,
@@ -101,19 +112,17 @@ pub struct Header {
     pub is_transaction_incomplete: bool,
     pub encryption_flag: u8,
     pub table_flags: TableFlags,
-    pub code_page_mark: u8, //FIXME is the "language driver id" instead ?
+    pub code_page_mark: u8,
 }
 
 
 impl Header {
+    pub(crate) const SIZE: usize = 32;
+
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
             file_type: Version::DBase3 { supports_memo: false },
-            last_update: Date {
-                year: 1990,
-                month: 12,
-                day: 25,
-            }, //FIXME use chrono crate
+            last_update: chrono::Utc::now().date().into(),
             num_records,
             offset_to_first_record: offset,
             size_of_record: size_of_records,
@@ -123,8 +132,6 @@ impl Header {
             code_page_mark: 0,
         }
     }
-
-    pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = Version::from(source.read_u8()?);
@@ -176,13 +183,7 @@ impl Header {
 
         // Reserved
         dest.write_u16::<LittleEndian>(0)?;
-
-        let byte_value = if self.is_transaction_incomplete {
-            1u8
-        } else {
-            0u8
-        };
-        dest.write_u8(byte_value)?;
+        dest.write_u8(u8::from(self.is_transaction_incomplete))?;
         dest.write_u8(self.encryption_flag)?;
 
         let _reserved = [0u8; 12];

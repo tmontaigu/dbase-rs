@@ -12,3 +12,9 @@ repository = "https://github.com/tmontaigu/dbase-rs"
 
 [dependencies]
 byteorder = "1.2.7"
+chrono = "0.4"
+serde = {version = "1.0.102", optional = true}
+
+[dev-dependencies]
+serde_derive = "1.0.102"
+
