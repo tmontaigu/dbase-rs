@@ -2,13 +2,14 @@ extern crate dbase;
 #[cfg(feature = "serde")]
 extern crate serde_derive;
 
+#[cfg(feature = "serde")]
 mod serde_tests {
     use std::convert::TryFrom;
-    use std::io::{Cursor, Write};
+    use std::io::Cursor;
 
     use serde_derive::{Deserialize, Serialize};
 
-    use dbase::{Error, FieldName, FieldValue, FieldWriter, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
+    use dbase::{Error, FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
     use std::fmt::Debug;
 
     fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(records: &Vec<R>, writer_builder: TableWriterBuilder) {
@@ -80,8 +81,6 @@ mod serde_tests {
 
     #[test]
     fn test_serde_tuple() {
-        type TupleRecord = (String, f64);
-
         let writer_builder = TableWriterBuilder::new()
             .add_character_field(FieldName::try_from("Name").unwrap(), 50)
             .add_numeric_field(FieldName::try_from("Price").unwrap(), 20, 6);

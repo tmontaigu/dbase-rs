@@ -7,6 +7,7 @@ use record::field::{MemoFileType, Date};
 
 use chrono;
 
+/// Known version of dBase files
 #[derive(Debug, Copy, Clone)]
 pub enum Version {
     FoxBase,
@@ -99,6 +100,8 @@ impl TableFlags {
     }
 }
 
+/// Definition of the header struct stored at the beginning
+/// of each dBase file
 #[derive(Debug)]
 pub struct Header {
     pub file_type: Version,
@@ -114,6 +117,8 @@ pub struct Header {
 
 
 impl Header {
+    pub(crate) const SIZE: usize = 32;
+
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         Self {
             file_type: Version::DBase3 { supports_memo: false },
@@ -127,8 +132,6 @@ impl Header {
             code_page_mark: 0,
         }
     }
-
-    pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = Version::from(source.read_u8()?);

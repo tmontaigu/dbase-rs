@@ -63,6 +63,10 @@ impl Record {
         self.map.get(field_name)
     }
 
+    pub fn get_mut(&mut self, field_name: &str) -> Option<&mut FieldValue> {
+        self.map.get_mut(field_name)
+    }
+
     pub fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
         self.map.remove(field_name)
     }
@@ -359,6 +363,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         Ok(())
     }
 
+    /// read the next field using the given info
     fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<NamedValue<'a, FieldValue>, Error> {
         let value = FieldValue::read_from(self.source, self.memo_reader, field_info)?;
         Ok(NamedValue { name: &field_info.name, value })

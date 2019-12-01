@@ -12,6 +12,19 @@ const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
 
 #[derive(Debug)]
+/// Wrapping struct to create a FieldName from a String.
+///
+/// FieldNames in the dBase format cannot exceed 11 bytes (not char).
+///
+/// # Examples
+///
+/// ```
+/// use dbase::FieldName;
+/// use std::convert::TryFrom;
+///
+/// let name = FieldName::try_from("Small Name");
+/// assert!(name.is_ok())
+/// ```
 pub struct FieldName(String);
 
 impl TryFrom<&str> for FieldName {
@@ -163,7 +176,8 @@ impl FieldInfo {
     }
 }
 
-// Conversion trait implementations
+/// Errors that can happen when trying to convert a FieldValue into
+/// a more concrete type
 #[derive(Debug)]
 pub enum FieldConversionError {
     FieldTypeNotAsExpected { actual: FieldType },

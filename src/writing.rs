@@ -14,6 +14,27 @@ use record::{FieldInfo, FieldName, field::FieldType};
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
+/// Builder to be used to create a [TableWriter](struct.TableWriter).
+///
+/// The dBase format il akin to a database, thus you have to specify the fields
+/// of the record you are going to write
+///
+/// # Example
+///
+/// Here we will create a writer that will be able to write records with 2 character fields
+/// where both fields cannot exceed 50 bytes in length.
+///
+/// The writer will write its data to a cursor, but files are also supported.
+/// ```
+/// use dbase::{TableWriterBuilder, FieldName};
+/// use std::convert::TryFrom;
+/// use std::io::Cursor;
+///
+/// let writer = TableWriterBuilder::new()
+///     .add_character_field(FieldName::try_from("First Name").unwrap(), 50)
+///     .add_character_field(FieldName::try_from("Last Name").unwrap(), 50)
+///     .build_with_dest(Cursor::new(Vec::<u8>::new()));
+/// ```
 pub struct TableWriterBuilder {
     v: Vec<FieldInfo>,
     hdr: Option<Header>,
@@ -40,16 +61,20 @@ impl TableWriterBuilder {
         }
     }
 
+    /// Adds a Character field to the record definition,
+    /// the length is the maximum number of bytes (not chars) that fields can hold
     pub fn add_character_field(mut self, name: FieldName, length: u8) -> Self {
         self.v.push(FieldInfo::new(name, FieldType::Character, length));
         self
     }
 
+    /// Adds a [Date](struct.Date.html) field
     pub fn add_date_field(mut self, name: FieldName) -> Self {
         self.v.push(FieldInfo::new(name, FieldType::Date, FieldType::Date.size().unwrap()));
         self
     }
 
+    /// Adds a [Numeric](enum.FieldValue.html#variant.Numeric)
     pub fn add_numeric_field(mut self, name: FieldName, length: u8, num_decimals: u8) -> Self {
         let mut info = FieldInfo::new(name, FieldType::Numeric, length);
         info.num_decimal_places = num_decimals;
@@ -57,6 +82,7 @@ impl TableWriterBuilder {
         self
     }
 
+    /// Adds a [Float](enum.FieldValue.html#variant.Float)
     pub fn add_float_field(mut self, name: FieldName, length: u8, num_decimals: u8) -> Self {
         let mut info = FieldInfo::new(name, FieldType::Float, length);
         info.num_decimal_places = num_decimals;
@@ -64,6 +90,7 @@ impl TableWriterBuilder {
         self
     }
 
+    /// Adds a [Logicak](enum.FieldValue.html#variant.Logical)
     pub fn add_logical_field(mut self, name: FieldName) -> Self {
         self.v.push(
             FieldInfo::new(
@@ -76,10 +103,15 @@ impl TableWriterBuilder {
         self
     }
 
+    /// Builds the writer and set the dst as where the file data will be written
     pub fn build_with_dest<W: Write>(self, dst: W) -> TableWriter<W> {
         TableWriter::new(dst, self.v, self.hdr)
     }
 
+    /// Helper function to set create a file at the given path
+    /// and make the writer write to the newly created file.
+    ///
+    /// This function wraps the `File` in a `BufWriter` to increase performance.
     pub fn build_with_file_dest<P: AsRef<Path>>(self, path: P) -> std::io::Result<TableWriter<BufWriter<File>>> {
         let dst = BufWriter::new(File::create(path)?);
         Ok(self.build_with_dest(dst))
@@ -109,12 +141,16 @@ mod private {
     impl_sealed_for!(crate::record::field::FieldValue);
 }
 
+/// Trait implemented by all types that we know how to write in a dBase file
 pub trait WritableDbaseField: private::Sealed {
     fn field_type(&self) -> FieldType;
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()>;
 }
 
+/// Trait to be implemented by struct to you want to be able to write to (serialize)
+/// to a dBase file
 pub trait WritableRecord {
+    /// Use the FieldWriter to write the fields of the record
     fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error>;
 }
 
@@ -130,6 +166,11 @@ impl WritableRecord for Record {
     }
 }
 
+/// Struct that knows how to write a record
+///
+/// You give it the values you want to write and it writes them.
+/// The order and type of value must match the one given when creating the
+/// [TableWriter](struct.TableWriter.html), otherwise an error will occur.
 pub struct FieldWriter<'a, W: Write> {
     pub(crate) dst: &'a mut W,
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
@@ -137,10 +178,23 @@ pub struct FieldWriter<'a, W: Write> {
 }
 
 impl<'a, W: Write> FieldWriter<'a, W> {
+    /// Returns the name of the field that is expected to be written
     pub fn next_field_name(&mut self) -> Option<&'a str> {
         self.fields_info.peek().map(|info| info.name.as_str())
     }
 
+    /// Writes the given `field_value` to the record.
+    ///
+    /// # Notes
+    ///
+    /// If the corresponding `FieldType` of the the field_value type (`T`) does not
+    /// match the expected type an error is returned.
+    ///
+    /// Values for witch the number of bytes written would exceed the specified field_length
+    /// (if it had to be specified) will be truncated
+    ///
+    /// Trying to write more values than was declared when creating the writer will cause
+    /// an `EndOfRecord` error.
     pub fn write_next_field_value<T: WritableDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
@@ -223,6 +277,10 @@ impl<'a, W: Write> FieldWriter<'a, W> {
 
 }
 
+/// Structs that writes dBase records to a destination
+///
+/// The only way to create a TableWriter is to use its
+/// [TableWriterBuilder](struct.TableWriterBuilder.html)
 pub struct TableWriter<W: Write> {
     dst: W,
     fields_info: Vec<FieldInfo>,
@@ -240,6 +298,37 @@ impl<W: Write> TableWriter<W> {
         }
     }
 
+    /// Writes the records to the inner destination
+    /// and returns it once finished
+    ///
+    /// # Example
+    /// ```
+    /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, Error, FieldWriter};
+    /// use std::convert::TryFrom;
+    /// use std::io::{Cursor, Write};
+    ///
+    /// struct User {
+    ///     first_name: String,
+    /// }
+    ///
+    /// impl WritableRecord for User {
+    ///     fn write_using<'a, W: Write>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
+    ///         field_writer.write_next_field_value(&self.first_name)
+    ///     }
+    /// }
+    ///
+    /// let writer = TableWriterBuilder::new()
+    ///     .add_character_field(FieldName::try_from("First Name").unwrap(), 50)
+    ///     .build_with_dest(Cursor::new(Vec::<u8>::new()));
+    ///
+    /// let records = vec![
+    ///     User {
+    ///         first_name: "Yoshi".to_owned(),
+    ///     }
+    /// ];
+    /// let cursor = writer.write(&records).unwrap();
+    /// assert_eq!(cursor.position(), 117)
+    /// ```
     pub fn write<R: WritableRecord>(mut self, records: &Vec<R>) -> Result<W, Error> {
         let header = self.build_header(records.len());
         header.write_to(&mut self.dst)?;
