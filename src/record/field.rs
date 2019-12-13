@@ -560,6 +560,7 @@ impl FieldValue {
         Ok(value)
     }
 
+    // Returns the corresponding field type of the contained value
     pub fn field_type(&self) -> FieldType {
         match self {
             FieldValue::Character(_) => FieldType::Character,

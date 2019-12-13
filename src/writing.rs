@@ -14,7 +14,7 @@ use record::{FieldInfo, FieldName, field::FieldType};
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
-/// Builder to be used to create a [TableWriter](struct.TableWriter).
+/// Builder to be used to create a [TableWriter](struct.TableWriter.html).
 ///
 /// The dBase format il akin to a database, thus you have to specify the fields
 /// of the record you are going to write
@@ -48,6 +48,25 @@ impl TableWriterBuilder {
         }
     }
 
+    /// Gets the field definition from the reader to construct the TableWriter
+    ///
+    /// # Example
+    /// ```
+    /// use dbase::{FieldValue, TableWriterBuilder};
+    /// use std::io::Cursor;
+    /// let mut  reader = dbase::Reader::from_path("tests/data/stations.dbf").unwrap();
+    /// let mut stations = reader.read().unwrap();
+    /// let old_name = stations[0].insert("name".parse().unwrap(), "Montparnasse".into());
+    /// assert_eq!(old_name, Some(FieldValue::Character(Some("Van Dorn Street".parse().unwrap()))));
+    ///
+    /// let mut writer = TableWriterBuilder::from_reader(reader)
+    ///     .build_with_dest(Cursor::new(Vec::<u8>::new()));
+    ///
+    /// // from_reader picked up the record definition,
+    /// // so writing will work
+    /// let writing_result = writer.write(&stations);
+    /// assert_eq!(writing_result.is_ok(), true);
+    /// ```
     pub fn from_reader<T: std::io::Read + std::io::Seek>(reader: crate::reading::Reader<T>) -> Self {
         let mut fields_info = reader.fields_info;
         if let Some(i) = fields_info.first() {
@@ -90,7 +109,7 @@ impl TableWriterBuilder {
         self
     }
 
-    /// Adds a [Logicak](enum.FieldValue.html#variant.Logical)
+    /// Adds a [Logical](enum.FieldValue.html#variant.Logical)
     pub fn add_logical_field(mut self, name: FieldName) -> Self {
         self.v.push(
             FieldInfo::new(
@@ -178,7 +197,7 @@ pub struct FieldWriter<'a, W: Write> {
 }
 
 impl<'a, W: Write> FieldWriter<'a, W> {
-    /// Returns the name of the field that is expected to be written
+    /// Returns the name of the next field that is expected to be written
     pub fn next_field_name(&mut self) -> Option<&'a str> {
         self.fields_info.peek().map(|info| info.name.as_str())
     }
@@ -190,7 +209,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     /// If the corresponding `FieldType` of the the field_value type (`T`) does not
     /// match the expected type an error is returned.
     ///
-    /// Values for witch the number of bytes written would exceed the specified field_length
+    /// Values for which the number of bytes written would exceed the specified field_length
     /// (if it had to be specified) will be truncated
     ///
     /// Trying to write more values than was declared when creating the writer will cause
@@ -301,6 +320,8 @@ impl<W: Write> TableWriter<W> {
     /// Writes the records to the inner destination
     /// and returns it once finished
     ///
+    /// Values for which the number of bytes written would exceed the specified field_length
+    /// (if it had to be specified) will be truncated
     /// # Example
     /// ```
     /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, Error, FieldWriter};
