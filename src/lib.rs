@@ -37,6 +37,8 @@
 //!
 //! ```
 //!
+//! ## Deserialisation
+//!
 //! If you know what kind of data you expect from a particular file you can use implement
 //! the [ReadbableRecord](trait.ReadableRecord.html) trait to "deserialize" the record into
 //! your custom struct:
@@ -54,10 +56,10 @@
 //!     fn read_using<'a, 'b, T>(field_iterator: &'a mut dbase::FieldIterator<'b, T>) -> Result<Self, dbase::Error>
 //!          where T: Read + Seek{
 //!         Ok(Self {
-//!             name: field_iterator.read_next_field_as().ok_or(dbase::Error::EndOfRecord)??.value,
-//!             marker_col: field_iterator.read_next_field_as().ok_or(dbase::Error::EndOfRecord)??.value,
-//!             marker_sym: field_iterator.read_next_field_as().ok_or(dbase::Error::EndOfRecord)??.value,
-//!             line: field_iterator.read_next_field_as().ok_or(dbase::Error::EndOfRecord)??.value,
+//!             name: field_iterator.read_next_field_as()?.value,
+//!             marker_col: field_iterator.read_next_field_as()?.value,
+//!             marker_sym: field_iterator.read_next_field_as()?.value,
+//!             line: field_iterator.read_next_field_as()?.value,
 //!         })
 //!     }
 //! }
@@ -327,8 +329,7 @@ macro_rules! dbase_record {
                   Ok(Self {
                     $(
                         $field_name: field_iterator
-                            .read_next_field_as::<$field_type>()
-                            .ok_or(Error::EndOfRecord)??
+                            .read_next_field_as::<$field_type>()?
                             .value
                     ),+
                   })

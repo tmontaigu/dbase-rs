@@ -90,11 +90,11 @@ impl ReadableRecord for Album {
         where T: Read + Seek
     {
         Ok(Self {
-            artist: field_iterator.read_next_field_as().unwrap()?.value,
-            name: field_iterator.read_next_field_as().unwrap()?.value,
-            released: field_iterator.read_next_field_as().unwrap()?.value,
-            playtime: field_iterator.read_next_field_as().unwrap()?.value,
-            available: field_iterator.read_next_field_as().unwrap()?.value,
+            artist: field_iterator.read_next_field_as()?.value,
+            name: field_iterator.read_next_field_as()?.value,
+            released: field_iterator.read_next_field_as()?.value,
+            playtime: field_iterator.read_next_field_as()?.value,
+            available: field_iterator.read_next_field_as()?.value,
         })
     }
 }

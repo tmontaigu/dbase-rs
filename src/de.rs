@@ -36,7 +36,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_as::<bool>().ok_or(Error::EndOfRecord)??.value;
+        let value = self.read_next_field_as::<bool>()?.value;
         visitor.visit_bool(value)
     }
 
@@ -82,13 +82,13 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_as::<f32>().ok_or(Error::EndOfRecord)??.value;
+        let value = self.read_next_field_as::<f32>()?.value;
         visitor.visit_f32(value)
     }
 
     fn deserialize_f64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_as::<f64>().ok_or(Error::EndOfRecord)??.value;
+        let value = self.read_next_field_as::<f64>()?.value;
         visitor.visit_f64(value)
     }
 
@@ -104,7 +104,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
 
     fn deserialize_string<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_as::<String>().ok_or(Error::EndOfRecord)??.value;
+        let value = self.read_next_field_as::<String>()?.value;
         visitor.visit_string(value)
     }
 
@@ -115,7 +115,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        let value = self.read_next_field_raw().ok_or(Error::EndOfRecord)??;
+        let value = self.read_next_field_raw()?;
         visitor.visit_byte_buf(value)
     }
 

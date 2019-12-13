@@ -263,16 +263,16 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
-    pub fn read_next_field(&mut self) -> Option<Result<NamedValue<'a, FieldValue>, Error>> {
-        let field_info = self.fields_info.next()?;
+    pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, Error> {
+        let field_info = self.fields_info.next().ok_or(Error::EndOfRecord)?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
-                Some(Err(e.into()))
+                Err(e.into())
             } else {
                 self.read_next_field()
             }
         } else {
-            Some(self.read_field(field_info))
+            self.read_field(field_info)
         }
     }
 
@@ -281,18 +281,16 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
-    pub fn read_next_field_as<F>(&mut self) -> Option<Result<NamedValue<'a, F>, Error>>
+    pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, Error>
         where F: TryFrom<FieldValue>,
               <F as TryFrom<FieldValue>>::Error: Into<Error> {
-        match self.read_next_field() {
-            Some(Ok(NamedValue { name, value })) => {
-                match F::try_from(value) {
-                    Err(e) => Some(Err(e.into())),
-                    Ok(v) => Some(Ok(NamedValue { name, value: v }))
-                }
-            }
-            Some(Err(e)) => Some(Err(e)),
-            None => None
+        let field_value = self.read_next_field()?;
+        match F::try_from(field_value.value) {
+            Ok(v) => Ok(NamedValue{
+                name: field_value.name,
+                value: v
+            }),
+            Err(e) => Err(e.into())
         }
     }
 
@@ -323,24 +321,15 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
 
     /// Reads the raw bytes of the next field without doing any filtering or trimming
     #[cfg(feature = "serde")]
-    pub(crate) fn read_next_field_raw(&mut self) -> Option<Result<Vec<u8>, Error>> {
-        match self.fields_info.next() {
-            Some(field_info) => {
-                if field_info.is_deletion_flag() {
-                    if let Err(e) = self.skip_field(field_info) {
-                        Some(Err(e.into()))
-                    } else {
-                        self.read_next_field_raw()
-                    }
-                } else {
-                    let mut buf = vec![0u8; field_info.field_length as usize];
-                    match self.source.read_exact(&mut buf) {
-                        Err(e) => Some(Err(e.into())),
-                        Ok(_) => Some(Ok(buf))
-                    }
-                }
-            }
-            None => None
+    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, Error> {
+        let field_info = self.fields_info.next().ok_or(Error::EndOfRecord)?;
+        if field_info.is_deletion_flag() {
+            self.skip_next_field()?;
+            self.read_next_field_raw()
+        } else {
+            let mut buf = vec![0u8; field_info.field_length as usize];
+            self.source.read_exact(&mut buf)?;
+            Ok(buf)
         }
     }
 
@@ -374,7 +363,11 @@ impl<'a, T: Read + Seek> Iterator for FieldIterator<'a, T> {
     type Item = Result<NamedValue<'a, FieldValue>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_next_field()
+        match self.read_next_field() {
+            Err(Error::EndOfRecord) => None,
+            Ok(field_value) => Some(Ok(field_value)),
+            Err(e) => Some(Err(e))
+        }
     }
 }
 
