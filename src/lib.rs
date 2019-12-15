@@ -205,6 +205,7 @@
 //! fn main() {}
 //! ```
 
+//#![deny(unstable_features, missing_docs)]
 
 extern crate byteorder;
 extern crate chrono;
@@ -240,13 +241,14 @@ pub enum Error {
     /// The Field as an invalid FieldType
     InvalidFieldType(char),
     InvalidDate,
-    FieldNameTooLong,
     /// Happens when at least one field is a Memo type
     /// and the that additional memo file could not be found / was not given
     MissingMemoFile,
     ErrorOpeningMemoFile(std::io::Error),
     BadConversion(FieldConversionError),
     EndOfRecord,
+    /// The [FieldWriter](struct.FieldWriter.html) did not receive as many field as it
+    /// was expected
     NotEnoughFields,
     BadFieldType{expected: FieldType, got: FieldType, field_name: String},
     Message(String),
@@ -292,7 +294,6 @@ impl std::error::Error for Error {
             Error::ParseIntError(_) => { "Failed to parse an int" }
             Error::InvalidFieldType(_) => { "The field type is invalid" }
             Error::InvalidDate => { "The date is invalid" }
-            Error::FieldNameTooLong => { "The Field name is too long to fit" }
             Error::MissingMemoFile => { "A memo file was expected but could not be found" }
             Error::ErrorOpeningMemoFile(_) => { "An error occurred when trying to open the memo file" }
             Error::BadConversion(_) => { "BadConversion" }

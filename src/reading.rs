@@ -28,6 +28,8 @@ const BACKLINK_SIZE: u16 = 263;
 /// It is not required that the user reads / skips all the fields in a record,
 /// in other words: it is not required to consume the iterator.
 pub trait ReadableRecord: Sized {
+    /// function to be implemented that returns a new instance of your type
+    /// using values read from the `FieldIterator'
     fn read_using<'a, 'b, T>(field_iterator: &'a mut FieldIterator<'b, T>) -> Result<Self, Error>
         where T: Read + Seek;
 }
@@ -55,18 +57,22 @@ impl ReadableRecord for Record {
 }
 
 impl Record {
+    /// Inserts a new value in the record, returning the old one if there was any
     pub fn insert(&mut self, field_name: String, value: FieldValue) -> Option<FieldValue>{
         self.map.insert(field_name, value)
     }
 
+    /// Returns the [FieldValue](enums.FieldValue.html) for the given field name
     pub fn get(&self, field_name: &str) -> Option<&FieldValue> {
         self.map.get(field_name)
     }
 
+    /// Returns the mutable [FieldValue](enums.FieldValue.html) for the given field name
     pub fn get_mut(&mut self, field_name: &str) -> Option<&mut FieldValue> {
         self.map.get_mut(field_name)
     }
 
+    /// Removes the [FieldValue](enums.FieldValue.html) for the given field name
     pub fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
         self.map.remove(field_name)
     }
@@ -172,10 +178,13 @@ impl<T: Read + Seek> Reader<T> {
         }
     }
 
+    /// Shortcut function to get an iterator over the [Record](struct.Record.html) in the file
     pub fn iter_records(&mut self) -> RecordIterator<T, Record> {
         self.iter_records_as::<Record>()
     }
 
+
+    /// Reads all the records of the file inside a `Vec`
     pub fn read_as<R: ReadableRecord>(&mut self) -> Result<Vec<R>, Error> {
         // We don't read the file terminator
         self.iter_records_as::<R>().collect::<Result<Vec<R>, Error>>()

@@ -180,7 +180,9 @@ impl FieldInfo {
 /// a more concrete type
 #[derive(Debug)]
 pub enum FieldConversionError {
-    FieldTypeNotAsExpected { actual: FieldType },
+    /// Happens when the conversion could not be mode because the FieldType
+    /// does not mat the expected one
+    FieldTypeNotAsExpected { expected: FieldType, actual: FieldType },
     NoneValue,
 }
 
@@ -193,7 +195,10 @@ macro_rules! impl_try_from_field_value_for_ {
                 if let FieldValue::$variant(v) = value {
                     Ok(v)
                 } else {
-                     Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                     Err(FieldConversionError::FieldTypeNotAsExpected {
+                        expected: FieldType::$variant,
+                        actual: value.field_type()
+                     })
                 }
             }
         }
@@ -206,7 +211,7 @@ macro_rules! impl_try_from_field_value_for_ {
                 match value {
                     FieldValue::$variant(Some($v)) => Ok($v),
                     FieldValue::$variant(None) => Err(FieldConversionError::NoneValue),
-                    _ => Err(FieldConversionError::FieldTypeNotAsExpected {actual: value.field_type()})
+                    _ => Err(FieldConversionError::FieldTypeNotAsExpected { expected: FieldType::$variant, actual: value.field_type()})
                 }
             }
         }
