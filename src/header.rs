@@ -120,9 +120,14 @@ impl Header {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
+        let current_date: Date = chrono::Utc::now().date().into();
+        // The year will be saved a a u8 offset from 1900
+        if current_date.year() < 1900 || current_date.year() > 2155 {
+            panic!("the year current date is out of range");
+        }
         Self {
             file_type: Version::DBase3 { supports_memo: false },
-            last_update: chrono::Utc::now().date().into(),
+            last_update: current_date,
             num_records,
             offset_to_first_record: offset,
             size_of_record: size_of_records,
@@ -136,9 +141,13 @@ impl Header {
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = Version::from(source.read_u8()?);
 
-        let mut date = [0u8; 3];
-        source.read_exact(&mut date)?;
-        let last_update = Date::from_bytes(date);
+        let mut date_bytes = [0u8; 3];
+        source.read_exact(&mut date_bytes)?;
+        let last_update= Date {
+            year: 1900u32 + date_bytes[0] as u32,
+            month: date_bytes[1] as u32,
+            day: date_bytes[2] as u32,
+        };
 
         let num_records = source.read_u32::<LittleEndian>()?;
         let offset_to_first_record = source.read_u16::<LittleEndian>()?;
@@ -174,9 +183,13 @@ impl Header {
         })
     }
 
-    pub(crate) fn write_to<T: Write>(&self, mut dest: &mut T) -> Result<(), Error> {
+    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
         dest.write_u8(u8::from(self.file_type))?;
-        self.last_update.write_to(&mut dest)?;
+
+        dest.write_u8((self.last_update.year() - 1900) as u8)?;
+        dest.write_u8(self.last_update.month() as u8)?;
+        dest.write_u8(self.last_update.day() as u8)?;
+
         dest.write_u32::<LittleEndian>(self.num_records)?;
         dest.write_u16::<LittleEndian>(self.offset_to_first_record)?;
         dest.write_u16::<LittleEndian>(self.size_of_record)?;

@@ -8,7 +8,7 @@ use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
 use record::FieldInfo;
 use Error;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use writing::WritableDbaseField;
 use chrono::Datelike;
 
@@ -215,9 +215,9 @@ impl TryFrom<char> for FieldType {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Date {
-    year: u32,
-    month: u32,
-    day: u32,
+    pub(crate) year: u32,
+    pub(crate) month: u32,
+    pub(crate) day: u32,
 }
 
 #[cfg(feature = "serde")]
@@ -289,21 +289,6 @@ impl Date {
         self.day
     }
 
-    pub(crate) fn from_bytes(bytes: [u8; 3]) -> Self {
-        Self {
-            year: 1900u32 + bytes[0] as u32,
-            month: bytes[1] as u32,
-            day: bytes[2] as u32,
-        }
-    }
-
-    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
-        dest.write_u8((self.year - 1900) as u8)?;
-        dest.write_u8(self.month as u8)?;
-        dest.write_u8(self.day as u8)?;
-        Ok(())
-    }
-
     // https://en.wikipedia.org/wiki/Julian_day
     // at "Julian or Gregorian calendar from Julian day number"
     fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
@@ -365,29 +350,23 @@ impl FromStr for Date {
 
 impl std::string::ToString for Date {
     fn to_string(&self) -> String {
-        let mut s = String::with_capacity(8);
-        let year_str = self.year.to_string();
-        let month_str = self.month.to_string();
-        let day_str = self.day.to_string();
+        format!("{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
+}
 
-        if self.year < 100 {
-            s.push('0');
-            s.push('0');
-        } else if self.year < 1000 {
-            s.push('0');
-        }
-        s.push_str(&year_str);
+impl From<Date> for chrono::NaiveDate {
+    fn from(d: Date) -> Self {
+        Self::from_ymd(d.year as i32, d.month, d.day)
+    }
+}
 
-        if self.month < 10 {
-            s.push('0');
+impl From<chrono::NaiveDate> for Date {
+    fn from(d: chrono::NaiveDate) -> Self {
+        Self {
+            year: d.year().try_into().unwrap(),
+            month: d.month(),
+            day: d.day()
         }
-        s.push_str(&month_str);
-
-        if self.day < 10 {
-            s.push('0');
-        }
-        s.push_str(&day_str);
-        s
     }
 }
 
@@ -801,6 +780,7 @@ mod test {
 
     use record::FieldFlags;
     use std::io::Cursor;
+    use std::convert::TryInto;
 
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> FieldInfo {
         FieldInfo {
@@ -931,5 +911,48 @@ mod test {
             }
             _ => assert!(false, "Did not read a Float field ??"),
         }
+    }
+
+    #[test]
+    fn test_write_read_date() {
+        use crate::record::FieldName;
+        let date = Date::new(12, 05, 2015).unwrap();
+
+        let mut cursor = Cursor::new(vec![0u8; 8]);
+        <Date as WritableDbaseField>::write_to(&date, &mut cursor).unwrap();
+
+        cursor.set_position(0);
+        let field_info = FieldInfo::new(
+            FieldName::try_from("Date").unwrap(),
+            FieldType::Date,
+            FieldType::Date.size().unwrap()
+
+        );
+        let read_date: Date = FieldValue::read_from(
+            &mut cursor, &mut None, &field_info)
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+       assert_eq!(date, read_date);
+    }
+
+    #[test]
+    fn test_write_read_date_via_enum() {
+        use crate::record::FieldName;
+        let date = FieldValue::Date(Some(Date::new(12, 05,2015).unwrap()));
+        let mut cursor = Cursor::new(vec![0u8; 8]);
+        date.write_to(&mut cursor).unwrap();
+        cursor.set_position(0);
+
+        let field_info = FieldInfo::new(
+            FieldName::try_from("Date").unwrap(),
+            FieldType::Date,
+            FieldType::Date.size().unwrap()
+        );
+        let read_date = FieldValue::read_from(
+            &mut cursor, &mut None, &field_info).unwrap();
+
+        assert_eq!(date, read_date);
     }
 }
