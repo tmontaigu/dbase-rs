@@ -10,6 +10,7 @@
     - Added Trait to allow users implementing it to writre structs as dBase record.
     - Added optional feature "serde", to automatically impl the 2 trait described above
     - Added dependency to chrono
+    - Bumped byteorder dependency to 1.3.0
 
 # 0.0.4
     - Added reading and writing of Float value #2
