@@ -558,7 +558,6 @@ impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
     }
 }
 
-// TODO new() fn that validates inputs
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Time {
     hours: u32,
@@ -571,6 +570,16 @@ impl Time {
     const MINUTES_FACTOR: i32 = 60_000;
     const SECONDS_FACTOR: i32 = 1_000;
 
+    pub fn new(hours: u32, minutes: u32, seconds: u32) -> Self {
+        if hours > 24 || minutes > 60 ||seconds > 60{
+            panic!("Invalid Time")
+        }
+        Self {
+            hours,
+            minutes,
+            seconds
+        }
+    }
 
     fn from_word(mut time_word: i32) -> Self {
         let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
@@ -601,6 +610,12 @@ pub struct DateTime {
 }
 
 impl DateTime {
+    pub fn new(date: Date, time: Time) -> Self {
+        Self {
+            date,
+            time
+        }
+    }
     fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
         let julian_day_number = src.read_i32::<LittleEndian>()?;
         let time_word = src.read_i32::<LittleEndian>()?;
@@ -762,6 +777,17 @@ impl WritableDbaseField for Option<bool> {
     }
 }
 
+
+impl WritableDbaseField for DateTime {
+    fn field_type(&self) -> FieldType {
+        FieldType::DateTime
+    }
+
+    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()> {
+        self.write_to(dst)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -769,6 +795,7 @@ mod test {
     use record::FieldFlags;
     use std::io::Cursor;
     use std::convert::TryInto;
+
 
     fn create_temp_record_field_info(field_type: FieldType, len: u8) -> FieldInfo {
         FieldInfo {
@@ -929,6 +956,7 @@ mod test {
     fn test_write_read_date_via_enum() {
         use crate::record::FieldName;
         let date = FieldValue::Date(Some(Date::new(12, 05,2015).unwrap()));
+
         let mut cursor = Cursor::new(vec![0u8; 8]);
         date.write_to(&mut cursor).unwrap();
         cursor.set_position(0);
@@ -942,5 +970,26 @@ mod test {
             &mut cursor, &mut None, &field_info).unwrap();
 
         assert_eq!(date, read_date);
+    }
+
+    #[test]
+    fn test_write_read_integer_via_enum() {
+        use crate::record::FieldName;
+
+        let value = FieldValue::Integer(1457);
+
+        let mut cursor = Cursor::new(vec![0u8; 4]);
+        value.write_to(&mut cursor).unwrap();
+        cursor.set_position(0);
+
+        let field_info = FieldInfo::new(
+            FieldName::try_from("Integer").unwrap(),
+            FieldType::Integer,
+            FieldType::Integer.size().unwrap()
+        );
+        let read_date = FieldValue::read_from(
+            &mut cursor, &mut None, &field_info).unwrap();
+
+        assert_eq!(read_date, value);
     }
 }

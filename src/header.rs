@@ -138,6 +138,15 @@ impl Header {
         }
     }
 
+    pub(crate) fn update_date(&mut self) {
+        let current_date: Date = chrono::Utc::now().date().into();
+        // The year will be saved a a u8 offset from 1900
+        if current_date.year() < 1900 || current_date.year() > 2155 {
+            panic!("the year current date is out of range");
+        }
+        self.last_update = current_date;
+    }
+
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {
         let file_type = Version::from(source.read_u8()?);
 

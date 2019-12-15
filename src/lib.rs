@@ -223,7 +223,7 @@ mod de;
 mod ser;
 
 pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord, NamedValue};
-pub use record::field::{FieldValue, Date, DateTime};
+pub use record::field::{FieldValue, Date, Time, DateTime};
 pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
 pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldWriter};
 use std::fmt::{Display, Formatter};
