@@ -56,7 +56,7 @@ impl TableWriterBuilder {
     /// use std::io::Cursor;
     /// let mut  reader = dbase::Reader::from_path("tests/data/stations.dbf").unwrap();
     /// let mut stations = reader.read().unwrap();
-    /// let old_name = stations[0].insert("name".parse().unwrap(), "Montparnasse".into());
+    /// let old_name = stations[0].insert("name".parse().unwrap(), String::from("Montparnasse").into());
     /// assert_eq!(old_name, Some(FieldValue::Character(Some("Van Dorn Street".parse().unwrap()))));
     ///
     /// let mut writer = TableWriterBuilder::from_reader(reader)

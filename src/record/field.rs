@@ -213,236 +213,6 @@ impl TryFrom<char> for FieldType {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Date {
-    pub(crate) year: u32,
-    pub(crate) month: u32,
-    pub(crate) day: u32,
-}
-
-#[cfg(feature = "serde")]
-mod de {
-    use super::*;
-    use serde::de::{Deserialize, Visitor};
-    use serde::Deserializer;
-
-    impl<'de> Deserialize<'de> for Date {
-        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
-            D: Deserializer<'de> {
-            struct DateVisitor;
-            impl<'de> Visitor<'de> for DateVisitor {
-                type Value = Date;
-
-                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    formatter.write_str("struct Date")
-                }
-
-                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where
-                    E: serde::de::Error, {
-                    let string = String::from_utf8(v).unwrap();
-                    Ok(Date::from_str(&string).unwrap())
-                }
-            }
-            deserializer.deserialize_byte_buf(DateVisitor)
-        }
-    }
-}
-
-
-#[cfg(feature = "serde")]
-mod ser {
-    use super::*;
-
-    use serde::ser::Serialize;
-    use serde::Serializer;
-
-    impl Serialize for Date {
-        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-            S: Serializer {
-            serializer.serialize_bytes(self.to_string().as_bytes())
-        }
-    }
-}
-
-impl Date {
-    pub fn new(day: u32, month: u32, year: u32) -> Result<Self, Error> {
-        if month > 12 || day > 31 || year < 1900 || year > 2155 {
-            Err(Error::InvalidDate)
-        } else {
-            Ok(Self {
-                year,
-                month,
-                day,
-            })
-        }
-    }
-
-    pub fn year(&self) -> u32 {
-        self.year
-    }
-
-    pub fn month(&self) -> u32 {
-        self.month
-    }
-
-    pub fn day(&self) -> u32 {
-        self.day
-    }
-
-    // https://en.wikipedia.org/wiki/Julian_day
-    // at "Julian or Gregorian calendar from Julian day number"
-    fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
-        const Y: i32 = 4716;
-        const J: i32 = 1401;
-        const M: i32 = 2;
-        const N: i32 = 12;
-        const R: i32 = 4;
-        const P: i32 = 1461;
-        const V: i32 = 3;
-        const U: i32 = 5;
-        const S: i32 = 153;
-        const W: i32 = 2;
-        const B: i32 = 274277;
-        const C: i32 = -38;
-
-
-        let f = jdn + J + ((4 * jdn + B) / 146097 * 3) / 4 + C;
-        let e = R * f + V;
-        let g = (e % P) / R;
-        let h = U * g + W;
-
-        let day = (h % S) / U + 1;
-        let month = ((h / S + M) % (N)) + 1;
-        let year = (e / P) - Y + (N + M - month) / N;
-
-        Date {
-            year: year as u32,
-            month: month as u32,
-            day: day as u32,
-        }
-    }
-
-    fn to_julian_day_number(&self) -> i32 {
-        let (month, year) = if self.month > 2 {
-            (self.month - 3, self.year)
-        } else {
-            (self.month + 9, self.year - 1)
-        };
-
-        let century = year / 100;
-        let decade = year - 100 * century;
-
-        ((146097 * century) / 4 + (1461 * decade) / 4 + (153 * month + 2) / 5 + self.day + 1721119) as i32
-    }
-}
-
-impl FromStr for Date {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let year = s[0..4].parse::<u32>()?;
-        let month = s[4..6].parse::<u32>()?;
-        let day = s[6..8].parse::<u32>()?;
-
-        Ok(Self { year, month, day })
-    }
-}
-
-impl std::string::ToString for Date {
-    fn to_string(&self) -> String {
-        format!("{:04}{:02}{:02}", self.year, self.month, self.day)
-    }
-}
-
-impl From<Date> for chrono::NaiveDate {
-    fn from(d: Date) -> Self {
-        Self::from_ymd(d.year as i32, d.month, d.day)
-    }
-}
-
-impl From<chrono::NaiveDate> for Date {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Self {
-            year: d.year().try_into().unwrap(),
-            month: d.month(),
-            day: d.day()
-        }
-    }
-}
-
-impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
-    fn from(d: chrono::Date<Tz>) -> Self {
-        Self {
-            year: d.year() as u32,
-            month: d.month(),
-            day: d.day()
-        }
-    }
-}
-
-// TODO new() fn that validates inputs
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Time {
-    hours: u32,
-    minutes: u32,
-    seconds: u32,
-}
-
-impl Time {
-    const HOURS_FACTOR: i32 = 3_600_000;
-    const MINUTES_FACTOR: i32 = 60_000;
-    const SECONDS_FACTOR: i32 = 1_000;
-
-
-    fn from_word(mut time_word: i32) -> Self {
-        let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
-        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
-        let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
-        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
-        let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
-        Self {
-            hours,
-            minutes,
-            seconds,
-        }
-    }
-
-    fn to_time_word(&self) -> i32 {
-        let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
-        time_word += self.minutes * Self::MINUTES_FACTOR as u32;
-        time_word += self.seconds * Self::SECONDS_FACTOR as u32;
-        time_word as i32
-    }
-}
-
-// TODO new() fn that validates inputs
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct DateTime {
-    date: Date,
-    time: Time,
-}
-
-impl DateTime {
-    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
-        let julian_day_number = src.read_i32::<LittleEndian>()?;
-        let time_word = src.read_i32::<LittleEndian>()?;
-        let time = Time::from_word(time_word);
-        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
-        Ok(Self {
-            date,
-            time,
-        })
-    }
-
-    fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
-        dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
-        dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
-        Ok(())
-    }
-}
-
-
-
 /// Enum where each variant stores the record value
 #[derive(Debug, PartialEq)]
 pub enum FieldValue {
@@ -621,17 +391,234 @@ impl fmt::Display for FieldValue {
     }
 }
 
-impl From<&str> for FieldValue {
-    fn from(s: &str) -> Self {
-        FieldValue::Character(Some(String::from(s)))
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Date {
+    pub(crate) year: u32,
+    pub(crate) month: u32,
+    pub(crate) day: u32,
+}
+
+#[cfg(feature = "serde")]
+mod de {
+    use super::*;
+    use serde::de::{Deserialize, Visitor};
+    use serde::Deserializer;
+
+    impl<'de> Deserialize<'de> for Date {
+        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
+            D: Deserializer<'de> {
+            struct DateVisitor;
+            impl<'de> Visitor<'de> for DateVisitor {
+                type Value = Date;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("struct Date")
+                }
+
+                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where
+                    E: serde::de::Error, {
+                    let string = String::from_utf8(v).unwrap();
+                    Ok(Date::from_str(&string).unwrap())
+                }
+            }
+            deserializer.deserialize_byte_buf(DateVisitor)
+        }
     }
 }
 
-impl From<Date> for FieldValue {
-    fn from(d: Date) -> Self {
-        FieldValue::Date(Some(d))
+
+#[cfg(feature = "serde")]
+mod ser {
+    use super::*;
+
+    use serde::ser::Serialize;
+    use serde::Serializer;
+
+    impl Serialize for Date {
+        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
+            S: Serializer {
+            serializer.serialize_bytes(self.to_string().as_bytes())
+        }
     }
 }
+
+impl Date {
+    pub fn new(day: u32, month: u32, year: u32) -> Result<Self, Error> {
+        if month > 12 || day > 31 {
+            Err(Error::InvalidDate)
+        } else {
+            Ok(Self {
+                year,
+                month,
+                day,
+            })
+        }
+    }
+
+    pub fn year(&self) -> u32 {
+        self.year
+    }
+
+    pub fn month(&self) -> u32 {
+        self.month
+    }
+
+    pub fn day(&self) -> u32 {
+        self.day
+    }
+
+    // https://en.wikipedia.org/wiki/Julian_day
+    // at "Julian or Gregorian calendar from Julian day number"
+    fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
+        const Y: i32 = 4716;
+        const J: i32 = 1401;
+        const M: i32 = 2;
+        const N: i32 = 12;
+        const R: i32 = 4;
+        const P: i32 = 1461;
+        const V: i32 = 3;
+        const U: i32 = 5;
+        const S: i32 = 153;
+        const W: i32 = 2;
+        const B: i32 = 274277;
+        const C: i32 = -38;
+
+
+        let f = jdn + J + ((4 * jdn + B) / 146097 * 3) / 4 + C;
+        let e = R * f + V;
+        let g = (e % P) / R;
+        let h = U * g + W;
+
+        let day = (h % S) / U + 1;
+        let month = ((h / S + M) % (N)) + 1;
+        let year = (e / P) - Y + (N + M - month) / N;
+
+        Date {
+            year: year as u32,
+            month: month as u32,
+            day: day as u32,
+        }
+    }
+
+    fn to_julian_day_number(&self) -> i32 {
+        let (month, year) = if self.month > 2 {
+            (self.month - 3, self.year)
+        } else {
+            (self.month + 9, self.year - 1)
+        };
+
+        let century = year / 100;
+        let decade = year - 100 * century;
+
+        ((146097 * century) / 4 + (1461 * decade) / 4 + (153 * month + 2) / 5 + self.day + 1721119) as i32
+    }
+}
+
+impl FromStr for Date {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let year = s[0..4].parse::<u32>()?;
+        let month = s[4..6].parse::<u32>()?;
+        let day = s[6..8].parse::<u32>()?;
+
+        Ok(Self { year, month, day })
+    }
+}
+
+impl std::string::ToString for Date {
+    fn to_string(&self) -> String {
+        format!("{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
+}
+
+impl From<Date> for chrono::NaiveDate {
+    fn from(d: Date) -> Self {
+        Self::from_ymd(d.year as i32, d.month, d.day)
+    }
+}
+
+impl From<chrono::NaiveDate> for Date {
+    fn from(d: chrono::NaiveDate) -> Self {
+        Self {
+            year: d.year().try_into().unwrap(),
+            month: d.month(),
+            day: d.day()
+        }
+    }
+}
+
+impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
+    fn from(d: chrono::Date<Tz>) -> Self {
+        Self {
+            year: d.year() as u32,
+            month: d.month(),
+            day: d.day()
+        }
+    }
+}
+
+// TODO new() fn that validates inputs
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Time {
+    hours: u32,
+    minutes: u32,
+    seconds: u32,
+}
+
+impl Time {
+    const HOURS_FACTOR: i32 = 3_600_000;
+    const MINUTES_FACTOR: i32 = 60_000;
+    const SECONDS_FACTOR: i32 = 1_000;
+
+
+    fn from_word(mut time_word: i32) -> Self {
+        let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
+        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
+        let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
+        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
+        let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
+        Self {
+            hours,
+            minutes,
+            seconds,
+        }
+    }
+
+    fn to_time_word(&self) -> i32 {
+        let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
+        time_word += self.minutes * Self::MINUTES_FACTOR as u32;
+        time_word += self.seconds * Self::SECONDS_FACTOR as u32;
+        time_word as i32
+    }
+}
+
+// TODO new() fn that validates inputs
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct DateTime {
+    date: Date,
+    time: Time,
+}
+
+impl DateTime {
+    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
+        let julian_day_number = src.read_i32::<LittleEndian>()?;
+        let time_word = src.read_i32::<LittleEndian>()?;
+        let time = Time::from_word(time_word);
+        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
+        Ok(Self {
+            date,
+            time,
+        })
+    }
+
+    fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
+        dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
+        dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
+        Ok(())
+    }
+}
+
 
 fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::io::Error> {
     let mut bytes = Vec::<u8>::new();

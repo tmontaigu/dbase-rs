@@ -24,7 +24,7 @@
 //!}
 //! ```
 //!
-//! You can also create a [Reader](reading/Reader.struct.html) and iterate over the records.
+//! You can also create a [Reader](reading/struct.Reader.html) and iterate over the records.
 //!
 //! ```
 //! let mut reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
@@ -222,7 +222,7 @@ mod de;
 #[cfg(feature = "serde")]
 mod ser;
 
-pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord};
+pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord, NamedValue};
 pub use record::field::{FieldValue, Date, DateTime};
 pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
 pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldWriter};

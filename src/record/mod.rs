@@ -3,10 +3,11 @@ use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-use ::{Error, FieldValue};
-use record::field::FieldType;
-
 pub mod field;
+
+use ::{Error, FieldValue};
+use record::field::{FieldType, Date};
+
 
 const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
@@ -39,31 +40,6 @@ impl TryFrom<&str> for FieldName {
     }
 }
 
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct FieldFlags(u8);
-
-impl FieldFlags {
-    pub fn new() -> Self {
-        Self { 0: 0 }
-    }
-
-    pub fn system_column(self) -> bool {
-        (self.0 & 0x01) != 0
-    }
-
-    pub fn can_store_null(self) -> bool {
-        (self.0 & 0x02) != 0
-    }
-
-    pub fn is_binary(self) -> bool {
-        (self.0 & 0x04) != 0
-    }
-
-    pub fn is_auto_incrementing(self) -> bool {
-        (self.0 & 0x0C) != 0
-    }
-}
 
 /// Struct giving the info for a record field
 #[derive(Debug, PartialEq)]
@@ -176,6 +152,32 @@ impl FieldInfo {
     }
 }
 
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct FieldFlags(u8);
+
+impl FieldFlags {
+    pub fn new() -> Self {
+        Self { 0: 0 }
+    }
+
+    pub fn system_column(self) -> bool {
+        (self.0 & 0x01) != 0
+    }
+
+    pub fn can_store_null(self) -> bool {
+        (self.0 & 0x02) != 0
+    }
+
+    pub fn is_binary(self) -> bool {
+        (self.0 & 0x04) != 0
+    }
+
+    pub fn is_auto_incrementing(self) -> bool {
+        (self.0 & 0x0C) != 0
+    }
+}
+
 /// Errors that can happen when trying to convert a FieldValue into
 /// a more concrete type
 #[derive(Debug)]
@@ -183,6 +185,8 @@ pub enum FieldConversionError {
     /// Happens when the conversion could not be mode because the FieldType
     /// does not mat the expected one
     FieldTypeNotAsExpected { expected: FieldType, actual: FieldType },
+    /// The value written is the file was only pad bytes / uninitialized
+    /// and the user tried to convert it into a non Option-Type
     NoneValue,
 }
 
@@ -233,29 +237,37 @@ impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
 impl_try_from_field_value_for_!(FieldValue::Logical => Option<bool>);
 impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
 
-impl From<String> for FieldValue {
-    fn from(s: String) -> Self {
-        FieldValue::Character(Some(s))
+macro_rules! impl_from_type_for_field_value (
+    ($t:ty => FieldValue::$variant:ident) => {
+        impl From<$t> for FieldValue {
+            fn from(v: $t) -> Self {
+                FieldValue::$variant(v)
+            }
+        }
+    };
+    ($t:ty => FieldValue::$variant:ident(Some($v:ident))) => {
+        impl From<$t> for FieldValue {
+            fn from(v: $t) -> Self {
+                FieldValue::$variant(Some(v))
+            }
+        }
     }
-}
+);
 
-impl From<f64> for FieldValue {
-    fn from(v: f64) -> Self {
-        FieldValue::Numeric(Some(v))
-    }
-}
+impl_from_type_for_field_value!(Option<String> => FieldValue::Character);
+impl_from_type_for_field_value!(String => FieldValue::Character(Some(s)));
 
-impl From<f32> for FieldValue {
-    fn from(v: f32) -> Self {
-        FieldValue::Float(Some(v))
-    }
-}
+impl_from_type_for_field_value!(Option<f64> => FieldValue::Numeric);
+impl_from_type_for_field_value!(f64 => FieldValue::Numeric(Some(v)));
 
-impl From<bool> for FieldValue {
-    fn from(b: bool) -> FieldValue {
-        FieldValue::Logical(Some(b))
-    }
-}
+impl_from_type_for_field_value!(Option<f32> => FieldValue::Float);
+impl_from_type_for_field_value!(f32 => FieldValue::Float(Some(v)));
+
+impl_from_type_for_field_value!(Option<bool> => FieldValue::Logical);
+impl_from_type_for_field_value!(bool => FieldValue::Logical(Some(v)));
+
+impl_from_type_for_field_value!(Option<Date> => FieldValue::Date);
+impl_from_type_for_field_value!(Date => FieldValue::Date(Some(v)));
 
 #[cfg(test)]
 mod test {
