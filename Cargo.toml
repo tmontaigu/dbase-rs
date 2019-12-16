@@ -2,7 +2,7 @@
 name = "dbase"
 version = "0.0.4"
 authors = ["tmontaigu <thomas.montaigu@laposte.net>"]
-description = "Read .dbf in Rust"
+description = "Read & Write .dbf in Rust"
 license = "MIT"
 readme = "README.md"
 keywords = ["dbase", "dbf"]

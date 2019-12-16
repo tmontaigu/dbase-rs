@@ -1,9 +1,12 @@
 # dbase-rs
 
-Rust library to read (and write) .dbf (dBase / FoxPro) files.
+Rust library to read and write .dbf (dBase / FoxPro) files.
 
-Reading File works well for most files
-(if you have a problem reading one, don't hesitate to file an issue)
+Most of the dBase III and FoxPro types can be read and written,
+with the exception of the Memo which can only be read
+(writing will come in a later release).
 
-Writing produces files that most dbf reader should be able to read,
-but the implementation of it is still a work in progress
+If dbase-rs fails to read of write a fail or does something incorrectly, don't hesitate to open an issue.
+
+
+
