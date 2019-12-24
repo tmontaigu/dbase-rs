@@ -3,11 +3,24 @@ extern crate dbase;
 
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, ReadableRecord, WritableRecord, Reader, FieldName, Record, FieldWriter};
+use dbase::{Error, TableWriterBuilder, FieldIterator, ReadableRecord, WritableRecord, Reader, FieldName, Record, FieldWriter, FieldValue, DateTime, Date, Time};
 use std::convert::{TryInto, TryFrom};
+use std::fmt::Debug;
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
+
+fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(records: &Vec<R>, writer_builder: TableWriterBuilder) {
+    let writer = writer_builder.build_with_dest(Cursor::new(Vec::<u8>::new()));
+
+    let mut dst = writer.write(records).unwrap();
+    dst.set_position(0);
+
+    let mut reader = Reader::new(dst).unwrap();
+    let read_records = reader.read_as::<R>().unwrap();
+
+    assert_eq!(&read_records, records);
+}
 
 #[test]
 fn test_none_float() {
@@ -112,14 +125,13 @@ impl WritableRecord for Album {
 
 
 #[test]
-fn from_scratch() {
-    let writer = TableWriterBuilder::new()
+fn from_scratch_dbase() {
+    let writer_builder = TableWriterBuilder::new()
         .add_character_field("Artist".try_into().unwrap(), 50)
         .add_character_field("Name".try_into().unwrap(), 50)
         .add_date_field("Released".try_into().unwrap())
         .add_numeric_field("Playtime".try_into().unwrap(), 10, 2)
-        .add_logical_field(FieldName::try_from("Available").unwrap())
-        .build_with_dest(Cursor::new(Vec::<u8>::new()));
+        .add_logical_field(FieldName::try_from("Available").unwrap());
 
     let records = vec![
         Album {
@@ -138,13 +150,60 @@ fn from_scratch() {
         },
     ];
 
-    let mut cursor = writer.write(&records).unwrap();
-    cursor.seek(SeekFrom::Start(0)).unwrap();
+    write_read_compare(&records, writer_builder);
+}
 
-    let mut reader = dbase::Reader::new(cursor).unwrap();
-    let read_records = reader.read_as::<Album>().unwrap();
+#[test]
+fn from_scratch_fox_pro_record() {
+    let writer_builder = TableWriterBuilder::new()
+        .add_integer_field(FieldName::try_from("integer").unwrap())
+        .add_double_field(FieldName::try_from("double").unwrap())
+        .add_currency_field(FieldName::try_from("currency").unwrap())
+        .add_datetime_field(FieldName::try_from("datetime").unwrap());
 
-    assert_eq!(read_records, records);
+    let mut record = Record::default();
+    record.insert(String::from("integer"), FieldValue::Integer(17));
+    record.insert(String::from("double"), FieldValue::Double(54621.154));
+    record.insert(String::from("currency"), FieldValue::Currency(4567.134));
+    record.insert(String::from("datetime"), FieldValue::DateTime
+        (DateTime::new(Date::new(01, 06, 2006).unwrap(),
+                       Time::new(12, 50, 20))));
+
+
+    let records = vec![record];
+    write_read_compare(&records, writer_builder);
+}
+
+dbase_record! {
+    #[derive(Clone, Debug, PartialEq)]
+    struct FoxProRecord {
+        datetime: DateTime,
+        double: f64,
+        currency: f64,
+        integer: i32
+    }
+}
+
+
+#[test]
+fn from_scratch_fox_pro_struct_record() {
+    let writer_builder = TableWriterBuilder::new()
+        .add_datetime_field(FieldName::try_from("datetime").unwrap())
+        .add_double_field(FieldName::try_from("double").unwrap())
+        .add_currency_field(FieldName::try_from("currency").unwrap())
+        .add_integer_field(FieldName::try_from("integer").unwrap());
+
+    let records = vec![
+        FoxProRecord {
+            datetime: DateTime::new(Date::new(12, 02, 1999).unwrap(),
+                                    Time::new(21, 20,35)),
+            double: 8649.48851,
+            currency: 3489.9612314,
+            integer:42069
+        }
+    ];
+
+    write_read_compare(&records, writer_builder);
 }
 
 dbase_record! {
@@ -155,6 +214,7 @@ dbase_record! {
     }
 }
 
+// We just test that this compiles
 dbase_record! {
     struct TestStructWithoutDerive {
         this_should_compile: String

@@ -37,14 +37,14 @@ const FILE_TERMINATOR: u8 = 0x1A;
 /// ```
 pub struct TableWriterBuilder {
     v: Vec<FieldInfo>,
-    hdr: Option<Header>,
+    hdr: Header,
 }
 
 impl TableWriterBuilder {
     pub fn new() -> Self {
         Self {
             v: vec![],
-            hdr: None
+            hdr: Header::new(0,0,0)
         }
     }
 
@@ -74,9 +74,11 @@ impl TableWriterBuilder {
                 fields_info.remove(0);
             }
         }
+        let mut hdr = reader.header;
+        hdr.update_date();
         Self {
             v: fields_info,
-            hdr: Some(reader.header)
+            hdr
         }
     }
 
@@ -122,6 +124,57 @@ impl TableWriterBuilder {
         self
     }
 
+    pub fn add_integer_field(mut self, name: FieldName) -> Self {
+        self.v.push(
+            FieldInfo::new(
+                name,
+                FieldType::Integer,
+                FieldType::Integer
+                    .size()
+                    .expect("Internal error Integer field date should be known"))
+        );
+        self.hdr.file_type = crate::header::Version::FoxPro2 {supports_memo: false};
+        self
+    }
+
+    pub fn add_datetime_field(mut self, name: FieldName) -> Self {
+        self.v.push(
+            FieldInfo::new(
+                name,
+                FieldType::DateTime,
+                FieldType::DateTime
+                    .size()
+                    .expect("Internal error datetime field date should be known"))
+        );
+        self.hdr.file_type = crate::header::Version::FoxPro2 { supports_memo: false };
+        self
+    }
+
+    pub fn add_double_field(mut self, name: FieldName) -> Self {
+        self.v.push(
+            FieldInfo::new(
+                name,
+                FieldType::Double,
+                FieldType::Double
+                    .size()
+                    .expect("Internal error Double field date should be known"))
+        );
+        self.hdr.file_type = crate::header::Version::FoxPro2 { supports_memo: false };
+        self
+    }
+
+    pub fn add_currency_field(mut self, name: FieldName) -> Self {
+        self.v.push(
+            FieldInfo::new(
+                name,
+                FieldType::Currency,
+                FieldType::Currency
+                    .size()
+                    .expect("Internal error Currency field date should be known"))
+        );
+        self.hdr.file_type = crate::header::Version::FoxPro2 { supports_memo: false };
+        self
+    }
     /// Builds the writer and set the dst as where the file data will be written
     pub fn build_with_dest<W: Write>(self, dst: W) -> TableWriter<W> {
         TableWriter::new(dst, self.v, self.hdr)
@@ -153,17 +206,23 @@ mod private {
     impl_sealed_for!(&str);
     impl_sealed_for!(f64);
     impl_sealed_for!(f32);
+    impl_sealed_for!(i32);
     impl_sealed_for!(Option<f64>);
     impl_sealed_for!(Option<f32>);
     impl_sealed_for!(crate::record::field::Date);
     impl_sealed_for!(Option<crate::record::field::Date>);
     impl_sealed_for!(crate::record::field::FieldValue);
+    impl_sealed_for!(crate::record::field::DateTime);
 }
 
 /// Trait implemented by all types that we know how to write in a dBase file
 pub trait WritableDbaseField: private::Sealed {
     fn field_type(&self) -> FieldType;
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()>;
+}
+
+pub trait WritableAsDbaseField: private::Sealed {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error>;
 }
 
 /// Trait to be implemented by struct to you want to be able to write to (serialize)
@@ -214,18 +273,19 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     ///
     /// Trying to write more values than was declared when creating the writer will cause
     /// an `EndOfRecord` error.
-    pub fn write_next_field_value<T: WritableDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
+    pub fn write_next_field_value<T: WritableAsDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
-            if field_value.field_type() != field_info.field_type {
-                return Err(Error::BadFieldType {
-                    expected: field_info.field_type,
-                    got: field_value.field_type(),
-                    field_name: field_info.name.to_owned()
-                });
-            }
+//            if field_value.field_type() != field_info.field_type {
+//                return Err(Error::BadFieldType {
+//                    expected: field_info.field_type,
+//                    got: field_value.field_type(),
+//                    field_name: field_info.name.to_owned()
+//                });
+//            }
 
-            field_value.write_to(&mut self.buffer)?;
+//            field_value.write_to(&mut self.buffer)?;
+            field_value.write_as(field_info.field_type, &mut self.buffer)?;
 
             let mut bytes_written = self.buffer.position();
             let mut bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
@@ -305,15 +365,15 @@ pub struct TableWriter<W: Write> {
     fields_info: Vec<FieldInfo>,
     /// contains the header of the input file
     /// if this writer was created form a reader
-    origin_header: Option<Header>,
+    header: Header,
 }
 
 impl<W: Write> TableWriter<W> {
-    fn new(dst: W, fields_info: Vec<FieldInfo>, origin_header: Option<Header>) -> Self {
+    fn new(dst: W, fields_info: Vec<FieldInfo>, origin_header: Header) -> Self {
         Self {
             dst,
             fields_info,
-            origin_header
+            header: origin_header
         }
     }
 
@@ -351,8 +411,8 @@ impl<W: Write> TableWriter<W> {
     /// assert_eq!(cursor.position(), 117)
     /// ```
     pub fn write<R: WritableRecord>(mut self, records: &Vec<R>) -> Result<W, Error> {
-        let header = self.build_header(records.len());
-        header.write_to(&mut self.dst)?;
+        self.update_header(records.len());
+        self.header.write_to(&mut self.dst)?;
         for record_info in &self.fields_info {
             record_info.write_to(&mut self.dst)?;
         }
@@ -365,9 +425,9 @@ impl<W: Write> TableWriter<W> {
         };
 
         for record in records {
-            if header.file_type.is_dbase() {
-                field_writer.write_deletion_flag()?;
-            }
+            //TODO Find out if the deletion flag is present in all dbase file type
+            //  (does foxbase & foxpro have this implicit field ?
+            field_writer.write_deletion_flag()?;
             record.write_using(&mut field_writer)?;
             if !field_writer.all_fields_were_written() {
                 return Err(Error::NotEnoughFields);
@@ -379,24 +439,16 @@ impl<W: Write> TableWriter<W> {
         Ok(self.dst)
     }
 
-    fn build_header(&self, num_records: usize) -> Header {
+    fn update_header(&mut self, num_records: usize) {
         let offset_to_first_record =
             Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
         let size_of_record = self.fields_info
             .iter()
             .fold(0u16, |s, ref info| s + info.field_length as u16);
 
-        let mut header = Header::new(
-            num_records as u32,
-            offset_to_first_record as u16,
-            size_of_record,
-        );
-
-        if let Some(ref hdr) = self.origin_header {
-            header.code_page_mark = hdr.code_page_mark;
-            header.file_type = hdr.file_type;
-        }
-        header
+        self.header.num_records =num_records as u32;
+        self.header.offset_to_first_record = offset_to_first_record as u16;
+        self.header.size_of_record = size_of_record;
     }
 }
 

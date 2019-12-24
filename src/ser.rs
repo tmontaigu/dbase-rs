@@ -37,8 +37,13 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
         unimplemented!("Dbase cannot serialize i16")
     }
 
-    fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
-        unimplemented!("Dbase cannot serialize i32")
+    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
+//        let field_info = self.fields_info.next().ok_or(Error::EndOfRecord)?;
+//        if field_info.field_type == FieldType::Integer {
+            self.write_next_field_value(&v)
+//        } else {
+//            Err(Error::IncompatibleType)
+//        }
     }
 
     fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {

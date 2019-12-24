@@ -333,7 +333,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, Error> {
         let field_info = self.fields_info.next().ok_or(Error::EndOfRecord)?;
         if field_info.is_deletion_flag() {
-            self.skip_next_field()?;
+            self.skip_field(field_info)?;
             self.read_next_field_raw()
         } else {
             let mut buf = vec![0u8; field_info.field_length as usize];

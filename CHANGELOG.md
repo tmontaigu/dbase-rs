@@ -3,13 +3,15 @@
     - Added support for reading dBase / FoxPro files which have 'Memo' fields. (Writing Memo fields is not supported yet)
     - Added support for reading and writing the 'Datetime' field
     - Added support for reading and writing the 'Currency' field
-    - Changed how iteration on the records is made (/!\ very small breaking change)
-    - Changed how dbase Writer are created, users now have to use the TableWriterBuilder
-      to specify fields that constitute a record before being able to write records.
     - Added Trait to allow users implementing it to read dBase records into their structs.
     - Added Trait to allow users implementing it to writre structs as dBase record.
     - Added optional feature "serde", to automatically impl the 2 trait described above
     - Added dependency to chrono
+    
+    - Changed how iteration on the records is made (/!\ very small breaking change)
+    - Changed how dbase Writer are created, users now have to use the TableWriterBuilder
+      to specify fields that constitute a record before being able to write records.
+      
     - Bumped byteorder dependency to 1.3.0
 
 # 0.0.4
