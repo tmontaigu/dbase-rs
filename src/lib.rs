@@ -251,6 +251,7 @@ pub enum Error {
     /// was expected
     NotEnoughFields,
     BadFieldType{expected: FieldType, got: FieldType, field_name: String},
+    IncompatibleType,
     Message(String),
 }
 
@@ -302,6 +303,7 @@ impl std::error::Error for Error {
             Error::BadFieldType { expected: _, got: _, field_name: _ } => {
                 "The Given type does not match the expected field type"
             }
+            Error::IncompatibleType => {"type is not compatible"}
         }
     }
 }

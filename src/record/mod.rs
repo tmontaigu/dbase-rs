@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -7,6 +7,7 @@ pub mod field;
 
 use ::{Error, FieldValue};
 use record::field::{FieldType, Date, DateTime};
+use Error::IncompatibleType;
 
 
 const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
@@ -223,7 +224,7 @@ macro_rules! impl_try_from_field_value_for_ {
 }
 
 impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
-impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
+//impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
 
 impl_try_from_field_value_for_!(FieldValue::Float => Option<f32>);
 impl_try_from_field_value_for_!(FieldValue::Float(Some(v)) => f32);
@@ -236,6 +237,23 @@ impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);
 
 impl_try_from_field_value_for_!(FieldValue::Logical => Option<bool>);
 impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
+
+impl_try_from_field_value_for_!(FieldValue::Integer => i32);
+
+impl TryFrom<FieldValue> for f64 {
+    type Error = Error;
+
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        match value {
+            FieldValue::Numeric(Some(v)) => Ok(v),
+            FieldValue::Numeric(None) => Err(FieldConversionError::NoneValue.into()),
+            FieldValue::Currency(c) => Ok(c),
+            FieldValue::Double(d) => Ok(d),
+            _ => Err(IncompatibleType)
+        }
+    }
+}
+
 
 // Fox Pro types
 impl_try_from_field_value_for_!(FieldValue::DateTime => DateTime);

@@ -168,4 +168,36 @@ mod serde_tests {
             _ => assert!(false)
         }
     }
+
+
+    #[test]
+    fn test_serde_fox_pro_types() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Record {
+            datetime: dbase::DateTime,
+            currency: f64,
+            double: f64,
+            integer: i32,
+        }
+
+        let writer_builder = TableWriterBuilder::new()
+            .add_datetime_field(FieldName::try_from("datetime").unwrap())
+            .add_currency_field(FieldName::try_from("currency").unwrap())
+            .add_double_field(FieldName::try_from("double").unwrap())
+            .add_integer_field(FieldName::try_from("integer").unwrap());
+
+        let records = vec![
+            Record {
+                datetime: dbase::DateTime::new(
+                    dbase::Date::new(12, 05, 2130).unwrap(),
+                    dbase::Time::new(15, 52, 12)
+                ),
+                currency: 79841.156846,
+                double: 976114.1846,
+                integer: -15315
+            }
+        ];
+
+        write_read_compare(&records, writer_builder);
+    }
 }

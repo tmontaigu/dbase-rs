@@ -50,9 +50,10 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         unimplemented!("DBase cannot deserialize i16")
     }
 
-    fn deserialize_i32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_i32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize i23")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_i32(value)
     }
 
     fn deserialize_i64<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where

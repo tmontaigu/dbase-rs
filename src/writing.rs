@@ -206,6 +206,7 @@ mod private {
     impl_sealed_for!(&str);
     impl_sealed_for!(f64);
     impl_sealed_for!(f32);
+    impl_sealed_for!(i32);
     impl_sealed_for!(Option<f64>);
     impl_sealed_for!(Option<f32>);
     impl_sealed_for!(crate::record::field::Date);
@@ -218,6 +219,10 @@ mod private {
 pub trait WritableDbaseField: private::Sealed {
     fn field_type(&self) -> FieldType;
     fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()>;
+}
+
+pub trait WritableAsDbaseField: private::Sealed {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error>;
 }
 
 /// Trait to be implemented by struct to you want to be able to write to (serialize)
@@ -268,18 +273,19 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     ///
     /// Trying to write more values than was declared when creating the writer will cause
     /// an `EndOfRecord` error.
-    pub fn write_next_field_value<T: WritableDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
+    pub fn write_next_field_value<T: WritableAsDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
-            if field_value.field_type() != field_info.field_type {
-                return Err(Error::BadFieldType {
-                    expected: field_info.field_type,
-                    got: field_value.field_type(),
-                    field_name: field_info.name.to_owned()
-                });
-            }
+//            if field_value.field_type() != field_info.field_type {
+//                return Err(Error::BadFieldType {
+//                    expected: field_info.field_type,
+//                    got: field_value.field_type(),
+//                    field_name: field_info.name.to_owned()
+//                });
+//            }
 
-            field_value.write_to(&mut self.buffer)?;
+//            field_value.write_to(&mut self.buffer)?;
+            field_value.write_as(field_info.field_type, &mut self.buffer)?;
 
             let mut bytes_written = self.buffer.position();
             let mut bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
