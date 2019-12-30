@@ -1,16 +1,22 @@
 #[macro_use]
 extern crate dbase;
 
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, Write};
 
-use dbase::{Error, TableWriterBuilder, FieldIterator, ReadableRecord, WritableRecord, Reader, FieldName, Record, FieldWriter, FieldValue, DateTime, Date, Time};
-use std::convert::{TryInto, TryFrom};
+use dbase::{
+    Date, DateTime, Error, FieldIterator, FieldName, FieldValue, FieldWriter, ReadableRecord,
+    Reader, Record, TableWriterBuilder, Time, WritableRecord,
+};
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 
-fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(records: &Vec<R>, writer_builder: TableWriterBuilder) {
+fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
+    records: &Vec<R>,
+    writer_builder: TableWriterBuilder,
+) {
     let writer = writer_builder.build_with_dest(Cursor::new(Vec::<u8>::new()));
 
     let mut dst = writer.write(records).unwrap();
@@ -32,22 +38,10 @@ fn test_none_float() {
         "name".to_owned(),
         dbase::FieldValue::Character(Some("tralala".to_owned())),
     );
-    expected_fields.insert(
-        "value_f".to_owned(),
-        dbase::FieldValue::Float(Some(12.345)),
-    );
-    expected_fields.insert(
-        "value_f_non".to_owned(),
-        dbase::FieldValue::Float(None),
-    );
-    expected_fields.insert(
-        "value_n".to_owned(),
-        dbase::FieldValue::Numeric(Some(4.0)),
-    );
-    expected_fields.insert(
-        "value_n_non".to_owned(),
-        dbase::FieldValue::Numeric(None),
-    );
+    expected_fields.insert("value_f".to_owned(), dbase::FieldValue::Float(Some(12.345)));
+    expected_fields.insert("value_f_non".to_owned(), dbase::FieldValue::Float(None));
+    expected_fields.insert("value_n".to_owned(), dbase::FieldValue::Numeric(Some(4.0)));
+    expected_fields.insert("value_n_non".to_owned(), dbase::FieldValue::Numeric(None));
 
     assert_eq!(records[0], expected_fields);
 }
@@ -78,8 +72,8 @@ fn test_read_write_simple_file() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
 
-    let writer = TableWriterBuilder::from_reader(reader)
-        .build_with_dest(Cursor::new(Vec::<u8>::new()));
+    let writer =
+        TableWriterBuilder::from_reader(reader).build_with_dest(Cursor::new(Vec::<u8>::new()));
     let mut dst = writer.write(&records).unwrap();
     dst.set_position(0);
 
@@ -100,7 +94,8 @@ struct Album {
 
 impl ReadableRecord for Album {
     fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
-        where T: Read + Seek
+    where
+        T: Read + Seek,
     {
         Ok(Self {
             artist: field_iterator.read_next_field_as()?.value,
@@ -113,7 +108,10 @@ impl ReadableRecord for Album {
 }
 
 impl WritableRecord for Album {
-    fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
+    fn write_using<'a, W: Write>(
+        &self,
+        field_writer: &mut FieldWriter<'a, W>,
+    ) -> Result<(), Error> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;
         field_writer.write_next_field_value(&self.released)?;
@@ -122,7 +120,6 @@ impl WritableRecord for Album {
         Ok(())
     }
 }
-
 
 #[test]
 fn from_scratch_dbase() {
@@ -137,16 +134,16 @@ fn from_scratch_dbase() {
         Album {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
-            released: dbase::Date::new(22,6,2014).unwrap(),
+            released: dbase::Date::new(22, 6, 2014),
             playtime: 2481f64,
-            available: false
+            available: false,
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
-            released: dbase::Date::new(24, 10, 2014).unwrap(),
+            released: dbase::Date::new(24, 10, 2014),
             playtime: 2481f64,
-            available: true
+            available: true,
         },
     ];
 
@@ -165,10 +162,13 @@ fn from_scratch_fox_pro_record() {
     record.insert(String::from("integer"), FieldValue::Integer(17));
     record.insert(String::from("double"), FieldValue::Double(54621.154));
     record.insert(String::from("currency"), FieldValue::Currency(4567.134));
-    record.insert(String::from("datetime"), FieldValue::DateTime
-        (DateTime::new(Date::new(01, 06, 2006).unwrap(),
-                       Time::new(12, 50, 20))));
-
+    record.insert(
+        String::from("datetime"),
+        FieldValue::DateTime(DateTime::new(
+            Date::new(01, 06, 2006),
+            Time::new(12, 50, 20),
+        )),
+    );
 
     let records = vec![record];
     write_read_compare(&records, writer_builder);
@@ -184,7 +184,6 @@ dbase_record! {
     }
 }
 
-
 #[test]
 fn from_scratch_fox_pro_struct_record() {
     let writer_builder = TableWriterBuilder::new()
@@ -193,15 +192,12 @@ fn from_scratch_fox_pro_struct_record() {
         .add_currency_field(FieldName::try_from("currency").unwrap())
         .add_integer_field(FieldName::try_from("integer").unwrap());
 
-    let records = vec![
-        FoxProRecord {
-            datetime: DateTime::new(Date::new(12, 02, 1999).unwrap(),
-                                    Time::new(21, 20,35)),
-            double: 8649.48851,
-            currency: 3489.9612314,
-            integer:42069
-        }
-    ];
+    let records = vec![FoxProRecord {
+        datetime: DateTime::new(Date::new(12, 02, 1999), Time::new(21, 20, 35)),
+        double: 8649.48851,
+        currency: 3489.9612314,
+        integer: 42069,
+    }];
 
     write_read_compare(&records, writer_builder);
 }
@@ -235,7 +231,7 @@ fn the_classical_user_record_example() {
         User {
             first_name: "Jamie".to_string(),
             last_name: "Oliver".to_string(),
-        }
+        },
     ];
 
     let writer = TableWriterBuilder::new()
@@ -246,7 +242,6 @@ fn the_classical_user_record_example() {
     let mut cursor = writer.write(&users).unwrap();
 
     cursor.set_position(0);
-
 
     let mut reader = Reader::new(cursor).unwrap();
     let read_records = reader.read_as::<User>().unwrap();

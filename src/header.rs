@@ -2,8 +2,8 @@ use std::io::{Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
+use record::field::{Date, MemoFileType};
 use Error;
-use record::field::{MemoFileType, Date};
 
 use chrono;
 
@@ -13,8 +13,8 @@ pub enum Version {
     FoxBase,
     DBase3 { supports_memo: bool },
     VisualFoxPro,
-    DBase4 {supports_memo: bool},
-    FoxPro2{ supports_memo: bool },
+    DBase4 { supports_memo: bool },
+    FoxPro2 { supports_memo: bool },
     Unknown(u8),
 }
 
@@ -22,21 +22,33 @@ impl Version {
     pub(crate) fn supported_memo_type(self) -> Option<MemoFileType> {
         match self {
             Version::FoxBase => Some(MemoFileType::FoxBaseMemo),
-            Version::DBase3 { supports_memo: true } => Some(MemoFileType::DbaseMemo),
-            Version::DBase3 { supports_memo: false } => None,
+            Version::DBase3 {
+                supports_memo: true,
+            } => Some(MemoFileType::DbaseMemo),
+            Version::DBase3 {
+                supports_memo: false,
+            } => None,
             Version::VisualFoxPro => Some(MemoFileType::FoxBaseMemo),
-            Version::DBase4 { supports_memo: true } => Some(MemoFileType::DbaseMemo4),
-            Version::DBase4 { supports_memo: false } => None,
-            Version::FoxPro2 { supports_memo: false } => None,
-            Version::FoxPro2 { supports_memo: true } => Some(MemoFileType::FoxBaseMemo),
-            _ => None
+            Version::DBase4 {
+                supports_memo: true,
+            } => Some(MemoFileType::DbaseMemo4),
+            Version::DBase4 {
+                supports_memo: false,
+            } => None,
+            Version::FoxPro2 {
+                supports_memo: false,
+            } => None,
+            Version::FoxPro2 {
+                supports_memo: true,
+            } => Some(MemoFileType::FoxBaseMemo),
+            _ => None,
         }
     }
 
     pub(crate) fn is_visual_fox_pro(self) -> bool {
         match self {
             Version::VisualFoxPro => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -45,14 +57,26 @@ impl From<Version> for u8 {
     fn from(v: Version) -> u8 {
         match v {
             Version::FoxBase => 0x02,
-            Version::DBase3 { supports_memo: false } => 0x03,
-            Version::DBase3 { supports_memo: true } => 0x83,
-            Version::VisualFoxPro => 0x30 ,
-            Version::DBase4 {supports_memo: true} => 0x8b,
-            Version::DBase4 {supports_memo: false} => 0x43,
-            Version::FoxPro2 { supports_memo: false } => 0xfb,
-            Version::FoxPro2 { supports_memo: true } => 0xf5,
-            Version::Unknown(v) => v
+            Version::DBase3 {
+                supports_memo: false,
+            } => 0x03,
+            Version::DBase3 {
+                supports_memo: true,
+            } => 0x83,
+            Version::VisualFoxPro => 0x30,
+            Version::DBase4 {
+                supports_memo: true,
+            } => 0x8b,
+            Version::DBase4 {
+                supports_memo: false,
+            } => 0x43,
+            Version::FoxPro2 {
+                supports_memo: false,
+            } => 0xfb,
+            Version::FoxPro2 {
+                supports_memo: true,
+            } => 0xf5,
+            Version::Unknown(v) => v,
         }
     }
 }
@@ -61,17 +85,29 @@ impl From<u8> for Version {
     fn from(b: u8) -> Self {
         match b {
             0x02 => Version::FoxBase,
-            0x03 => Version::DBase3 { supports_memo: false },
-            0x83 => Version::DBase3 { supports_memo: true },
+            0x03 => Version::DBase3 {
+                supports_memo: false,
+            },
+            0x83 => Version::DBase3 {
+                supports_memo: true,
+            },
             // Each version has different feature (varchar / autoincrement)
             // but we don't support that for now
-            0x30 | 0x31 | 0x32=> Version::VisualFoxPro,
+            0x30 | 0x31 | 0x32 => Version::VisualFoxPro,
             // Same here these different version num means that some features are different
-            0x8b | 0xcb => Version::DBase4 {supports_memo: true},
-            0x43 | 0x63 => Version::DBase4 {supports_memo: false},
-            0xfb => Version::FoxPro2 {supports_memo: false},
-            0xf5 => Version::FoxPro2 {supports_memo: true},
-            b => Version::Unknown(b)
+            0x8b | 0xcb => Version::DBase4 {
+                supports_memo: true,
+            },
+            0x43 | 0x63 => Version::DBase4 {
+                supports_memo: false,
+            },
+            0xfb => Version::FoxPro2 {
+                supports_memo: false,
+            },
+            0xf5 => Version::FoxPro2 {
+                supports_memo: true,
+            },
+            b => Version::Unknown(b),
         }
     }
 }
@@ -108,14 +144,15 @@ pub struct Header {
     pub code_page_mark: u8,
 }
 
-
 impl Header {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
         let current_date = Self::get_today_date();
         Self {
-            file_type: Version::DBase3 { supports_memo: false },
+            file_type: Version::DBase3 {
+                supports_memo: false,
+            },
             last_update: current_date,
             num_records,
             offset_to_first_record: offset,
@@ -146,7 +183,7 @@ impl Header {
 
         let mut date_bytes = [0u8; 3];
         source.read_exact(&mut date_bytes)?;
-        let last_update= Date {
+        let last_update = Date {
             year: 1900u32 + date_bytes[0] as u32,
             month: date_bytes[1] as u32,
             day: date_bytes[2] as u32,
@@ -214,7 +251,6 @@ impl Header {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use std::fs::File;
@@ -241,7 +277,6 @@ mod test {
         assert_eq!(pos_after_writing, Header::SIZE as u64);
     }
 
-
     #[test]
     fn read_write_header() {
         let mut file = File::open("tests/data/line.dbf").unwrap();
@@ -261,4 +296,3 @@ mod test {
         assert_eq!(hdr_bytes_written, hdr_bytes);
     }
 }
-

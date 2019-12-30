@@ -1,4 +1,6 @@
-//! dbase is rust library meant to read and write
+//! dbase is rust library meant to read and write dBase / FoxPro files.
+//!
+//! Theses files are nowadays generally only found in association with shapefiles.
 //!
 //! # Reading
 //!
@@ -53,7 +55,7 @@
 //! }
 //!
 //! impl dbase::ReadableRecord for StationRecord {
-//!     fn read_using<'a, 'b, T>(field_iterator: &'a mut dbase::FieldIterator<'b, T>) -> Result<Self, dbase::Error>
+//!     fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::Error>
 //!          where T: Read + Seek{
 //!         Ok(Self {
 //!             name: field_iterator.read_next_field_as()?.value,
@@ -205,29 +207,29 @@
 //! fn main() {}
 //! ```
 
-//#![deny(unstable_features, missing_docs)]
+#![deny(unstable_features)]
 
 extern crate byteorder;
 extern crate chrono;
 #[cfg(feature = "serde")]
 extern crate serde;
 
-mod header;
-mod reading;
-mod record;
-mod writing;
-
 #[cfg(feature = "serde")]
 mod de;
 #[cfg(feature = "serde")]
 mod ser;
 
-pub use reading::{read, Reader, Record, FieldIterator, ReadableRecord, NamedValue};
-pub use record::field::{FieldValue, Date, Time, DateTime};
-pub use record::{FieldInfo, FieldName, FieldFlags, FieldConversionError};
-pub use writing::{TableWriter, TableWriterBuilder, WritableRecord, FieldWriter};
+mod header;
+mod reading;
+mod record;
+mod writing;
+
 use std::fmt::{Display, Formatter};
-use record::field::FieldType;
+
+pub use reading::{read, FieldIterator, NamedValue, ReadableRecord, Reader, Record};
+pub use record::field::{Date, Time, DateTime, FieldValue};
+pub use record::{FieldConversionError, FieldInfo, FieldName};
+pub use writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
 /// Errors that may happen when reading a .dbf
 #[derive(Debug)]
@@ -240,17 +242,20 @@ pub enum Error {
     ParseIntError(std::num::ParseIntError),
     /// The Field as an invalid FieldType
     InvalidFieldType(char),
-    InvalidDate,
     /// Happens when at least one field is a Memo type
     /// and the that additional memo file could not be found / was not given
     MissingMemoFile,
+    /// Something went wrong when we tried to open the associated memo file
     ErrorOpeningMemoFile(std::io::Error),
+    /// The conversion from a FieldValue to another type could not be made
     BadConversion(FieldConversionError),
+    /// End of the record, there are no more fields
     EndOfRecord,
     /// The [FieldWriter](struct.FieldWriter.html) did not receive as many field as it
     /// was expected
     NotEnoughFields,
-    BadFieldType{expected: FieldType, got: FieldType, field_name: String},
+    /// The type of the value for the field is not compatible with the
+    /// dbase field's type
     IncompatibleType,
     Message(String),
 }
@@ -289,27 +294,39 @@ impl Display for Error {
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         match self {
-            Error::Message(ref msg) => { msg }
-            Error::IoError(_) => { "A std::io::Error occurred" }
-            Error::ParseFloatError(_) => { "Failed to parse a float" }
-            Error::ParseIntError(_) => { "Failed to parse an int" }
-            Error::InvalidFieldType(_) => { "The field type is invalid" }
-            Error::InvalidDate => { "The date is invalid" }
-            Error::MissingMemoFile => { "A memo file was expected but could not be found" }
-            Error::ErrorOpeningMemoFile(_) => { "An error occurred when trying to open the memo file" }
-            Error::BadConversion(_) => { "BadConversion" }
-            Error::EndOfRecord => { "EndOfRecord" }
-            Error::NotEnoughFields => { "Missing at least one field" }
-            Error::BadFieldType { expected: _, got: _, field_name: _ } => {
-                "The Given type does not match the expected field type"
-            }
-            Error::IncompatibleType => {"type is not compatible"}
+            Error::Message(ref msg) => msg,
+            Error::IoError(_) => "A std::io::Error occurred",
+            Error::ParseFloatError(_) => "Failed to parse a float",
+            Error::ParseIntError(_) => "Failed to parse an int",
+            Error::InvalidFieldType(_) => "The field type is invalid",
+            Error::MissingMemoFile => "A memo file was expected but could not be found",
+            Error::ErrorOpeningMemoFile(_) => "An error occurred when trying to open the memo file",
+            Error::BadConversion(_) => "BadConversion",
+            Error::EndOfRecord => "EndOfRecord",
+            Error::NotEnoughFields => "Missing at least one field",
+            Error::IncompatibleType => "type is not compatible",
         }
     }
 }
 
-/// macro to define a struct implements the ReadableRecord and WritableRecord
-/// trait impl for it.
+
+/// macro to define a struct that implements the ReadableRecord and WritableRecord
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use] extern crate dbase;
+/// # fn main() {
+///     dbase_record!(
+///         #[derive(Debug)]
+///         struct UserRecord {
+///             first_name: String,
+///             last_name: String,
+///             age: f64
+///         }
+///     );
+/// # }
+/// ```
 #[macro_export]
 macro_rules! dbase_record {
     (
@@ -325,9 +342,9 @@ macro_rules! dbase_record {
             $($field_name: $field_type),+
         }
 
-        impl ReadableRecord for $name {
-                fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
-                    where T: Read + Seek
+        impl dbase::ReadableRecord for $name {
+                fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::Error>
+                    where T: std::io::Read + std::io::Seek
                 {
                   Ok(Self {
                     $(
@@ -339,8 +356,8 @@ macro_rules! dbase_record {
               }
         }
 
-       impl WritableRecord for $name {
-             fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
+       impl dbase::WritableRecord for $name {
+             fn write_using<'a, W: std::io::Write>(&self, field_writer: &mut dbase::FieldWriter<'a, W>) -> Result<(), dbase::Error> {
                 $(
                     field_writer.write_next_field_value(&self.$field_name)?;
                 )+

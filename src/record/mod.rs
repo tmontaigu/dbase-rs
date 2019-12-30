@@ -5,10 +5,9 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 
 pub mod field;
 
-use ::{Error, FieldValue};
-use record::field::{FieldType, Date, DateTime};
+use record::field::{Date, DateTime, FieldType};
 use Error::IncompatibleType;
-
+use {Error, FieldValue};
 
 const DELETION_FLAG_NAME: &str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
@@ -36,11 +35,12 @@ impl TryFrom<&str> for FieldName {
         if name.as_bytes().len() > FIELD_NAME_LENGTH {
             Err("FieldName byte representation cannot exceed 11 bytes")
         } else {
-            Ok(Self { 0: name.to_string() })
+            Ok(Self {
+                0: name.to_string(),
+            })
         }
     }
 }
-
 
 /// Struct giving the info for a record field
 #[derive(Debug, PartialEq)]
@@ -57,9 +57,20 @@ pub struct FieldInfo {
     pub(crate) autoincrement_step: u8,
 }
 
-
 impl FieldInfo {
     pub(crate) const SIZE: usize = 32;
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn field_type(&self) -> FieldType {
+        self.field_type
+    }
+
+    pub fn length(&self) -> u8 {
+        self.field_length
+    }
 
     pub(crate) fn new(name: FieldName, field_type: FieldType, length: u8) -> Self {
         Self {
@@ -144,7 +155,6 @@ impl FieldInfo {
             flags: FieldFlags { 0: 0u8 },
             autoincrement_next_val: [0u8; 5],
             autoincrement_step: 0u8,
-
         }
     }
 
@@ -153,27 +163,9 @@ impl FieldInfo {
     }
 }
 
-
+/// Flags describing a field
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct FieldFlags(u8);
-
-impl FieldFlags {
-    pub fn system_column(self) -> bool {
-        (self.0 & 0x01) != 0
-    }
-
-    pub fn can_store_null(self) -> bool {
-        (self.0 & 0x02) != 0
-    }
-
-    pub fn is_binary(self) -> bool {
-        (self.0 & 0x04) != 0
-    }
-
-    pub fn is_auto_incrementing(self) -> bool {
-        (self.0 & 0x0C) != 0
-    }
-}
+pub(crate) struct FieldFlags(u8);
 
 impl Default for FieldFlags {
     fn default() -> Self {
@@ -187,7 +179,12 @@ impl Default for FieldFlags {
 pub enum FieldConversionError {
     /// Happens when the conversion could not be mode because the FieldType
     /// does not mat the expected one
-    FieldTypeNotAsExpected { expected: FieldType, actual: FieldType },
+    FieldTypeNotAsExpected {
+        /// The expected FieldType of the FieldValue the conversion was tried on
+        expected: FieldType,
+        /// The actual FieldType of the FieldValue the conversion was tried on
+        actual: FieldType,
+    },
     /// The value written is the file was only pad bytes / uninitialized
     /// and the user tried to convert it into a non Option-Type
     NoneValue,
@@ -202,15 +199,15 @@ macro_rules! impl_try_from_field_value_for_ {
                 if let FieldValue::$variant(v) = value {
                     Ok(v)
                 } else {
-                     Err(FieldConversionError::FieldTypeNotAsExpected {
+                    Err(FieldConversionError::FieldTypeNotAsExpected {
                         expected: FieldType::$variant,
-                        actual: value.field_type()
-                     })
+                        actual: value.field_type(),
+                    })
                 }
             }
         }
     };
-     (FieldValue::$variant:ident(Some($v:ident)) => $out_type:ty) => {
+    (FieldValue::$variant:ident(Some($v:ident)) => $out_type:ty) => {
         impl TryFrom<FieldValue> for $out_type {
             type Error = FieldConversionError;
 
@@ -218,7 +215,10 @@ macro_rules! impl_try_from_field_value_for_ {
                 match value {
                     FieldValue::$variant(Some($v)) => Ok($v),
                     FieldValue::$variant(None) => Err(FieldConversionError::NoneValue),
-                    _ => Err(FieldConversionError::FieldTypeNotAsExpected { expected: FieldType::$variant, actual: value.field_type()})
+                    _ => Err(FieldConversionError::FieldTypeNotAsExpected {
+                        expected: FieldType::$variant,
+                        actual: value.field_type(),
+                    }),
                 }
             }
         }
@@ -250,11 +250,10 @@ impl TryFrom<FieldValue> for f64 {
             FieldValue::Numeric(None) => Err(FieldConversionError::NoneValue.into()),
             FieldValue::Currency(c) => Ok(c),
             FieldValue::Double(d) => Ok(d),
-            _ => Err(IncompatibleType)
+            _ => Err(IncompatibleType),
         }
     }
 }
-
 
 // Fox Pro types
 impl_try_from_field_value_for_!(FieldValue::DateTime => DateTime);
@@ -301,7 +300,11 @@ mod test {
 
     #[test]
     fn write_read_field_info() {
-        let field_info = FieldInfo::new(FieldName::try_from("LICENSE").unwrap(), FieldType::Character, 30);
+        let field_info = FieldInfo::new(
+            FieldName::try_from("LICENSE").unwrap(),
+            FieldType::Character,
+            30,
+        );
         let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
         field_info.write_to(&mut cursor).unwrap();
 
@@ -312,4 +315,3 @@ mod test {
         assert_eq!(read_field_info, field_info);
     }
 }
-

@@ -1,17 +1,17 @@
 use std::fmt;
-use std::io::{Read, Write, Seek, SeekFrom};
-
+use std::io::{Read, Seek, SeekFrom, Write};
 
 use std::str::FromStr;
 
-use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use record::FieldInfo;
-use Error;
-use std::convert::{TryFrom, TryInto};
-use writing::{WritableAsDbaseField};
 use chrono::Datelike;
+use record::FieldInfo;
+use std::convert::{TryFrom, TryInto};
+use writing::WritableAsDbaseField;
+use Error;
 
+/// The different types of Memo file structure there seem to exist
 #[derive(PartialEq, Copy, Clone)]
 pub(crate) enum MemoFileType {
     DbaseMemo,
@@ -19,6 +19,8 @@ pub(crate) enum MemoFileType {
     FoxBaseMemo,
 }
 
+/// Although there are different memo file type with each a different
+/// header organisation, we use the same struct internally
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct MemoHeader {
     next_available_block_index: u32,
@@ -26,13 +28,16 @@ pub(crate) struct MemoHeader {
 }
 
 impl MemoHeader {
-    pub(crate) fn read_from<R: Read>(src: &mut R, memo_type: MemoFileType) -> std::io::Result<Self> {
+    pub(crate) fn read_from<R: Read>(
+        src: &mut R,
+        memo_type: MemoFileType,
+    ) -> std::io::Result<Self> {
         let next_available_block_index = src.read_u32::<LittleEndian>()?;
         let block_size = match memo_type {
             MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => {
                 match src.read_u16::<LittleEndian>()? {
                     0 => 512,
-                    v => u32::from(v)
+                    v => u32::from(v),
                 }
             }
             MemoFileType::FoxBaseMemo => {
@@ -48,6 +53,7 @@ impl MemoHeader {
     }
 }
 
+/// Struct that reads knows how to read data from a memo source
 pub(crate) struct MemoReader<T: Read + Seek> {
     memo_file_type: MemoFileType,
     header: MemoHeader,
@@ -81,9 +87,7 @@ impl<T: Read + Seek> MemoReader<T> {
                 let buf_slice = &mut self.internal_buffer[..length as usize];
                 self.source.read_exact(buf_slice)?;
                 match buf_slice.iter().rposition(|b| *b != 0) {
-                    Some(pos) => {
-                        Ok(&buf_slice[..=pos])
-                    }
+                    Some(pos) => Ok(&buf_slice[..=pos]),
                     None => {
                         if buf_slice.iter().all(|b| *b == 0) {
                             Ok(&buf_slice[..0])
@@ -96,35 +100,34 @@ impl<T: Read + Seek> MemoReader<T> {
             MemoFileType::DbaseMemo4 => {
                 let _ = self.source.read_u32::<LittleEndian>()?;
                 let length = self.source.read_u32::<LittleEndian>()?;
-                self.source.read_exact(&mut self.internal_buffer[..length as usize])?;
-                match self.internal_buffer[..length as usize].iter().position(|b| *b == 0x1F) {
-                    Some(pos) => {
-                        Ok(&self.internal_buffer[..pos])
-                    }
-                    None => {
-                        Ok(&self.internal_buffer)
-                    }
+                self.source
+                    .read_exact(&mut self.internal_buffer[..length as usize])?;
+                match self.internal_buffer[..length as usize]
+                    .iter()
+                    .position(|b| *b == 0x1F)
+                {
+                    Some(pos) => Ok(&self.internal_buffer[..pos]),
+                    None => Ok(&self.internal_buffer),
                 }
             }
             MemoFileType::DbaseMemo => {
                 if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
-                    if index != self.header.next_available_block_index - 1 &&
-                        e.kind() != std::io::ErrorKind::UnexpectedEof {
+                    if index != self.header.next_available_block_index - 1
+                        && e.kind() != std::io::ErrorKind::UnexpectedEof
+                    {
                         return Err(e);
                     }
                 }
                 match self.internal_buffer.iter().position(|b| *b == 0x1A) {
-                    Some(pos) => {
-                        Ok(&self.internal_buffer[..pos])
-                    }
-                    None => Ok(&self.internal_buffer)
+                    Some(pos) => Ok(&self.internal_buffer[..pos]),
+                    None => Ok(&self.internal_buffer),
                 }
             }
         }
     }
 }
 
-
+/// Enum listing all the field types we know of
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FieldType {
     // dBASE III
@@ -188,6 +191,12 @@ impl FieldType {
         }
     }
 
+    /// Returns the size when stored in a file
+    ///
+    /// None is returned when the size cannot be known statically
+    /// (the in-file size depends on the field data)
+    ///
+    /// This could/should be a const fn but they are not stable yet
     pub(crate) fn size(self) -> Option<u8> {
         match self {
             FieldType::Logical => Some(1),
@@ -196,7 +205,7 @@ impl FieldType {
             FieldType::Currency => Some(std::mem::size_of::<f64>() as u8),
             FieldType::DateTime => Some(2 * std::mem::size_of::<i32>() as u8),
             FieldType::Double => Some(std::mem::size_of::<f64>() as u8),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -212,6 +221,11 @@ impl TryFrom<char> for FieldType {
     }
 }
 
+impl std::fmt::Display for FieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "dbase::{:?}", self)
+    }
+}
 
 /// Enum where each variant stores the record value
 #[derive(Debug, PartialEq)]
@@ -219,16 +233,28 @@ pub enum FieldValue {
     // dBase III fields
     // Stored as strings, fully padded (ie only space char) strings
     // are interpreted as None
+    /// dBase String type
+    ///
+    /// A string full of 'pad bytes' is considered `None`
     Character(Option<String>),
+    /// dBase type to represent numbers, stored as String in the file
     Numeric(Option<f64>),
+    /// dBase type for boolean values, stored as a character in the file
     Logical(Option<bool>),
+    /// dBase type for dates, stored as a string in the file
     Date(Option<Date>),
+    /// Another dBase type to represent numbers, stored as String in the file
     Float(Option<f32>),
     //Visual FoxPro fields
     Integer(i32),
     Currency(f64),
     DateTime(DateTime),
     Double(f64),
+
+    /// Memo is a dBase type that allows to store Strings
+    /// that are longer than 255 bytes.
+    /// These strings are stored in an external file
+    /// called the `Memo file`
     Memo(String),
 }
 
@@ -243,7 +269,7 @@ impl FieldValue {
                 ' ' | '?' => FieldValue::Logical(None),
                 '1' | '0' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
                 'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(false)),
-                _ => FieldValue::Logical(None)
+                _ => FieldValue::Logical(None),
             },
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
@@ -285,18 +311,17 @@ impl FieldValue {
             FieldType::Currency => FieldValue::Currency(source.read_f64::<LittleEndian>()?),
             FieldType::DateTime => FieldValue::DateTime(DateTime::read_from(&mut source)?),
             FieldType::Memo => {
-                let index_in_memo =
-                    if field_info.field_length > 4 {
-                        let string = read_string_of_len(&mut source, field_info.field_length)?;
-                        let trimmed_str = string.trim();
-                        if trimmed_str.is_empty() {
-                            return Ok(FieldValue::Memo(String::from("")));
-                        } else {
-                            trimmed_str.parse::<u32>()?
-                        }
+                let index_in_memo = if field_info.field_length > 4 {
+                    let string = read_string_of_len(&mut source, field_info.field_length)?;
+                    let trimmed_str = string.trim();
+                    if trimmed_str.is_empty() {
+                        return Ok(FieldValue::Memo(String::from("")));
                     } else {
-                        source.read_u32::<LittleEndian>()?
-                    };
+                        trimmed_str.parse::<u32>()?
+                    }
+                } else {
+                    source.read_u32::<LittleEndian>()?
+                };
 
                 if let Some(memo_reader) = memo_reader {
                     let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
@@ -309,7 +334,7 @@ impl FieldValue {
         Ok(value)
     }
 
-    // Returns the corresponding field type of the contained value
+    /// Returns the corresponding field type of the contained value
     pub fn field_type(&self) -> FieldType {
         match self {
             FieldValue::Character(_) => FieldType::Character,
@@ -321,7 +346,7 @@ impl FieldValue {
             FieldValue::Date(_) => FieldType::Date,
             FieldValue::Memo(_) => FieldType::Memo,
             FieldValue::Currency(_) => FieldType::Currency,
-            FieldValue::DateTime(_) => FieldType::DateTime
+            FieldValue::DateTime(_) => FieldType::DateTime,
         }
     }
 }
@@ -332,6 +357,14 @@ impl fmt::Display for FieldValue {
     }
 }
 
+/// dBase representation of date
+///
+/// # Note
+///
+/// This is really really naive date, it just holds the day, moth, year value
+/// with just a very few checks.
+///
+/// Also, dBase files do not have concept of timezones.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Date {
     pub(crate) year: u32,
@@ -340,26 +373,35 @@ pub struct Date {
 }
 
 impl Date {
-    pub fn new(day: u32, month: u32, year: u32) -> Result<Self, Error> {
-        if month > 12 || day > 31 {
-            Err(Error::InvalidDate)
-        } else {
-            Ok(Self {
-                year,
-                month,
-                day,
-            })
+    /// Creates a new dbase::Date
+    /// # panic
+    ///
+    /// panics if the year has more than 4 digits or if the day is greater than 31 or
+    /// the month greater than 12
+    pub fn new(day: u32, month: u32, year: u32) -> Self {
+        if year > 9999 {
+            panic!("Year cannot have more than 4 digits")
         }
+        if day > 31 {
+            panic!("Day cannot be greater than 31")
+        }
+        if month > 12 {
+            panic!("Month cannot be greater than 12")
+        }
+        Self { year, month, day }
     }
 
+    /// Returns the year
     pub fn year(&self) -> u32 {
         self.year
     }
 
+    /// Returns the month
     pub fn month(&self) -> u32 {
         self.month
     }
 
+    /// Returns the day
     pub fn day(&self) -> u32 {
         self.day
     }
@@ -379,7 +421,6 @@ impl Date {
         const W: i32 = 2;
         const B: i32 = 274_277;
         const C: i32 = -38;
-
 
         let f = jdn + J + ((4 * jdn + B) / 146_097 * 3) / 4 + C;
         let e = R * f + V;
@@ -407,7 +448,11 @@ impl Date {
         let century = year / 100;
         let decade = year - 100 * century;
 
-        ((146_097 * century) / 4 + (1461 * decade) / 4 + (153 * month + 2) / 5 + self.day + 1_721_119) as i32
+        ((146_097 * century) / 4
+            + (1461 * decade) / 4
+            + (153 * month + 2) / 5
+            + self.day
+            + 1_721_119) as i32
     }
 }
 
@@ -440,7 +485,7 @@ impl From<chrono::NaiveDate> for Date {
         Self {
             year: d.year().try_into().unwrap(),
             month: d.month(),
-            day: d.day()
+            day: d.day(),
         }
     }
 }
@@ -450,11 +495,16 @@ impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
         Self {
             year: d.year() as u32,
             month: d.month(),
-            day: d.day()
+            day: d.day(),
         }
     }
 }
 
+/// FoxBase representation of a time
+/// # note
+///
+/// This is a very naive Time struct, very minimal verifications are done.
+///
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Time {
     hours: u32,
@@ -467,14 +517,19 @@ impl Time {
     const MINUTES_FACTOR: i32 = 60_000;
     const SECONDS_FACTOR: i32 = 1_000;
 
+    /// Creates a new Time
+    ///
+    /// # panics
+    /// will panic if the  minutes or seconds are greater than 60 or
+    /// if the hours are greater than 24
     pub fn new(hours: u32, minutes: u32, seconds: u32) -> Self {
-        if hours > 24 || minutes > 60 ||seconds > 60{
+        if hours > 24 || minutes > 60 || seconds > 60 {
             panic!("Invalid Time")
         }
         Self {
             hours,
             minutes,
-            seconds
+            seconds,
         }
     }
 
@@ -499,7 +554,7 @@ impl Time {
     }
 }
 
-// TODO new() fn that validates inputs
+/// FoxBase representation of a DateTime
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DateTime {
     date: Date,
@@ -507,21 +562,17 @@ pub struct DateTime {
 }
 
 impl DateTime {
+    /// Creates a new DateTime from a date and a time
     pub fn new(date: Date, time: Time) -> Self {
-        Self {
-            date,
-            time
-        }
+        Self { date, time }
     }
+
     fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
         let julian_day_number = src.read_i32::<LittleEndian>()?;
         let time_word = src.read_i32::<LittleEndian>()?;
         let time = Time::from_word(time_word);
         let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
-        Ok(Self {
-            date,
-            time,
-        })
+        Ok(Self { date, time })
     }
 
     fn write_to<W: Write>(&self, dest: &mut W) -> std::io::Result<()> {
@@ -531,113 +582,22 @@ impl DateTime {
     }
 }
 
-
-#[cfg(feature = "serde")]
-mod de {
-    use super::*;
-    use serde::de::{Deserialize, Visitor};
-    use serde::Deserializer;
-    use std::io::Cursor;
-
-    impl<'de> Deserialize<'de> for Date {
-        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
-            D: Deserializer<'de> {
-            struct DateVisitor;
-            impl<'de> Visitor<'de> for DateVisitor {
-                type Value = Date;
-
-                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    formatter.write_str("struct Date")
-                }
-
-                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where
-                    E: serde::de::Error, {
-                    let string = String::from_utf8(v).unwrap();
-                    Ok(Date::from_str(&string).unwrap())
-                }
-            }
-            deserializer.deserialize_byte_buf(DateVisitor)
-        }
-    }
-
-    struct DateTimeVisitor;
-
-    impl<'de> Visitor<'de> for DateTimeVisitor {
-        type Value = DateTime;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("struct dbase::DateTime")
-        }
-
-        fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where
-            E: serde::de::Error {
-            let mut cursor = Cursor::new(v);
-            match DateTime::read_from(&mut cursor) {
-                Ok(d) => Ok(d),
-                Err(e) => Err(E::custom(e))
-            }
-        }
-    }
-
-
-    impl<'de> Deserialize<'de> for DateTime {
-        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
-            D: Deserializer<'de> {
-            deserializer.deserialize_byte_buf(DateTimeVisitor)
-        }
-    }
-}
-
-
-#[cfg(feature = "serde")]
-mod ser {
-    use super::*;
-
-    use serde::ser::Serialize;
-    use serde::Serializer;
-
-    impl Serialize for Date {
-        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-            S: Serializer {
-            serializer.serialize_bytes(self.to_string().as_bytes())
-        }
-    }
-
-    impl Serialize for DateTime {
-        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-            S: Serializer {
-            let mut bytes = [0u8; 8];
-            bytes[..4].copy_from_slice(&self.date.to_julian_day_number().to_le_bytes());
-            bytes[4..8].copy_from_slice(&self.time.to_time_word().to_le_bytes());
-            serializer.serialize_bytes(&bytes)
-        }
-    }
-}
-
-fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::io::Error> {
-    let mut bytes = Vec::<u8>::new();
-    bytes.resize(len as usize, 0u8);
-    source.read_exact(&mut bytes)?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
-}
-
-
 impl WritableAsDbaseField for FieldValue {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
         if self.field_type() != field_type {
             Err(Error::IncompatibleType)
         } else {
             match self {
-                FieldValue::Character(value) => { value.write_as(field_type, dst) },
-                FieldValue::Numeric(value) => { value.write_as(field_type, dst) },
-                FieldValue::Logical(value) => { value.write_as(field_type, dst) },
-                FieldValue::Date(value) => { value.write_as(field_type, dst) },
-                FieldValue::Float(value) => { value.write_as(field_type, dst) },
-                FieldValue::Integer(value) => { value.write_as(field_type, dst) },
-                FieldValue::Currency(value) => { value.write_as(field_type, dst) },
-                FieldValue::DateTime(value) => { value.write_as(field_type, dst) },
-                FieldValue::Double(value) => { value.write_as(field_type, dst) },
-                FieldValue::Memo(_) => { unimplemented!("Cannot write memo") },
+                FieldValue::Character(value) => value.write_as(field_type, dst),
+                FieldValue::Numeric(value) => value.write_as(field_type, dst),
+                FieldValue::Logical(value) => value.write_as(field_type, dst),
+                FieldValue::Date(value) => value.write_as(field_type, dst),
+                FieldValue::Float(value) => value.write_as(field_type, dst),
+                FieldValue::Integer(value) => value.write_as(field_type, dst),
+                FieldValue::Currency(value) => value.write_as(field_type, dst),
+                FieldValue::DateTime(value) => value.write_as(field_type, dst),
+                FieldValue::Double(value) => value.write_as(field_type, dst),
+                FieldValue::Memo(_) => unimplemented!("Cannot write memo"),
             }
         }
     }
@@ -650,12 +610,11 @@ impl WritableAsDbaseField for f64 {
                 write!(dst, "{}", self)?;
                 Ok(())
             }
-            FieldType::Currency |
-            FieldType::Double =>{
+            FieldType::Currency | FieldType::Double => {
                 dst.write_f64::<LittleEndian>(*self)?;
                 Ok(())
             }
-            _ => Err(Error::IncompatibleType)
+            _ => Err(Error::IncompatibleType),
         }
     }
 }
@@ -702,7 +661,6 @@ impl WritableAsDbaseField for Option<f64> {
     }
 }
 
-
 impl WritableAsDbaseField for f32 {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
         if field_type == FieldType::Float {
@@ -714,12 +672,11 @@ impl WritableAsDbaseField for f32 {
     }
 }
 
-
-impl WritableAsDbaseField for Option<f32>{
+impl WritableAsDbaseField for Option<f32> {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
         if field_type == FieldType::Float {
             if let Some(value) = self {
-               value.write_as(field_type, dst)?;
+                value.write_as(field_type, dst)?;
             }
             Ok(())
         } else {
@@ -752,7 +709,6 @@ impl WritableAsDbaseField for Option<String> {
     }
 }
 
-
 impl WritableAsDbaseField for &str {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
         if field_type == FieldType::Character {
@@ -763,8 +719,6 @@ impl WritableAsDbaseField for &str {
         }
     }
 }
-
-
 
 impl WritableAsDbaseField for bool {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
@@ -816,13 +770,117 @@ impl WritableAsDbaseField for DateTime {
     }
 }
 
+#[cfg(feature = "serde")]
+mod de {
+    use super::*;
+    use serde::de::{Deserialize, Visitor};
+    use serde::Deserializer;
+    use std::io::Cursor;
+
+    impl<'de> Deserialize<'de> for Date {
+        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct DateVisitor;
+            impl<'de> Visitor<'de> for DateVisitor {
+                type Value = Date;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("struct Date")
+                }
+
+                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    let string = String::from_utf8(v).unwrap();
+                    Ok(Date::from_str(&string).unwrap())
+                }
+            }
+            deserializer.deserialize_byte_buf(DateVisitor)
+        }
+    }
+
+    struct DateTimeVisitor;
+
+    impl<'de> Visitor<'de> for DateTimeVisitor {
+        type Value = DateTime;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("struct dbase::DateTime")
+        }
+
+        fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            let mut cursor = Cursor::new(v);
+            match DateTime::read_from(&mut cursor) {
+                Ok(d) => Ok(d),
+                Err(e) => Err(E::custom(e)),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for DateTime {
+        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_byte_buf(DateTimeVisitor)
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+mod ser {
+    use super::*;
+
+    use serde::ser::Serialize;
+    use serde::Serializer;
+
+    impl Serialize for Date {
+        fn serialize<S>(
+            &self,
+            serializer: S,
+        ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_bytes(self.to_string().as_bytes())
+        }
+    }
+
+    impl Serialize for DateTime {
+        fn serialize<S>(
+            &self,
+            serializer: S,
+        ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+        where
+            S: Serializer,
+        {
+            let mut bytes = [0u8; 8];
+            bytes[..4].copy_from_slice(&self.date.to_julian_day_number().to_le_bytes());
+            bytes[4..8].copy_from_slice(&self.time.to_time_word().to_le_bytes());
+            serializer.serialize_bytes(&bytes)
+        }
+    }
+}
+
+fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::io::Error> {
+    let mut bytes = Vec::<u8>::new();
+    bytes.resize(len as usize, 0u8);
+    source.read_exact(&mut bytes)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     use record::FieldFlags;
     use std::io::Cursor;
-
 
     fn create_temp_field_info(field_type: FieldType, len: u8) -> FieldInfo {
         FieldInfo {
@@ -843,8 +901,7 @@ mod test {
 
         out.set_position(0);
 
-        let read_value = FieldValue::read_from(&mut out, &mut None, field_info)
-            .unwrap();
+        let read_value = FieldValue::read_from(&mut out, &mut None, field_info).unwrap();
         assert_eq!(value, &read_value);
     }
 
@@ -856,31 +913,25 @@ mod test {
             day: 01,
         });
 
-        let field_info = create_temp_field_info(
-            FieldType::Date, FieldType::Date.size().unwrap());
+        let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
         test_we_can_read_back(&field_info, &date);
     }
-
 
     #[test]
     fn test_write_read_empty_date() {
         let date = FieldValue::Date(None);
 
-        let field_info = create_temp_field_info(
-            FieldType::Date, FieldType::Date.size().unwrap());
+        let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
         test_we_can_read_back(&field_info, &date);
     }
-
 
     #[test]
     fn write_read_ascii_char() {
         let field = FieldValue::Character(Some(String::from("Only ASCII")));
 
-        let record_info =
-            create_temp_field_info(FieldType::Character, 10);
+        let record_info = create_temp_field_info(FieldType::Character, 10);
         test_we_can_read_back(&record_info, &field);
     }
-
 
     #[test]
     fn write_read_utf8_char() {
@@ -889,10 +940,8 @@ mod test {
         let mut out = Cursor::new(Vec::<u8>::new());
         field.write_as(FieldType::Character, &mut out).unwrap();
 
-        let record_info =
-            create_temp_field_info(FieldType::Character, out.position() as u8);
+        let record_info = create_temp_field_info(FieldType::Character, out.position() as u8);
         out.set_position(0);
-
 
         match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
             FieldValue::Character(s) => {
@@ -906,12 +955,10 @@ mod test {
     fn write_read_float() {
         let field = FieldValue::Float(Some(12.43));
 
-        let record_info =
-            create_temp_field_info(FieldType::Float, 5);
+        let record_info = create_temp_field_info(FieldType::Float, 5);
 
         test_we_can_read_back(&record_info, &field)
     }
-
 
     #[test]
     fn test_write_read_integer_via_enum() {
@@ -938,7 +985,11 @@ mod test {
 
     #[test]
     fn test_to_julian_day_number() {
-        let date = Date { year: 2019, month: 07, day: 20 };
+        let date = Date {
+            year: 2019,
+            month: 07,
+            day: 20,
+        };
         assert_eq!(date.to_julian_day_number(), 2458685);
     }
 }
