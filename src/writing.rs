@@ -42,10 +42,7 @@ pub struct TableWriterBuilder {
 
 impl TableWriterBuilder {
     pub fn new() -> Self {
-        Self {
-            v: vec![],
-            hdr: Header::new(0,0,0)
-        }
+        Self::default()
     }
 
     /// Gets the field definition from the reader to construct the TableWriter
@@ -190,6 +187,15 @@ impl TableWriterBuilder {
     }
 }
 
+impl Default for TableWriterBuilder {
+    fn default() -> Self {
+        Self {
+            v: vec![],
+            hdr: Header::new(0, 0, 0)
+        }
+    }
+}
+
 mod private {
     pub trait Sealed {}
 
@@ -215,11 +221,6 @@ mod private {
     impl_sealed_for!(crate::record::field::DateTime);
 }
 
-/// Trait implemented by all types that we know how to write in a dBase file
-pub trait WritableDbaseField: private::Sealed {
-    fn field_type(&self) -> FieldType;
-    fn write_to<W: Write>(&self, dst: &mut W) -> std::io::Result<()>;
-}
 
 pub trait WritableAsDbaseField: private::Sealed {
     fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error>;
@@ -276,15 +277,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     pub fn write_next_field_value<T: WritableAsDbaseField>(&mut self, field_value: &T) -> Result<(), Error> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
-//            if field_value.field_type() != field_info.field_type {
-//                return Err(Error::BadFieldType {
-//                    expected: field_info.field_type,
-//                    got: field_value.field_type(),
-//                    field_name: field_info.name.to_owned()
-//                });
-//            }
 
-//            field_value.write_to(&mut self.buffer)?;
             field_value.write_as(field_info.field_type, &mut self.buffer)?;
 
             let mut bytes_written = self.buffer.position();
@@ -294,7 +287,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
                     field_info.field_type == FieldType::Numeric {
                     // Depending on the locale, the dot might not be the delimiter for floating point
                     // but we are not yet ready to handle correctly codepages, etc
-                    let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == '.' as u8);
+                    let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == b'.');
                     if maybe_dot_pos.is_none() {
                         write!(self.buffer, ".")?;
                         bytes_written = self.buffer.position();
@@ -347,7 +340,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     }
 
     fn write_deletion_flag(&mut self) -> std::io::Result<()> {
-        self.dst.write_u8(' ' as u8)
+        self.dst.write_u8(b' ')
     }
 
     fn all_fields_were_written(&mut self) -> bool {
@@ -410,7 +403,7 @@ impl<W: Write> TableWriter<W> {
     /// let cursor = writer.write(&records).unwrap();
     /// assert_eq!(cursor.position(), 117)
     /// ```
-    pub fn write<R: WritableRecord>(mut self, records: &Vec<R>) -> Result<W, Error> {
+    pub fn write<R: WritableRecord>(mut self, records: &[R]) -> Result<W, Error> {
         self.update_header(records.len());
         self.header.write_to(&mut self.dst)?;
         for record_info in &self.fields_info {

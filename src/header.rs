@@ -19,28 +19,21 @@ pub enum Version {
 }
 
 impl Version {
-    pub(crate) fn supported_memo_type(&self) -> Option<MemoFileType> {
+    pub(crate) fn supported_memo_type(self) -> Option<MemoFileType> {
         match self {
             Version::FoxBase => Some(MemoFileType::FoxBaseMemo),
             Version::DBase3 { supports_memo: true } => Some(MemoFileType::DbaseMemo),
             Version::DBase3 { supports_memo: false } => None,
             Version::VisualFoxPro => Some(MemoFileType::FoxBaseMemo),
-            Version::DBase4{supports_memo: true} => Some(MemoFileType::DbaseMemo4),
-            Version::DBase4{supports_memo: false} => None,
+            Version::DBase4 { supports_memo: true } => Some(MemoFileType::DbaseMemo4),
+            Version::DBase4 { supports_memo: false } => None,
             Version::FoxPro2 { supports_memo: false } => None,
             Version::FoxPro2 { supports_memo: true } => Some(MemoFileType::FoxBaseMemo),
             _ => None
         }
     }
 
-    pub(crate) fn is_dbase(&self) -> bool {
-       match self {
-           Version::DBase3 {supports_memo: _} | Version::DBase4 {supports_memo: _} => true,
-           _ => false
-       }
-    }
-
-    pub(crate) fn is_visual_fox_pro(&self) -> bool {
+    pub(crate) fn is_visual_fox_pro(self) -> bool {
         match self {
             Version::VisualFoxPro => true,
             _ => false
@@ -120,11 +113,7 @@ impl Header {
     pub(crate) const SIZE: usize = 32;
 
     pub(crate) fn new(num_records: u32, offset: u16, size_of_records: u16) -> Self {
-        let current_date: Date = chrono::Utc::now().date().into();
-        // The year will be saved a a u8 offset from 1900
-        if current_date.year() < 1900 || current_date.year() > 2155 {
-            panic!("the year current date is out of range");
-        }
+        let current_date = Self::get_today_date();
         Self {
             file_type: Version::DBase3 { supports_memo: false },
             last_update: current_date,
@@ -138,13 +127,18 @@ impl Header {
         }
     }
 
-    pub(crate) fn update_date(&mut self) {
+    fn get_today_date() -> Date {
         let current_date: Date = chrono::Utc::now().date().into();
         // The year will be saved a a u8 offset from 1900
         if current_date.year() < 1900 || current_date.year() > 2155 {
             panic!("the year current date is out of range");
+        } else {
+            current_date
         }
-        self.last_update = current_date;
+    }
+
+    pub(crate) fn update_date(&mut self) {
+        self.last_update = Self::get_today_date();
     }
 
     pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, std::io::Error> {

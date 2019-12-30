@@ -1,5 +1,6 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
+use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -13,7 +14,6 @@ use Error;
 use header::Header;
 use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use record::FieldInfo;
-use std::collections::hash_map::RandomState;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -30,7 +30,7 @@ const BACKLINK_SIZE: u16 = 263;
 pub trait ReadableRecord: Sized {
     /// function to be implemented that returns a new instance of your type
     /// using values read from the `FieldIterator'
-    fn read_using<'a, 'b, T>(field_iterator: &'a mut FieldIterator<'b, T>) -> Result<Self, Error>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
         where T: Read + Seek;
 }
 
@@ -227,22 +227,24 @@ impl Reader<BufReader<File>> {
             .iter()
             .any(|f_info| f_info.field_type == FieldType::Memo);
 
-        let memo_type = reader.header.file_type.supported_memo_type();
-        if at_least_one_field_is_memo && memo_type.is_some() {
-            let memo_path = match memo_type.unwrap() {
-                MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
-                MemoFileType::FoxBaseMemo => p.with_extension("fpt")
-            };
+        if at_least_one_field_is_memo {
+            let memo_type = reader.header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_path = match mt {
+                    MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
+                    MemoFileType::FoxBaseMemo => p.with_extension("fpt")
+                };
 
-            let memo_file = match File::open(memo_path) {
-                Ok(file) => file,
-                Err(err) => {
-                    return Err(Error::ErrorOpeningMemoFile(err));
-                }
-            };
+                let memo_file = match File::open(memo_path) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        return Err(Error::ErrorOpeningMemoFile(err));
+                    }
+                };
 
-            let memo_reader = MemoReader::new(memo_type.unwrap(), BufReader::new(memo_file))?;
-            reader.memo_reader = Some(memo_reader);
+                let memo_reader = MemoReader::new(mt, BufReader::new(memo_file))?;
+                reader.memo_reader = Some(memo_reader);
+            }
         }
         Ok(reader)
     }

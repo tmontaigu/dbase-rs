@@ -123,7 +123,7 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
     fn deserialize_option<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
         //FIXME this is actually terrible, this means we read the field twice
-        // Would just peeking the first fex bytes and checking they are not padding bytes be better ?
+        // Would just peeking the first few bytes and checking they are not padding bytes be better ?
         let value: FieldValue = self.peek_next_field()?.value;
         match value {
             FieldValue::Character(Some(_)) => visitor.visit_some(self),
@@ -150,14 +150,14 @@ impl<'de, 'a, 'f , T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, 
         unimplemented!("DBase cannot deserialize unit struct")
     }
 
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        _visitor.visit_seq(self)
+        visitor.visit_seq(self)
     }
 
     fn deserialize_seq<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where
         V: Visitor<'de> {
-        unimplemented!("DBase cannot deserialize sequence")
+        unimplemented!("dBase cannot deserialize sequence")
     }
 
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error> where

@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -10,7 +10,7 @@ use record::field::{FieldType, Date, DateTime};
 use Error::IncompatibleType;
 
 
-const DELETION_FLAG_NAME: &'static str = "DeletionFlag";
+const DELETION_FLAG_NAME: &str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
 
 #[derive(Debug)]
@@ -68,7 +68,7 @@ impl FieldInfo {
             displacement_field: [0u8; 4],
             field_length: length,
             num_decimal_places: 0,
-            flags: FieldFlags::new(),
+            flags: FieldFlags::default(),
             autoincrement_next_val: [0u8; 5],
             autoincrement_step: 0u8,
         }
@@ -149,7 +149,7 @@ impl FieldInfo {
     }
 
     pub(crate) fn is_deletion_flag(&self) -> bool {
-        &self.name == DELETION_FLAG_NAME
+        self.name == DELETION_FLAG_NAME
     }
 }
 
@@ -158,10 +158,6 @@ impl FieldInfo {
 pub struct FieldFlags(u8);
 
 impl FieldFlags {
-    pub fn new() -> Self {
-        Self { 0: 0 }
-    }
-
     pub fn system_column(self) -> bool {
         (self.0 & 0x01) != 0
     }
@@ -176,6 +172,12 @@ impl FieldFlags {
 
     pub fn is_auto_incrementing(self) -> bool {
         (self.0 & 0x0C) != 0
+    }
+}
+
+impl Default for FieldFlags {
+    fn default() -> Self {
+        Self { 0: 0 }
     }
 }
 
@@ -224,7 +226,6 @@ macro_rules! impl_try_from_field_value_for_ {
 }
 
 impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
-//impl_try_from_field_value_for_!(FieldValue::Numeric(Some(v)) => f64);
 
 impl_try_from_field_value_for_!(FieldValue::Float => Option<f32>);
 impl_try_from_field_value_for_!(FieldValue::Float(Some(v)) => f32);
