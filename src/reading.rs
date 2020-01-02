@@ -322,26 +322,10 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
-        let field_info = self.fields_info.next().ok_or(FieldIOError {
-            field: None,
-            kind: ErrorKind::EndOfRecord,
-        })?;
-        if field_info.is_deletion_flag() {
-            if let Err(e) = self.skip_field(field_info) {
-                Err(FieldIOError {
-                    field: Some(field_info.clone()),
-                    kind: ErrorKind::IoError(e),
-                })
-            } else {
-                self.read_next_field()
-            }
-        } else {
-            let value = self.read_field(field_info)?;
-            Ok(NamedValue {
-                name: field_info.name(),
-                value,
-            })
-        }
+        self
+            .read_next_field_impl()
+            .map(|(field_info, field_value)|
+                NamedValue { name: field_info.name(), value: field_value })
     }
 
     /// Reads the next field and tries to convert into the requested type
