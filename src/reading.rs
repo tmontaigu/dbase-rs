@@ -495,7 +495,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
             let mut iter = FieldIterator {
                 source: &mut self.reader.source,
                 fields_info: self.reader.fields_info.iter().peekable(),
-                memo_reader: &mut None,
+                memo_reader: &mut self.reader.memo_reader,
             };
 
             let record = R::read_using(&mut iter)
