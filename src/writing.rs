@@ -8,7 +8,7 @@ use byteorder::WriteBytesExt;
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::record::{field::FieldType, FieldInfo, FieldName};
-use crate::{Error, FieldIOError, ErrorKind, Record};
+use crate::{Error, ErrorKind, FieldIOError, Record};
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
@@ -376,27 +376,24 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
             if value.len() == field_info.field_length as usize {
-                self.dst.write_all(value)
-                    .map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
+                self.dst.write_all(value).map_err(|error| {
+                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                })?;
             } else if value.len() < field_info.field_length as usize {
-                self.dst.write_all(value)
-                    .map_err(|error| {
+                self.dst.write_all(value).map_err(|error| {
                     FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                 })?;
                 for _ in 0..field_info.field_length - value.len() as u8 {
-                    write!(self.dst, " ")
-                        .map_err(|error| {
-                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                        })?;
+                    write!(self.dst, " ").map_err(|error| {
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
                 }
             } else {
                 self.dst
                     .write_all(&value[..field_info.field_length as usize])
                     .map_err(|error| {
-                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                })?;
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
             }
             Ok(())
         } else {

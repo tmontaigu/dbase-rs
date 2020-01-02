@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use serde::de::{DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use serde::Deserializer;
 
-use crate::{FieldIterator, FieldValue, ErrorKind, ReadableRecord, FieldIOError};
+use crate::{ErrorKind, FieldIOError, FieldIterator, FieldValue, ReadableRecord};
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
     type Error = FieldIOError;
@@ -299,7 +299,7 @@ impl serde::de::Error for FieldIOError {
     fn custom<T: Display>(msg: T) -> Self {
         Self {
             field: None,
-            kind: ErrorKind::Message(msg.to_string())
+            kind: ErrorKind::Message(msg.to_string()),
         }
     }
 }

@@ -1,10 +1,10 @@
 use serde::{Serialize, Serializer};
-use std::io::{Write};
+use std::io::Write;
 
 use crate::record::field::FieldType;
 use crate::writing::FieldWriter;
 use crate::{Date, FieldIOError};
-use crate::{WritableRecord, ErrorKind};
+use crate::{ErrorKind, WritableRecord};
 
 impl<T> WritableRecord for T
 where
@@ -99,10 +99,9 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
                 FieldType::Date => self.write_next_field_value::<Option<Date>>(&None),
                 FieldType::Logical => self.write_next_field_value::<Option<bool>>(&None),
                 _ => Err(FieldIOError::new(
-                    ErrorKind::Message(format!(
-                        "This field cannot store None values")),
-                    Some((*field_info).to_owned())
-                ))
+                    ErrorKind::Message(format!("This field cannot store None values")),
+                    Some((*field_info).to_owned()),
+                )),
             }
         } else {
             Err(FieldIOError::end_of_record())
@@ -344,7 +343,7 @@ impl serde::ser::Error for FieldIOError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         Self {
             field: None,
-            kind: ErrorKind::Message(msg.to_string())
+            kind: ErrorKind::Message(msg.to_string()),
         }
     }
 }

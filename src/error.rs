@@ -86,7 +86,7 @@ impl FieldIOError {
     pub(crate) fn end_of_record() -> Self {
         Self {
             field: None,
-            kind: ErrorKind::EndOfRecord
+            kind: ErrorKind::EndOfRecord,
         }
     }
 
@@ -118,7 +118,6 @@ impl From<FieldConversionError> for ErrorKind {
         ErrorKind::BadConversion(e)
     }
 }
-
 
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -155,13 +154,17 @@ impl std::error::Error for FieldIOError {
         match self.kind {
             ErrorKind::IoError(_) => "An I/O error happened",
             ErrorKind::ParseFloatError(_) => "Float value could not be obtained",
-            ErrorKind::ParseIntError(_) =>  "Float value could not be obtained",
+            ErrorKind::ParseIntError(_) => "Float value could not be obtained",
             ErrorKind::InvalidFieldType(_) => "The FieldType code is note a valid one",
             ErrorKind::MissingMemoFile => "The memo file could not be found",
-            ErrorKind::ErrorOpeningMemoFile(_) => "An error occurred when trying to open the memo file",
+            ErrorKind::ErrorOpeningMemoFile(_) => {
+                "An error occurred when trying to open the memo file"
+            }
             ErrorKind::BadConversion(_) => "The convertion cannot be made",
             ErrorKind::EndOfRecord => "End of record reached, no more fields left",
-            ErrorKind::NotEnoughFields => "The writer did not expected that many fields for the record",
+            ErrorKind::NotEnoughFields => {
+                "The writer did not expected that many fields for the record"
+            }
             ErrorKind::TooManyFields => "The writer expected to write more fields for the record",
             ErrorKind::IncompatibleType => "The types are not compatible",
             ErrorKind::Message(ref msg) => msg,
@@ -178,11 +181,7 @@ impl std::fmt::Display for FieldIOError {
                 self.kind, field_info
             )
         } else {
-            write!(
-                f,
-                "ReadingError {{ kind: {:?} }}",
-                self.kind
-            )
+            write!(f, "ReadingError {{ kind: {:?} }}", self.kind)
         }
     }
 }

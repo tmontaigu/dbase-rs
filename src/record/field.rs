@@ -1,7 +1,7 @@
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::str::FromStr;
-use std::convert::{TryFrom, TryInto};
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 

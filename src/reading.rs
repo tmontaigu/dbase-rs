@@ -299,10 +299,10 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field_impl(&mut self) -> Result<(&'a FieldInfo, FieldValue), FieldIOError> {
-        let field_info = self.fields_info.next().ok_or(FieldIOError {
-            field: None,
-            kind: ErrorKind::EndOfRecord,
-        })?;
+        let field_info = self
+            .fields_info
+            .next()
+            .ok_or(FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
                 Err(FieldIOError {
@@ -322,10 +322,11 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// If the "DeletionFlag" field is present in the file it won't be returned
     /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
-        self
-            .read_next_field_impl()
-            .map(|(field_info, field_value)|
-                NamedValue { name: field_info.name(), value: field_value })
+        self.read_next_field_impl()
+            .map(|(field_info, field_value)| NamedValue {
+                name: field_info.name(),
+                value: field_value,
+            })
     }
 
     /// Reads the next field and tries to convert into the requested type
@@ -336,19 +337,15 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, FieldIOError>
     where
         F: TryFrom<FieldValue, Error = FieldConversionError>,
-        //        <F as TryFrom<FieldValue>>::Error: Into<Error>,
     {
-        let (field_info, field_value) = self.read_next_field_impl()?;
-        match F::try_from(field_value) {
-            Ok(v) => Ok(NamedValue {
-                name: field_info.name(),
-                value: v,
-            }),
-            Err(e) => Err(FieldIOError {
-                field: Some(field_info.clone()),
-                kind: e.into(),
-            }),
-        }
+        self.read_next_field_impl()
+            .and_then(|(field_info, field_value)| match F::try_from(field_value) {
+                Ok(v) => Ok(NamedValue {
+                    name: field_info.name(),
+                    value: v,
+                }),
+                Err(e) => Err(FieldIOError::new(e.into(), Some(field_info.to_owned()))),
+            })
     }
 
     /// Skips the next field of the record, useful if the field does not interest you
@@ -383,15 +380,20 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// Reads the raw bytes of the next field without doing any filtering or trimming
     #[cfg(feature = "serde")]
     pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, FieldIOError> {
-        let field_info = self.fields_info.next().ok_or(FieldIOError::end_of_record())?;
+        let field_info = self
+            .fields_info
+            .next()
+            .ok_or(FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info)
-                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
+            self.skip_field(field_info).map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+            })?;
             self.read_next_field_raw()
         } else {
             let mut buf = vec![0u8; field_info.field_length as usize];
-            self.source.read_exact(&mut buf)
-                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
+            self.source.read_exact(&mut buf).map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+            })?;
             Ok(buf)
         }
     }
@@ -403,19 +405,25 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             kind: ErrorKind::EndOfRecord,
         })?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info)
-                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
+            self.skip_field(field_info).map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+            })?;
             self.fields_info.next().unwrap();
-            field_info = self.fields_info.peek().ok_or(FieldIOError::end_of_record())?;
+            field_info = self
+                .fields_info
+                .peek()
+                .ok_or(FieldIOError::end_of_record())?;
         }
         let value = self.read_field(field_info)?;
         self.source
             .seek(SeekFrom::Current(-i64::from(field_info.field_length)))
-            .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
+            .map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+            })?;
 
-        Ok(NamedValue{
+        Ok(NamedValue {
             name: field_info.name(),
-            value
+            value,
         })
     }
 

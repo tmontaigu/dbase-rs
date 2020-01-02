@@ -4,9 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::io::{Read, Write};
 
-
 use crate::record::field::{Date, MemoFileType};
-
 
 /// Known version of dBase files
 #[derive(Debug, Copy, Clone)]

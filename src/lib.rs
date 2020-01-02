@@ -225,11 +225,11 @@ mod reading;
 mod record;
 mod writing;
 
-pub use crate::reading::{read, FieldIterator, NamedValue, ReadableRecord, Reader, Record};
-pub use crate::record::field::{FieldValue, Date, Time, DateTime};
-pub use crate::record::{FieldName, FieldInfo, FieldConversionError};
-pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
+pub use crate::reading::{read, FieldIterator, NamedValue, ReadableRecord, Reader, Record};
+pub use crate::record::field::{Date, DateTime, FieldValue, Time};
+pub use crate::record::{FieldConversionError, FieldInfo, FieldName};
+pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
 /// macro to define a struct that implements the ReadableRecord and WritableRecord
 ///
