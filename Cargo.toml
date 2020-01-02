@@ -1,6 +1,6 @@
 [package]
 name = "dbase"
-version = "0.0.4"
+version = "0.1.0"
 authors = ["tmontaigu <thomas.montaigu@laposte.net>"]
 description = "Read & Write .dbf in Rust"
 license = "MIT"

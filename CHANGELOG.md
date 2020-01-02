@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.0
     - Added preliminary support for reading some 'VisualFoxPro' files
     - Added support for reading dBase / FoxPro files which have 'Memo' fields. (Writing Memo fields is not supported yet)
     - Added support for reading and writing the 'Datetime' field
@@ -11,6 +11,7 @@
     - Changed how iteration on the records is made (/!\ very small breaking change)
     - Changed how dbase Writer are created, users now have to use the TableWriterBuilder
       to specify fields that constitute a record before being able to write records.
+    - Changed the Error type.
       
     - Bumped byteorder dependency to 1.3.0
 
