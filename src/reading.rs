@@ -398,30 +398,41 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
 
     /// Reads the raw bytes of the next field without doing any filtering or trimming
     #[cfg(feature = "serde")]
-    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, Error> {
-        let field_info = self.fields_info.next().ok_or(Error::EndOfRecord)?;
+    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, FieldIOError> {
+        let field_info = self.fields_info.next().ok_or(FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info)?;
+            self.skip_field(field_info)
+                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
             self.read_next_field_raw()
         } else {
             let mut buf = vec![0u8; field_info.field_length as usize];
-            self.source.read_exact(&mut buf)?;
+            self.source.read_exact(&mut buf)
+                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
             Ok(buf)
         }
     }
 
     #[cfg(feature = "serde")]
-    pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, ErrorKind> {
-        let mut field_info = *self.fields_info.peek().ok_or(Error::EndOfRecord)?;
+    pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
+        let mut field_info = *self.fields_info.peek().ok_or(FieldIOError {
+            field: None,
+            kind: ErrorKind::EndOfRecord,
+        })?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info)?;
+            self.skip_field(field_info)
+                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
             self.fields_info.next().unwrap();
-            field_info = self.fields_info.peek().ok_or(Error::EndOfRecord)?;
+            field_info = self.fields_info.peek().ok_or(FieldIOError::end_of_record())?;
         }
         let value = self.read_field(field_info)?;
         self.source
-            .seek(SeekFrom::Current(-i64::from(field_info.field_length)))?;
-        Ok(value)
+            .seek(SeekFrom::Current(-i64::from(field_info.field_length)))
+            .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned())))?;
+
+        Ok(NamedValue{
+            name: field_info.name(),
+            value
+        })
     }
 
     /// Advance the source to skip the field

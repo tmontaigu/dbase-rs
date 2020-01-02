@@ -27,6 +27,7 @@ pub enum ErrorKind {
     Message(String),
 }
 
+/// The error type for this crate
 pub struct Error {
     pub(crate) record_num: usize,
     pub(crate) field: Option<FieldInfo>,
@@ -80,6 +81,13 @@ impl FieldIOError {
         Self { field, kind }
     }
 
+    pub(crate) fn end_of_record() -> Self {
+        Self {
+            field: None,
+            kind: ErrorKind::EndOfRecord
+        }
+    }
+
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
@@ -109,25 +117,70 @@ impl From<FieldConversionError> for ErrorKind {
     }
 }
 
+
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            ErrorKind::EndOfRecord => write!(
+        if let Some(field_info) = &self.field {
+            write!(
                 f,
-                "ReadingError {{ record_num: {},  kind: EndOfRecord }}",
-                self.record_num
-            ),
-            kind => write!(
+                "ReadingError {{ record_num: {}, kind: {:?}, {} }}",
+                self.record_num, self.kind, field_info
+            )
+        } else {
+            write!(
                 f,
-                "ReadingError {{ record_num: {}, kind: {:?}, {:?} }}",
-                self.record_num, kind, self.field
-            ),
+                "ReadingError {{ record_num: {}, kind: {:?} }}",
+                self.record_num, self.kind
+            )
         }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for FieldIOError {
+    fn description(&self) -> &str {
+        match self.kind {
+            ErrorKind::IoError(_) => "An I/O error happened",
+            ErrorKind::ParseFloatError(_) => "Float value could not be obtained",
+            ErrorKind::ParseIntError(_) =>  "Float value could not be obtained",
+            ErrorKind::InvalidFieldType(_) => "The FieldType code is note a valid one",
+            ErrorKind::MissingMemoFile => "The memo file could not be found",
+            ErrorKind::ErrorOpeningMemoFile(_) => "An error occurred when trying to open the memo file",
+            ErrorKind::BadConversion(_) => "The convertion cannot be made",
+            ErrorKind::EndOfRecord => "End of record reached, no more fields left",
+            ErrorKind::NotEnoughFields => "The writer did not expected that many fields for the record",
+            ErrorKind::TooManyFields => "The writer expected to write more fields for the record",
+            ErrorKind::IncompatibleType => "The types are not compatible",
+            ErrorKind::Message(ref msg) => msg,
+        }
+    }
+}
+
+impl std::fmt::Display for FieldIOError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(field_info) = &self.field {
+            write!(
+                f,
+                "FieldIOError {{ kind: {:?}, {} }}",
+                self.kind, field_info
+            )
+        } else {
+            write!(
+                f,
+                "ReadingError {{ kind: {:?} }}",
+                self.kind
+            )
+        }
     }
 }

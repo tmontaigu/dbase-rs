@@ -4,14 +4,13 @@ use std::io::{Read, Seek};
 use serde::de::{DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use serde::Deserializer;
 
-use ReadableRecord;
+use ::{ReadableRecord, FieldIOError};
 
-use crate::Error;
 use crate::FieldIterator;
-use FieldValue;
+use ::{FieldValue, ErrorKind};
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn next_element_seed<T>(
         &mut self,
@@ -30,7 +29,7 @@ impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
 
 //TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
 impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T> {
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
@@ -291,7 +290,7 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
 }
 
 impl<S: DeserializeOwned> ReadableRecord for S {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
     {
@@ -299,8 +298,11 @@ impl<S: DeserializeOwned> ReadableRecord for S {
     }
 }
 
-impl serde::de::Error for Error {
+impl serde::de::Error for FieldIOError {
     fn custom<T: Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
+        Self {
+            field: None,
+            kind: ErrorKind::Message(msg.to_string())
+        }
     }
 }

@@ -375,22 +375,34 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     }
 
     #[cfg(feature = "serde")]
-    pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
             if value.len() == field_info.field_length as usize {
-                self.dst.write_all(value)?;
+                self.dst.write_all(value)
+                    .map_err(|error| {
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
             } else if value.len() < field_info.field_length as usize {
-                self.dst.write_all(value)?;
+                self.dst.write_all(value)
+                    .map_err(|error| {
+                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                })?;
                 for _ in 0..field_info.field_length - value.len() as u8 {
-                    write!(self.dst, " ")?;
+                    write!(self.dst, " ")
+                        .map_err(|error| {
+                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                        })?;
                 }
             } else {
                 self.dst
-                    .write_all(&value[..field_info.field_length as usize])?;
+                    .write_all(&value[..field_info.field_length as usize])
+                    .map_err(|error| {
+                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                })?;
             }
             Ok(())
         } else {
-            Err(Error::EndOfRecord)
+            Err(FieldIOError::new(ErrorKind::EndOfRecord, None))
         }
     }
 

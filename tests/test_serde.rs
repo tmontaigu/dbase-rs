@@ -9,7 +9,7 @@ mod serde_tests {
 
     use serde_derive::{Deserialize, Serialize};
 
-    use dbase::{Error, FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
+    use dbase::{FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord, ErrorKind};
     use std::fmt::Debug;
 
     fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
@@ -139,11 +139,11 @@ mod serde_tests {
             .add_character_field(FieldName::try_from("not present").unwrap(), 50)
             .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-        let result = writer.write(&records);
-
-        match result {
-            Err(Error::NotEnoughFields) => assert!(true),
-            _ => assert!(false),
+        let error = writer.write(&records)
+            .expect_err("We expected an Error");
+        match error.kind() {
+            ErrorKind::NotEnoughFields => assert!(true),
+            _ => assert!(false)
         }
     }
 
@@ -158,11 +158,12 @@ mod serde_tests {
 
         let writer = TableWriterBuilder::new().build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-        let result = writer.write(&records);
+        let error = writer.write(&records)
+            .expect_err("Expected an error");
 
-        match result {
-            Err(Error::EndOfRecord) => assert!(true),
-            _ => assert!(false),
+        match error.kind() {
+            ErrorKind::TooManyFields => assert!(true),
+            kind => assert!(false, "The kind is not the expected one: {}", kind),
         }
     }
 

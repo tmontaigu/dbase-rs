@@ -1,10 +1,10 @@
 use serde::{Serialize, Serializer};
-use std::io::Write;
+use std::io::{Write};
 
 use record::field::FieldType;
 use writing::FieldWriter;
-use Date;
-use {Error, WritableRecord};
+use ::{Date, FieldIOError};
+use {WritableRecord, ErrorKind};
 
 impl<T> WritableRecord for T
 where
@@ -13,14 +13,14 @@ where
     fn write_using<'a, W: Write>(
         &self,
         field_writer: &mut FieldWriter<'a, W>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), FieldIOError> {
         self.serialize(field_writer)
     }
 }
 
 impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
@@ -98,13 +98,14 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
                 FieldType::Float => self.write_next_field_value::<Option<f32>>(&None),
                 FieldType::Date => self.write_next_field_value::<Option<Date>>(&None),
                 FieldType::Logical => self.write_next_field_value::<Option<bool>>(&None),
-                _ => Err(Error::Message(format!(
-                    "FieldType {:?} cannot store None values",
-                    field_info.field_type
-                ))),
+                _ => Err(FieldIOError::new(
+                    ErrorKind::Message(format!(
+                        "This field cannot store None values")),
+                    Some((*field_info).to_owned())
+                ))
             }
         } else {
-            Err(Error::EndOfRecord)
+            Err(FieldIOError::end_of_record())
         }
     }
 
@@ -214,7 +215,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_field<T: ?Sized>(
         &mut self,
@@ -234,7 +235,7 @@ impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W
 
 impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_field<T: ?Sized>(
         &mut self,
@@ -254,7 +255,7 @@ impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -270,7 +271,7 @@ impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
     where
@@ -293,7 +294,7 @@ impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_field<T: ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error>
     where
@@ -309,7 +310,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W>
 
 impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -325,7 +326,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> 
 
 impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = Error;
+    type Error = FieldIOError;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -338,8 +339,12 @@ impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
         Ok(())
     }
 }
-impl serde::ser::Error for Error {
+
+impl serde::ser::Error for FieldIOError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
+        Self {
+            field: None,
+            kind: ErrorKind::Message(msg.to_string())
+        }
     }
 }
