@@ -8,7 +8,9 @@ use byteorder::WriteBytesExt;
 use header::Header;
 use reading::TERMINATOR_VALUE;
 use record::{field::FieldType, FieldInfo, FieldName};
-use {Error, Record};
+use FieldIOError;
+use Record;
+use {Error, ErrorKind};
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
@@ -242,28 +244,33 @@ mod private {
 ///
 /// This trait is 'private' and cannot be implemented on your custom types.
 pub trait WritableAsDbaseField: private::Sealed {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error>;
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind>;
 }
 
 /// Trait to be implemented by struct that you want to be able to write to (serialize)
 /// a dBase file
 pub trait WritableRecord {
     /// Use the FieldWriter to write the fields of the record
-    fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>)
-        -> Result<(), Error>;
+    fn write_using<'a, W: Write>(
+        &self,
+        field_writer: &mut FieldWriter<'a, W>,
+    ) -> Result<(), FieldIOError>;
 }
 
 impl WritableRecord for Record {
     fn write_using<'a, W: Write>(
         &self,
         field_writer: &mut FieldWriter<'a, W>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), FieldIOError> {
         while let Some(name) = field_writer.next_field_name() {
             let value = self.get(name).ok_or_else(|| {
-                Error::Message(format!(
-                    "Could not find field named '{}' in the record map",
-                    name
-                ))
+                FieldIOError::new(
+                    ErrorKind::Message(format!(
+                        "Could not find field named '{}' in the record map",
+                        name
+                    )),
+                    None,
+                )
             })?;
             field_writer.write_next_field_value(value)?;
         }
@@ -303,11 +310,13 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     pub fn write_next_field_value<T: WritableAsDbaseField>(
         &mut self,
         field_value: &T,
-    ) -> Result<(), Error> {
+    ) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
             self.buffer.set_position(0);
 
-            field_value.write_as(field_info.field_type, &mut self.buffer)?;
+            field_value
+                .write_as(field_info.field_type, &mut self.buffer)
+                .map_err(|kind| FieldIOError::new(kind, Some(field_info.clone())))?;
 
             let mut bytes_written = self.buffer.position();
             let mut bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
@@ -319,7 +328,9 @@ impl<'a, W: Write> FieldWriter<'a, W> {
                     // but we are not yet ready to handle correctly codepages, etc
                     let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == b'.');
                     if maybe_dot_pos.is_none() {
-                        write!(self.buffer, ".")?;
+                        write!(self.buffer, ".").map_err(|error| {
+                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                        })?;
                         bytes_written = self.buffer.position();
                         maybe_dot_pos = Some(bytes_written as usize)
                     }
@@ -327,29 +338,39 @@ impl<'a, W: Write> FieldWriter<'a, W> {
                     let missing_decimals =
                         field_info.num_decimal_places - (bytes_written - dot_pos as u64) as u8;
                     for _ in 0..missing_decimals {
-                        write!(self.buffer, "0")?;
+                        write!(self.buffer, "0").map_err(|error| {
+                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                        })?;
                     }
                     bytes_written = self.buffer.position();
                     bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
                 }
                 for _ in 0..bytes_to_pad {
-                    write!(self.buffer, " ")?;
+                    write!(self.buffer, " ").map_err(|error| {
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
                 }
                 let field_bytes = self.buffer.get_ref();
                 debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
                 self.dst
-                    .write_all(&field_bytes[..self.buffer.position() as usize])?;
+                    .write_all(&field_bytes[..self.buffer.position() as usize])
+                    .map_err(|error| {
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
             } else {
                 // The current field value size exceeds the one one set
                 // when creating the writer, we just crop
                 let field_bytes = self.buffer.get_ref();
                 debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
                 self.dst
-                    .write_all(&field_bytes[..field_info.field_length as usize])?;
+                    .write_all(&field_bytes[..field_info.field_length as usize])
+                    .map_err(|error| {
+                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                    })?;
             }
             Ok(())
         } else {
-            Err(Error::EndOfRecord)
+            Err(FieldIOError::new(ErrorKind::TooManyFields, None))
         }
     }
 
@@ -410,7 +431,7 @@ impl<W: Write> TableWriter<W> {
     /// (if it had to be specified) will be truncated
     /// # Example
     /// ```
-    /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, Error, FieldWriter};
+    /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, ErrorKind, FieldIOError};
     /// use std::convert::TryFrom;
     /// use std::io::{Cursor, Write};
     ///
@@ -419,7 +440,7 @@ impl<W: Write> TableWriter<W> {
     /// }
     ///
     /// impl WritableRecord for User {
-    ///     fn write_using<'a, W: Write>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), Error> {
+    ///     fn write_using<'a, W: Write>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError> {
     ///         field_writer.write_next_field_value(&self.first_name)
     ///     }
     /// }
@@ -438,11 +459,17 @@ impl<W: Write> TableWriter<W> {
     /// ```
     pub fn write<R: WritableRecord>(mut self, records: &[R]) -> Result<W, Error> {
         self.update_header(records.len());
-        self.header.write_to(&mut self.dst)?;
+        self.header
+            .write_to(&mut self.dst)
+            .map_err(|error| Error::io_error(error, 0))?;
         for record_info in &self.fields_info {
-            record_info.write_to(&mut self.dst)?;
+            record_info
+                .write_to(&mut self.dst)
+                .map_err(|error| Error::io_error(error, 0))?;
         }
-        self.dst.write_u8(TERMINATOR_VALUE)?;
+        self.dst
+            .write_u8(TERMINATOR_VALUE)
+            .map_err(|error| Error::io_error(error, 0))?;
 
         let mut field_writer = FieldWriter {
             dst: &mut self.dst,
@@ -450,18 +477,29 @@ impl<W: Write> TableWriter<W> {
             buffer: Cursor::new(vec![0u8; 255]),
         };
 
-        for record in records {
-            //TODO Find out if the deletion flag is present in all dbase file type
-            //  (does foxbase & foxpro have this implicit field ?
-            field_writer.write_deletion_flag()?;
-            record.write_using(&mut field_writer)?;
+        for (i, record) in records.iter().enumerate() {
+            field_writer
+                .write_deletion_flag()
+                .map_err(|error| Error::io_error(error, i))?;
+
+            record
+                .write_using(&mut field_writer)
+                .map_err(|error| Error::new(error, i))?;
+
             if !field_writer.all_fields_were_written() {
-                return Err(Error::NotEnoughFields);
+                return Err(Error {
+                    record_num: i,
+                    field: None,
+                    kind: ErrorKind::NotEnoughFields,
+                });
             }
             field_writer.fields_info = self.fields_info.iter().peekable();
         }
 
-        self.dst.write_u8(FILE_TERMINATOR)?;
+        self.dst
+            .write_u8(FILE_TERMINATOR)
+            .map_err(|error| Error::io_error(error, records.len()))?;
+
         Ok(self.dst)
     }
 

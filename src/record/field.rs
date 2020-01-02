@@ -6,10 +6,10 @@ use std::str::FromStr;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use chrono::Datelike;
+use error::ErrorKind;
 use record::FieldInfo;
 use std::convert::{TryFrom, TryInto};
 use writing::WritableAsDbaseField;
-use Error;
 
 /// The different types of Memo file structure there seem to exist
 #[derive(PartialEq, Copy, Clone)]
@@ -211,12 +211,12 @@ impl FieldType {
 }
 
 impl TryFrom<char> for FieldType {
-    type Error = Error;
+    type Error = ErrorKind;
 
     fn try_from(c: char) -> Result<Self, Self::Error> {
         match Self::from(c) {
             Some(t) => Ok(t),
-            None => Err(Error::InvalidFieldType(c)),
+            None => Err(ErrorKind::InvalidFieldType(c)),
         }
     }
 }
@@ -263,7 +263,7 @@ impl FieldValue {
         mut source: &mut T,
         memo_reader: &mut Option<MemoReader<T>>,
         field_info: &FieldInfo,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ErrorKind> {
         let value = match field_info.field_type {
             FieldType::Logical => match source.read_u8()? as char {
                 ' ' | '?' => FieldValue::Logical(None),
@@ -327,7 +327,7 @@ impl FieldValue {
                     let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
                     FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
                 } else {
-                    return Err(Error::MissingMemoFile);
+                    return Err(ErrorKind::MissingMemoFile);
                 }
             }
         };
@@ -567,7 +567,7 @@ impl DateTime {
         Self { date, time }
     }
 
-    fn read_from<T: Read>(src: &mut T) -> Result<Self, Error> {
+    fn read_from<T: Read>(src: &mut T) -> Result<Self, ErrorKind> {
         let julian_day_number = src.read_i32::<LittleEndian>()?;
         let time_word = src.read_i32::<LittleEndian>()?;
         let time = Time::from_word(time_word);
@@ -583,9 +583,9 @@ impl DateTime {
 }
 
 impl WritableAsDbaseField for FieldValue {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if self.field_type() != field_type {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         } else {
             match self {
                 FieldValue::Character(value) => value.write_as(field_type, dst),
@@ -604,7 +604,7 @@ impl WritableAsDbaseField for FieldValue {
 }
 
 impl WritableAsDbaseField for f64 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         match field_type {
             FieldType::Numeric => {
                 write!(dst, "{}", self)?;
@@ -614,24 +614,24 @@ impl WritableAsDbaseField for f64 {
                 dst.write_f64::<LittleEndian>(*self)?;
                 Ok(())
             }
-            _ => Err(Error::IncompatibleType),
+            _ => Err(ErrorKind::IncompatibleType),
         }
     }
 }
 
 impl WritableAsDbaseField for Date {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Date {
             write!(dst, "{:04}{:02}{:02}", self.year, self.month, self.day)?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for Option<Date> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Date {
             if let Some(date) = self {
                 date.write_as(field_type, dst)?;
@@ -642,13 +642,13 @@ impl WritableAsDbaseField for Option<Date> {
             }
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for Option<f64> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Numeric {
             if let Some(value) = self {
                 value.write_as(field_type, dst)
@@ -656,72 +656,72 @@ impl WritableAsDbaseField for Option<f64> {
                 Ok(())
             }
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for f32 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Float {
             write!(dst, "{}", self)?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for Option<f32> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Float {
             if let Some(value) = self {
                 value.write_as(field_type, dst)?;
             }
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for String {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Character {
             dst.write_all(self.as_bytes())?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for Option<String> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Character {
             if let Some(s) = self {
                 s.write_as(field_type, dst)?;
             }
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for &str {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Character {
             dst.write_all(self.as_bytes())?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for bool {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Logical {
             if *self {
                 write!(dst, "t")?;
@@ -730,42 +730,42 @@ impl WritableAsDbaseField for bool {
             }
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for Option<bool> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Logical {
             if let Some(v) = self {
                 v.write_as(field_type, dst)?;
             }
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for i32 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::Integer {
             dst.write_i32::<LittleEndian>(*self)?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }
 
 impl WritableAsDbaseField for DateTime {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), Error> {
+    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
         if field_type == FieldType::DateTime {
             self.write_to(dst)?;
             Ok(())
         } else {
-            Err(Error::IncompatibleType)
+            Err(ErrorKind::IncompatibleType)
         }
     }
 }

@@ -4,8 +4,8 @@ extern crate dbase;
 use std::io::{Cursor, Read, Seek, Write};
 
 use dbase::{
-    Date, DateTime, Error, FieldIterator, FieldName, FieldValue, FieldWriter, ReadableRecord,
-    Reader, Record, TableWriterBuilder, Time, WritableRecord,
+    Date, DateTime, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
+    ReadableRecord, Reader, Record, TableWriterBuilder, Time, WritableRecord,
 };
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
@@ -93,7 +93,7 @@ struct Album {
 }
 
 impl ReadableRecord for Album {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, Error>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
     {
@@ -111,7 +111,7 @@ impl WritableRecord for Album {
     fn write_using<'a, W: Write>(
         &self,
         field_writer: &mut FieldWriter<'a, W>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), FieldIOError> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;
         field_writer.write_next_field_value(&self.released)?;

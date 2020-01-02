@@ -6,8 +6,8 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 pub mod field;
 
 use record::field::{Date, DateTime, FieldType};
-use Error::IncompatibleType;
-use {Error, FieldValue};
+use ErrorKind;
+use FieldValue;
 
 const DELETION_FLAG_NAME: &str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
@@ -43,7 +43,7 @@ impl TryFrom<&str> for FieldName {
 }
 
 /// Struct giving the info for a record field
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FieldInfo {
     /// The name of the field
     pub(crate) name: String,
@@ -85,7 +85,7 @@ impl FieldInfo {
         }
     }
 
-    pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, Error> {
+    pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, ErrorKind> {
         let mut name = [0u8; FIELD_NAME_LENGTH];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
@@ -111,6 +111,7 @@ impl FieldInfo {
         let s = String::from_utf8_lossy(&name)
             .trim_matches(|c| c == '\u{0}')
             .to_owned();
+
         let field_type = FieldType::try_from(field_type as char)?;
 
         Ok(Self {
@@ -125,7 +126,7 @@ impl FieldInfo {
         })
     }
 
-    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
+    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> std::io::Result<()> {
         let num_bytes = self.name.as_bytes().len();
         let mut name_bytes = [0u8; FIELD_NAME_LENGTH];
         name_bytes[..num_bytes.min(FIELD_NAME_LENGTH)].copy_from_slice(self.name.as_bytes());
@@ -163,6 +164,16 @@ impl FieldInfo {
     }
 }
 
+impl std::fmt::Display for FieldInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "FieldInfo {{ Name: {}, Field Type: {} }}",
+            self.name, self.field_type
+        )
+    }
+}
+
 /// Flags describing a field
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct FieldFlags(u8);
@@ -185,6 +196,7 @@ pub enum FieldConversionError {
         /// The actual FieldType of the FieldValue the conversion was tried on
         actual: FieldType,
     },
+    IncompatibleType,
     /// The value written is the file was only pad bytes / uninitialized
     /// and the user tried to convert it into a non Option-Type
     NoneValue,
@@ -242,7 +254,7 @@ impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
 impl_try_from_field_value_for_!(FieldValue::Integer => i32);
 
 impl TryFrom<FieldValue> for f64 {
-    type Error = Error;
+    type Error = FieldConversionError;
 
     fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
         match value {
@@ -250,7 +262,7 @@ impl TryFrom<FieldValue> for f64 {
             FieldValue::Numeric(None) => Err(FieldConversionError::NoneValue.into()),
             FieldValue::Currency(c) => Ok(c),
             FieldValue::Double(d) => Ok(d),
-            _ => Err(IncompatibleType),
+            _ => Err(FieldConversionError::IncompatibleType),
         }
     }
 }

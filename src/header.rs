@@ -3,7 +3,6 @@ use std::io::{Read, Write};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use record::field::{Date, MemoFileType};
-use Error;
 
 use chrono;
 
@@ -223,7 +222,7 @@ impl Header {
         })
     }
 
-    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> Result<(), Error> {
+    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> std::io::Result<()> {
         dest.write_u8(u8::from(self.file_type))?;
 
         dest.write_u8((self.last_update.year() - 1900) as u8)?;
