@@ -4,7 +4,8 @@
 //!
 //! # Reading
 //!
-//! To Read the whole file at once you should use the [read](fn.read.html) function.
+//! The [Reader](struct.Reader.html) is the struct that you'll need to use in order
+//! to read the content of a dBase file.
 //!
 //! Once you have access to the records, you will have to `match` against the real
 //! [FieldValue](enum.FieldValue.html)
@@ -13,7 +14,8 @@
 //!
 //! ```
 //! use dbase::FieldValue;
-//! let records = dbase::read("tests/data/line.dbf").unwrap();
+//! # fn main() -> Result<(), dbase::Error> {
+//! let records = dbase::read("tests/data/line.dbf")?;
 //! for record in records {
 //!     for (name, value) in record {
 //!         println!("{} -> {:?}", name, value);
@@ -24,24 +26,28 @@
 //!         }
 //!     }
 //!}
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! You can also create a [Reader](reading/struct.Reader.html) and iterate over the records.
 //!
 //! ```
-//! let mut reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path("tests/data/line.dbf")?;
 //! for record_result in reader.iter_records() {
-//!     let record = record_result.unwrap();
+//!     let record = record_result?;
 //!     for (name, value) in record {
 //!         println!("name: {}, value: {:?}", name, value);
 //!     }
 //! }
-//!
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Deserialisation
 //!
-//! If you know what kind of data you expect from a particular file you can use implement
+//! If you know what kind of data to expect from a particular file you can use implement
 //! the [ReadbableRecord](trait.ReadableRecord.html) trait to "deserialize" the record into
 //! your custom struct:
 //!
@@ -65,50 +71,52 @@
 //!         })
 //!     }
 //! }
-//!
-//! let mut reader = dbase::Reader::from_path("tests/data/stations.dbf").unwrap();
-//! let stations = reader.read_as::<StationRecord>().unwrap();
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path("tests/data/stations.dbf")?;
+//! let stations = reader.read_as::<StationRecord>()?;
 //!
 //! assert_eq!(stations[0].name, "Van Dorn Street");
 //! assert_eq!(stations[0].marker_col, "#0000ff");
 //! assert_eq!(stations[0].marker_sym, "rail-metro");
 //! assert_eq!(stations[0].line, "blue");
-//!
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! If you use the `serde` optional feature and serde_derive crate you can have the
 //! [ReadbableRecord](trait.ReadableRecord.html) impletemented for you
 //!
 //! ```
-//! #[cfg(feature = "serde")]
+//! # #[cfg(feature = "serde")]
 //! extern crate serde_derive;
 //!
-//! #[cfg(feature = "serde")]
-//! fn main() {
+//! # #[cfg(feature = "serde")]
+//! # fn main() -> Result<(), dbase::Error>{
 //!
-//!     use std::io::{Read, Seek};
-//!     use serde_derive::Deserialize;
+//! use std::io::{Read, Seek};
+//! use serde_derive::Deserialize;
 //!
-//!     #[derive(Deserialize)]
-//!     struct StationRecord {
-//!         name: String,
-//!         marker_col: String,
-//!         marker_sym: String,
-//!         line: String,
-//!     }
-//!
-//!     let mut reader = dbase::Reader::from_path("tests/data/stations.dbf").unwrap();
-//!     let stations = reader.read_as::<StationRecord>().unwrap();
-//!
-//!     assert_eq!(stations[0].name, "Van Dorn Street");
-//!     assert_eq!(stations[0].marker_col, "#0000ff");
-//!     assert_eq!(stations[0].marker_sym, "rail-metro");
-//!     assert_eq!(stations[0].line, "blue");
+//! #[derive(Deserialize)]
+//! struct StationRecord {
+//!     name: String,
+//!     marker_col: String,
+//!     marker_sym: String,
+//!     line: String,
 //! }
 //!
-//! #[cfg(not(feature = "serde"))]
-//! fn main() {
-//! }
+//! let mut reader = dbase::Reader::from_path("tests/data/stations.dbf")?;
+//! let stations = reader.read_as::<StationRecord>()?;
+//!
+//! assert_eq!(stations[0].name, "Van Dorn Street");
+//! assert_eq!(stations[0].marker_col, "#0000ff");
+//! assert_eq!(stations[0].marker_sym, "rail-metro");
+//! assert_eq!(stations[0].line, "blue");
+//! # Ok(())
+//! # }
+//!
+//! # #[cfg(not(feature = "serde"))]
+//! # fn main() {
+//! # }
 //! ```
 //!
 //!
@@ -125,16 +133,17 @@
 //! ## Examples
 //!
 //! ```
-//! let mut reader = dbase::Reader::from_path("tests/data/stations.dbf").unwrap();
-//! let mut stations = reader.read().unwrap();
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path("tests/data/stations.dbf")?;
+//! let mut stations = reader.read()?;
 //!
 //! let mut writer = dbase::TableWriterBuilder::from_reader(reader)
-//!     .build_with_file_dest("stations.dbf")
-//!     .unwrap();
+//!     .build_with_file_dest("stations.dbf").unwrap();
 //!
 //! stations[0].get_mut("line").and_then(|_old| Some("Red".to_string()));
-//! writer.write(&stations).unwrap();
-//!
+//! writer.write(&stations)?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ```
@@ -173,38 +182,39 @@
 //! [WritableRecord](trait.WritableRecord.html) impletemented for you.
 //!
 //! ```
-//! #[cfg(feature = "serde")]
+//! # #[cfg(feature = "serde")]
 //! extern crate serde_derive;
 //!
-//! #[cfg(feature = "serde")]
+//! # #[cfg(feature = "serde")]
 //! use serde_derive::Serialize;
 //!
 //! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter};
 //! use std::convert::TryFrom;
 //! use std::io::{Cursor, Write};
 //!
-//! #[cfg(feature = "serde")]
-//! fn main () {
-//!     #[derive(Serialize)]
-//!     struct User {
-//!         nick_name: String,
-//!         age: f64
-//!     }
-//!     let writer = TableWriterBuilder::new()
-//!         .add_character_field(FieldName::try_from("Nick Name").unwrap(), 50)
-//!         .add_numeric_field(FieldName::try_from("Age").unwrap(), 20, 10)
-//!         .build_with_dest(Cursor::new(Vec::<u8>::new()));
+//! # #[cfg(feature = "serde")]
+//! # fn main () {
+//! #[derive(Serialize)]
+//! struct User {
+//!     nick_name: String,
+//!     age: f64
+//! }
+//!
+//! let writer = TableWriterBuilder::new()
+//!     .add_character_field(FieldName::try_from("Nick Name").unwrap(), 50)
+//!     .add_numeric_field(FieldName::try_from("Age").unwrap(), 20, 10)
+//!     .build_with_dest(Cursor::new(Vec::<u8>::new()));
 //!
 //!
-//!     let records = vec![User{
-//!         nick_name: "Yoshi".to_string(),
-//!         age: 32.0,
-//!     }];
+//! let records = vec![User{
+//!     nick_name: "Yoshi".to_string(),
+//!     age: 32.0,
+//! }];
 //!
 //!     writer.write(&records);
-//! }
-//! #[cfg(not(feature = "serde"))]
-//! fn main() {}
+//! # }
+//! # #[cfg(not(feature = "serde"))]
+//! # fn main() {}
 //! ```
 
 #![deny(unstable_features)]
@@ -238,14 +248,14 @@ pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableR
 /// ```
 /// # #[macro_use] extern crate dbase;
 /// # fn main() {
-///     dbase_record!(
-///         #[derive(Debug)]
-///         struct UserRecord {
-///             first_name: String,
-///             last_name: String,
-///             age: f64
-///         }
-///     );
+/// dbase_record!(
+///     #[derive(Debug)]
+///     struct UserRecord {
+///         first_name: String,
+///         last_name: String,
+///         age: f64
+///     }
+/// );
 /// # }
 /// ```
 #[macro_export]

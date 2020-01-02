@@ -59,21 +59,28 @@ impl ReadableRecord for Record {
 
 impl Record {
     /// Inserts a new value in the record, returning the old one if there was any
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut record = dbase::Record::default();
+    /// record.insert("FirstName".to_owned(), dbase::FieldValue::Character(Some("Yoshi".to_owned())));
+    /// ```
     pub fn insert(&mut self, field_name: String, value: FieldValue) -> Option<FieldValue> {
         self.map.insert(field_name, value)
     }
 
-    /// Returns the [FieldValue](enums.FieldValue.html) for the given field name
+    /// Returns the [FieldValue](enum.FieldValue.html) for the given field name
     pub fn get(&self, field_name: &str) -> Option<&FieldValue> {
         self.map.get(field_name)
     }
 
-    /// Returns the mutable [FieldValue](enums.FieldValue.html) for the given field name
+    /// Returns the mutable [FieldValue](enum.FieldValue.html) for the given field name
     pub fn get_mut(&mut self, field_name: &str) -> Option<&mut FieldValue> {
         self.map.get_mut(field_name)
     }
 
-    /// Removes the [FieldValue](enums.FieldValue.html) for the given field name
+    /// Removes the [FieldValue](enum.FieldValue.html) for the given field name
     pub fn remove(&mut self, field_name: &str) -> Option<FieldValue> {
         self.map.remove(field_name)
     }
@@ -117,17 +124,27 @@ impl<T: Read + Seek> Reader<T> {
     ///
     /// Reads the header and fields information as soon as its created.
     ///
+    /// Creating a reader from a file path using the [from_path](struct.Reader.html#method.from_path) is the prefered
+    /// way of doing it as it wraps the file in a BufReader for performance.
+    ///
     /// # Example
     ///
     /// ```
-    /// let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// let records = reader.read()?;
+    /// # Ok(())
+    /// # }
     ///
     /// ```
     ///
     /// ```
     /// use std::fs::File;
+    /// # fn main() -> Result<(), dbase::Error> {
     /// let f = File::open("tests/data/line.dbf").unwrap();
-    /// let reader = dbase::Reader::new(f).unwrap();
+    /// let reader = dbase::Reader::new(f)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
@@ -191,7 +208,7 @@ impl<T: Read + Seek> Reader<T> {
         }
     }
 
-    /// Shortcut function to get an iterator over the [Record](struct.Record.html) in the file
+    /// Shortcut function to get an iterator over the [Records](struct.Record.html) in the file
     pub fn iter_records(&mut self) -> RecordIterator<T, Record> {
         self.iter_records_as::<Record>()
     }
@@ -203,17 +220,18 @@ impl<T: Read + Seek> Reader<T> {
             .collect::<Result<Vec<R>, Error>>()
     }
 
-    /// Make the `Reader` read the [Records](type.Record.html)
+    /// Make the `Reader` read the [Records](struct.Record.html)
     ///
     /// # Examples
     ///
     /// ```
     /// use std::fs::File;
-    ///
-    /// let f = File::open("tests/data/line.dbf").unwrap();
-    /// let mut reader = dbase::Reader::new(f).unwrap();
-    /// let records = reader.read().unwrap();
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// let records = reader.read()?;
     /// assert_eq!(records.len(), 1);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn read(&mut self) -> Result<Vec<Record>, Error> {
         // We don't read the file terminator
@@ -227,10 +245,11 @@ impl Reader<BufReader<File>> {
     /// # Example
     ///
     /// ```
-    /// let reader = dbase::Reader::from_path("tests/data/line.dbf").unwrap();
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// # Ok(())
+    /// # }
     /// ```
-    ///
-    ///
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let p = path.as_ref().to_owned();
         let bufreader =
@@ -242,23 +261,20 @@ impl Reader<BufReader<File>> {
             .any(|f_info| f_info.field_type == FieldType::Memo);
 
         if at_least_one_field_is_memo {
-            let memo_type = reader.header.file_type.supported_memo_type();
+            let memo_type = dbg!(reader.header.file_type.supported_memo_type());
             if let Some(mt) = memo_type {
                 let memo_path = match mt {
                     MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
                     MemoFileType::FoxBaseMemo => p.with_extension("fpt"),
                 };
 
-                let memo_file = match File::open(memo_path) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        return Err(Error {
+                let memo_file = File::open(memo_path)
+                    .map_err(|error|
+                        Error {
                             record_num: 0,
                             field: None,
-                            kind: ErrorKind::ErrorOpeningMemoFile(err),
-                        });
-                    }
-                };
+                            kind: ErrorKind::ErrorOpeningMemoFile(error),
+                        })?;
 
                 let memo_reader = MemoReader::new(mt, BufReader::new(memo_file))
                     .map_err(|error| Error::io_error(error, 0))?;

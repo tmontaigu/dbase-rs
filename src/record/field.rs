@@ -12,7 +12,7 @@ use crate::record::FieldInfo;
 use crate::writing::WritableAsDbaseField;
 
 /// The different types of Memo file structure there seem to exist
-#[derive(PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub(crate) enum MemoFileType {
     DbaseMemo,
     DbaseMemo4,
@@ -54,6 +54,7 @@ impl MemoHeader {
 }
 
 /// Struct that reads knows how to read data from a memo source
+#[derive(Debug)]
 pub(crate) struct MemoReader<T: Read + Seek> {
     memo_file_type: MemoFileType,
     header: MemoHeader,
