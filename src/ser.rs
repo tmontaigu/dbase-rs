@@ -1,10 +1,10 @@
 use serde::{Serialize, Serializer};
 use std::io::{Write};
 
-use record::field::FieldType;
-use writing::FieldWriter;
-use ::{Date, FieldIOError};
-use {WritableRecord, ErrorKind};
+use crate::record::field::FieldType;
+use crate::writing::FieldWriter;
+use crate::{Date, FieldIOError};
+use crate::{WritableRecord, ErrorKind};
 
 impl<T> WritableRecord for T
 where

@@ -5,9 +5,8 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 
 pub mod field;
 
-use record::field::{Date, DateTime, FieldType};
-use ErrorKind;
-use FieldValue;
+use self::field::{Date, DateTime, FieldType};
+use crate::{ErrorKind, FieldValue};
 
 const DELETION_FLAG_NAME: &str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
@@ -46,7 +45,7 @@ impl TryFrom<&str> for FieldName {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FieldInfo {
     /// The name of the field
-    pub(crate) name: String,
+    pub name: String,
     /// The field type
     pub(crate) field_type: FieldType,
     pub(crate) displacement_field: [u8; 4],

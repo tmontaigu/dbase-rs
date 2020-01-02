@@ -1,5 +1,7 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
+use byteorder::ReadBytesExt;
+
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -8,13 +10,11 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::iter::FusedIterator;
 use std::path::Path;
 
-use byteorder::ReadBytesExt;
-
-use error::{Error, ErrorKind, FieldIOError};
-use header::Header;
-use record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
-use record::FieldInfo;
-use FieldConversionError;
+use crate::error::{Error, ErrorKind, FieldIOError};
+use crate::header::Header;
+use crate::record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
+use crate::record::FieldInfo;
+use crate::FieldConversionError;
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;

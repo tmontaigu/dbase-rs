@@ -1,15 +1,15 @@
 use std::fmt;
 use std::io::{Read, Seek, SeekFrom, Write};
-
 use std::str::FromStr;
+use std::convert::{TryFrom, TryInto};
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use chrono::Datelike;
-use error::ErrorKind;
-use record::FieldInfo;
-use std::convert::{TryFrom, TryInto};
-use writing::WritableAsDbaseField;
+
+use crate::error::ErrorKind;
+use crate::record::FieldInfo;
+use crate::writing::WritableAsDbaseField;
 
 /// The different types of Memo file structure there seem to exist
 #[derive(PartialEq, Copy, Clone)]
@@ -128,7 +128,7 @@ impl<T: Read + Seek> MemoReader<T> {
 }
 
 /// Enum listing all the field types we know of
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FieldType {
     // dBASE III
     Character,

@@ -4,10 +4,7 @@ use std::io::{Read, Seek};
 use serde::de::{DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use serde::Deserializer;
 
-use ::{ReadableRecord, FieldIOError};
-
-use crate::FieldIterator;
-use ::{FieldValue, ErrorKind};
+use crate::{FieldIterator, FieldValue, ErrorKind, ReadableRecord, FieldIOError};
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
     type Error = FieldIOError;

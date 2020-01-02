@@ -1,10 +1,12 @@
-use std::io::{Read, Write};
+use chrono;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use record::field::{Date, MemoFileType};
+use std::io::{Read, Write};
 
-use chrono;
+
+use crate::record::field::{Date, MemoFileType};
+
 
 /// Known version of dBase files
 #[derive(Debug, Copy, Clone)]
