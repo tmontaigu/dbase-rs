@@ -19,7 +19,9 @@ pub enum ErrorKind {
     BadConversion(FieldConversionError),
     /// End of the record, there are no more fields
     EndOfRecord,
+    /// Not all the fields declared to the writer were given
     NotEnoughFields,
+    /// More fields than expected were given to the writer
     TooManyFields,
     /// The type of the value for the field is not compatible with the
     /// dbase field's type
