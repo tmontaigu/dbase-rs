@@ -45,7 +45,7 @@ impl TryFrom<&str> for FieldName {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FieldInfo {
     /// The name of the field
-    pub name: String,
+    pub(crate) name: String,
     /// The field type
     pub(crate) field_type: FieldType,
     pub(crate) displacement_field: [u8; 4],
