@@ -54,7 +54,7 @@ impl MemoHeader {
 }
 
 /// Struct that reads knows how to read data from a memo source
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct MemoReader<T: Read + Seek> {
     memo_file_type: MemoFileType,
     header: MemoHeader,
@@ -229,7 +229,7 @@ impl std::fmt::Display for FieldType {
 }
 
 /// Enum where each variant stores the record value
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FieldValue {
     // dBase III fields
     // Stored as strings, fully padded (ie only space char) strings

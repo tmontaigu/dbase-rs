@@ -258,7 +258,7 @@ impl TryFrom<FieldValue> for f64 {
     fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
         match value {
             FieldValue::Numeric(Some(v)) => Ok(v),
-            FieldValue::Numeric(None) => Err(FieldConversionError::NoneValue.into()),
+            FieldValue::Numeric(None) => Err(FieldConversionError::NoneValue),
             FieldValue::Currency(c) => Ok(c),
             FieldValue::Double(d) => Ok(d),
             _ => Err(FieldConversionError::IncompatibleType),
