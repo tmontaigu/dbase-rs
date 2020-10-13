@@ -111,6 +111,7 @@ impl From<HashMap<String, FieldValue>> for Record {
 
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
+#[derive(Clone, Debug)]
 pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
     source: T,
@@ -318,7 +319,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         let field_info = self
             .fields_info
             .next()
-            .ok_or(FieldIOError::end_of_record())?;
+            .ok_or_else(|| { FieldIOError::end_of_record() })?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
                 Err(FieldIOError {

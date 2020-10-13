@@ -111,7 +111,7 @@ impl From<u8> for Version {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct TableFlags(u8);
 
 impl TableFlags {
@@ -130,7 +130,7 @@ impl TableFlags {
 
 /// Definition of the header struct stored at the beginning
 /// of each dBase file
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Header {
     pub file_type: Version,
     pub last_update: Date,
