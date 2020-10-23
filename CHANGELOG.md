@@ -1,3 +1,8 @@
+# 0.1.1
+    - Added RecordIterator to the lib.rs exports
+    - Added derive `Clone` to the `Reader`
+    - Removed `pub` attribute from `FieldInfo`'s `name` struct member.
+
 # 0.1.0
     - Added preliminary support for reading some 'VisualFoxPro' files
     - Added support for reading dBase / FoxPro files which have 'Memo' fields. (Writing Memo fields is not supported yet)
