@@ -150,14 +150,13 @@ impl<T: Read + Seek> Reader<T> {
     pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
-        let offset_to_first_record = if header.file_type.is_visual_fox_pro() {
+        let offset = if header.file_type.is_visual_fox_pro() {
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
             header.offset_to_first_record
         };
         let num_fields =
-            (offset_to_first_record as usize - Header::SIZE - std::mem::size_of::<u8>())
-                / FieldInfo::SIZE;
+            (offset as usize - Header::SIZE - std::mem::size_of::<u8>()) / FieldInfo::SIZE;
 
         let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(FieldInfo::new_deletion_flag());
@@ -176,11 +175,9 @@ impl<T: Read + Seek> Reader<T> {
 
         debug_assert_eq!(terminator, TERMINATOR_VALUE);
 
-        if header.file_type.is_visual_fox_pro() {
-            source
-                .seek(SeekFrom::Current(i64::from(BACKLINK_SIZE)))
-                .map_err(|error| Error::io_error(error, 0))?;
-        }
+        source
+            .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
+            .map_err(|error| Error::io_error(error, 0))?;
 
         Ok(Self {
             source,
@@ -269,13 +266,11 @@ impl Reader<BufReader<File>> {
                     MemoFileType::FoxBaseMemo => p.with_extension("fpt"),
                 };
 
-                let memo_file = File::open(memo_path)
-                    .map_err(|error|
-                        Error {
-                            record_num: 0,
-                            field: None,
-                            kind: ErrorKind::ErrorOpeningMemoFile(error),
-                        })?;
+                let memo_file = File::open(memo_path).map_err(|error| Error {
+                    record_num: 0,
+                    field: None,
+                    kind: ErrorKind::ErrorOpeningMemoFile(error),
+                })?;
 
                 let memo_reader = MemoReader::new(mt, BufReader::new(memo_file))
                     .map_err(|error| Error::io_error(error, 0))?;
@@ -319,7 +314,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         let field_info = self
             .fields_info
             .next()
-            .ok_or_else(|| { FieldIOError::end_of_record() })?;
+            .ok_or_else(|| FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
                 Err(FieldIOError {

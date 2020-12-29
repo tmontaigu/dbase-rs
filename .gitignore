@@ -6,3 +6,4 @@ Cargo.lock
 support/
 *.dbf
 .DS_Store
+.vscode
