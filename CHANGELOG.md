@@ -1,3 +1,7 @@
+# 0.1.2
+    - Fixed some files not being properly read, by ensuring the reader seeks to the begining
+      of the records after reading the header. (issue #11, Pull Request #12)
+
 # 0.1.1
     - Added RecordIterator to the lib.rs exports
     - Added derive `Clone` to the `Reader`
