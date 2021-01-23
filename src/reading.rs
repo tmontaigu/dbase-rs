@@ -235,6 +235,14 @@ impl<T: Read + Seek> Reader<T> {
         // We don't read the file terminator
         self.iter_records().collect::<Result<Vec<Record>, Error>>()
     }
+
+
+    /// Seek to the start of the record at `index`
+    pub fn seek(&mut self, index: usize) -> Result<(), Error> {
+        let offset = self.header.offset_to_first_record as usize + (index * self.header.size_of_record as usize);
+        self.source.seek(SeekFrom::Start(offset as u64)).map_err(|err| Error::io_error(err, 0))?;
+        Ok(())
+    }
 }
 
 impl Reader<BufReader<File>> {
