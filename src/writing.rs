@@ -9,6 +9,7 @@ use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::record::{field::FieldType, FieldInfo, FieldName};
 use crate::{Error, ErrorKind, FieldIOError, Record};
+use reading::TableInfo;
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
@@ -67,13 +68,17 @@ impl TableWriterBuilder {
     pub fn from_reader<T: std::io::Read + std::io::Seek>(
         reader: crate::reading::Reader<T>,
     ) -> Self {
-        let mut fields_info = reader.fields_info;
+        Self::from_table_info(reader.into_table_info())
+    }
+
+    pub fn from_table_info(table_info: TableInfo) -> Self {
+        let mut fields_info = table_info.fields_info;
         if let Some(i) = fields_info.first() {
             if i.is_deletion_flag() {
                 fields_info.remove(0);
             }
         }
-        let mut hdr = reader.header;
+        let mut hdr = table_info.header;
         hdr.update_date();
         Self {
             v: fields_info,
@@ -201,6 +206,13 @@ impl TableWriterBuilder {
     ) -> std::io::Result<TableWriter<BufWriter<File>>> {
         let dst = BufWriter::new(File::create(path)?);
         Ok(self.build_with_dest(dst))
+    }
+
+    pub fn build_table_info(self) -> TableInfo {
+        TableInfo {
+            header: self.hdr,
+            fields_info: self.v
+        }
     }
 }
 
@@ -409,6 +421,8 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         self.fields_info.peek().is_none()
     }
 }
+
+
 
 /// Structs that writes dBase records to a destination
 ///

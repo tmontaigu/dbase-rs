@@ -236,7 +236,7 @@ mod record;
 mod writing;
 
 pub use crate::error::{Error, ErrorKind, FieldIOError};
-pub use crate::reading::{read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator};
+pub use crate::reading::{read, FieldIterator, NamedValue, TableInfo, ReadableRecord, Reader, Record, RecordIterator};
 pub use crate::record::field::{Date, DateTime, FieldValue, Time};
 pub use crate::record::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};

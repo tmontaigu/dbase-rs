@@ -130,7 +130,7 @@ impl TableFlags {
 
 /// Definition of the header struct stored at the beginning
 /// of each dBase file
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Header {
     pub file_type: Version,
     pub last_update: Date,

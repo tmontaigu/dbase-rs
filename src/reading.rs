@@ -109,6 +109,17 @@ impl From<HashMap<String, FieldValue>> for Record {
     }
 }
 
+/// Structs containing the information allowing to
+/// create a new TableWriter which would write file
+/// with the same record structure as another dbase file.
+///
+/// You can get this by using [Reader::into_table_info].
+#[derive(Clone, Debug)]
+pub struct TableInfo {
+    pub(crate) header: Header,
+    pub(crate) fields_info: Vec<FieldInfo>,
+}
+
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 #[derive(Clone, Debug)]
@@ -116,8 +127,8 @@ pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
     source: T,
     memo_reader: Option<MemoReader<T>>,
-    pub(crate) header: Header,
-    pub(crate) fields_info: Vec<FieldInfo>,
+    header: Header,
+    fields_info: Vec<FieldInfo>,
 }
 
 impl<T: Read + Seek> Reader<T> {
@@ -242,6 +253,31 @@ impl<T: Read + Seek> Reader<T> {
         let offset = self.header.offset_to_first_record as usize + (index * self.header.size_of_record as usize);
         self.source.seek(SeekFrom::Start(offset as u64)).map_err(|err| Error::io_error(err, 0))?;
         Ok(())
+    }
+
+    /// Consumes the reader, and returns the info that
+    /// allow to create a writer that would write a file
+    /// with the same structure.
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("some_file.dbf")?;
+    /// let records = reader.read()?;
+    /// let table_info = reader.into_table_info();
+    /// let writer_1 = dbase::TableWriterBuilder::from_table_info(table_info.clone())
+    ///         .build_with_file_dest("new_file_1.dbf");
+    ///
+    /// let writer_2 = dbase::TableWriterBuilder::from_table_info(table_info)
+    ///         .build_with_file_dest("new_file_2.dbf");
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    pub fn into_table_info(self) -> TableInfo {
+        TableInfo {
+            header: self.header,
+            fields_info: self.fields_info
+        }
     }
 }
 
