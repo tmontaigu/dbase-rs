@@ -17,9 +17,10 @@ fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
     records: &Vec<R>,
     writer_builder: TableWriterBuilder,
 ) {
-    let writer = writer_builder.build_with_dest(Cursor::new(Vec::<u8>::new()));
+    let mut dst = Cursor::new(Vec::<u8>::new());
+    let writer = writer_builder.build_with_dest(&mut dst);
 
-    let mut dst = writer.write(records).unwrap();
+    writer.write_records(records).unwrap();
     dst.set_position(0);
 
     let mut reader = Reader::new(dst).unwrap();
@@ -72,9 +73,10 @@ fn test_read_write_simple_file() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0], expected_fields);
 
+    let mut dst = Cursor::new(Vec::<u8>::new());
     let writer =
-        TableWriterBuilder::from_reader(reader).build_with_dest(Cursor::new(Vec::<u8>::new()));
-    let mut dst = writer.write(&records).unwrap();
+        TableWriterBuilder::from_reader(reader).build_with_dest(&mut dst);
+    writer.write_records(&records).unwrap();
     dst.set_position(0);
 
     let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
@@ -234,13 +236,13 @@ fn the_classical_user_record_example() {
         },
     ];
 
+    let mut cursor = Cursor::new(Vec::<u8>::new());
     let writer = TableWriterBuilder::new()
         .add_character_field("First Name".try_into().unwrap(), 50)
         .add_character_field("Last Name".try_into().unwrap(), 50)
-        .build_with_dest(Cursor::new(Vec::<u8>::new()));
+        .build_with_dest(&mut cursor);
 
-    let mut cursor = writer.write(&users).unwrap();
-
+    writer.write_records(&users).unwrap();
     cursor.set_position(0);
 
     let mut reader = Reader::new(cursor).unwrap();

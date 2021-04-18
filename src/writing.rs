@@ -1,6 +1,6 @@
 //! Module with all structs & functions charged of writing .dbf file content
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Write};
+use std::io::{BufWriter, Cursor, Write, Seek, SeekFrom};
 use std::path::Path;
 
 use byteorder::WriteBytesExt;
@@ -62,7 +62,7 @@ impl TableWriterBuilder {
     ///
     /// // from_reader picked up the record definition,
     /// // so writing will work
-    /// let writing_result = writer.write(&stations);
+    /// let writing_result = writer.write_records(&stations);
     /// assert_eq!(writing_result.is_ok(), true);
     /// ```
     pub fn from_reader<T: std::io::Read + std::io::Seek>(
@@ -192,7 +192,7 @@ impl TableWriterBuilder {
         self
     }
     /// Builds the writer and set the dst as where the file data will be written
-    pub fn build_with_dest<W: Write>(self, dst: W) -> TableWriter<W> {
+    pub fn build_with_dest<W: Write + Seek>(self, dst: W) -> TableWriter<W> {
         TableWriter::new(dst, self.v, self.hdr)
     }
 
@@ -211,7 +211,7 @@ impl TableWriterBuilder {
     pub fn build_table_info(self) -> TableInfo {
         TableInfo {
             header: self.hdr,
-            fields_info: self.v
+            fields_info: self.v,
         }
     }
 }
@@ -296,7 +296,7 @@ impl WritableRecord for Record {
 pub struct FieldWriter<'a, W: Write> {
     pub(crate) dst: &'a mut W,
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
-    pub(crate) buffer: Cursor<Vec<u8>>,
+    pub(crate) buffer: &'a mut Cursor<Vec<u8>>,
 }
 
 impl<'a, W: Write> FieldWriter<'a, W> {
@@ -423,30 +423,67 @@ impl<'a, W: Write> FieldWriter<'a, W> {
 }
 
 
-
 /// Structs that writes dBase records to a destination
 ///
 /// The only way to create a TableWriter is to use its
 /// [TableWriterBuilder](struct.TableWriterBuilder.html)
-pub struct TableWriter<W: Write> {
+pub struct TableWriter<W: Write + Seek> {
     dst: W,
     fields_info: Vec<FieldInfo>,
     /// contains the header of the input file
     /// if this writer was created form a reader
     header: Header,
+    /// Buffer used by the FieldWriter
+    buffer: Cursor<Vec<u8>>,
+    closed: bool,
 }
 
-impl<W: Write> TableWriter<W> {
+impl<W: Write + Seek> TableWriter<W> {
     fn new(dst: W, fields_info: Vec<FieldInfo>, origin_header: Header) -> Self {
         Self {
             dst,
             fields_info,
             header: origin_header,
+            buffer: Cursor::new(vec![0u8; 255]),
+            closed: false,
         }
     }
 
+    pub fn write_record<R: WritableRecord>(&mut self, record: &R) -> Result<(), Error> {
+        if self.header.num_records == 0 {
+            // reserve the header
+            self.write_header()?;
+        }
+
+        let mut field_writer = FieldWriter {
+            dst: &mut self.dst,
+            fields_info: self.fields_info.iter().peekable(),
+            buffer: &mut self.buffer,
+        };
+
+        let current_record_num = self.header.num_records as usize;
+
+        field_writer
+            .write_deletion_flag()
+            .map_err(|error| Error::io_error(error, current_record_num))?;
+
+        record
+            .write_using(&mut field_writer)
+            .map_err(|error| Error::new(error, current_record_num))?;
+
+        if !field_writer.all_fields_were_written() {
+            return Err(Error {
+                record_num: current_record_num,
+                field: None,
+                kind: ErrorKind::NotEnoughFields,
+            });
+        }
+
+        self.header.num_records += 1;
+        Ok(())
+    }
+
     /// Writes the records to the inner destination
-    /// and returns it once finished
     ///
     /// Values for which the number of bytes written would exceed the specified field_length
     /// (if it had to be specified) will be truncated
@@ -466,20 +503,55 @@ impl<W: Write> TableWriter<W> {
     ///     }
     /// }
     ///
+    /// let mut cursor = Cursor::new(Vec::<u8>::new());
     /// let writer = TableWriterBuilder::new()
     ///     .add_character_field(FieldName::try_from("First Name").unwrap(), 50)
-    ///     .build_with_dest(Cursor::new(Vec::<u8>::new()));
+    ///     .build_with_dest(&mut cursor);
     ///
     /// let records = vec![
     ///     User {
     ///         first_name: "Yoshi".to_owned(),
     ///     }
     /// ];
-    /// let cursor = writer.write(&records).unwrap();
+    /// writer.write_records(&records).unwrap();
     /// assert_eq!(cursor.position(), 117)
     /// ```
-    pub fn write<R: WritableRecord>(mut self, records: &[R]) -> Result<W, Error> {
-        self.update_header(records.len());
+    pub fn write_records<'a, R: WritableRecord + 'a, C: IntoIterator<Item=&'a R>>(mut self, records: C) -> Result<(), Error> {
+        for record in records.into_iter() {
+            self.write_record(record)?;
+        }
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), Error> {
+        if !self.closed {
+            self.dst.seek(SeekFrom::Start(0))
+                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+            self.update_header();
+            self.write_header()?;
+            self.dst.seek(SeekFrom::End(0))
+                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+            self.dst
+                .write_u8(FILE_TERMINATOR)
+                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+            self.closed = true;
+        }
+        Ok(())
+    }
+
+    fn update_header(&mut self) {
+        let offset_to_first_record =
+            Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
+        let size_of_record = self
+            .fields_info
+            .iter()
+            .fold(0u16, |s, ref info| s + info.field_length as u16);
+
+        self.header.offset_to_first_record = offset_to_first_record as u16;
+        self.header.size_of_record = size_of_record;
+    }
+
+    fn write_header(&mut self) -> Result<(), Error> {
         self.header
             .write_to(&mut self.dst)
             .map_err(|error| Error::io_error(error, 0))?;
@@ -490,50 +562,12 @@ impl<W: Write> TableWriter<W> {
         }
         self.dst
             .write_u8(TERMINATOR_VALUE)
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        let mut field_writer = FieldWriter {
-            dst: &mut self.dst,
-            fields_info: self.fields_info.iter().peekable(),
-            buffer: Cursor::new(vec![0u8; 255]),
-        };
-
-        for (i, record) in records.iter().enumerate() {
-            field_writer
-                .write_deletion_flag()
-                .map_err(|error| Error::io_error(error, i))?;
-
-            record
-                .write_using(&mut field_writer)
-                .map_err(|error| Error::new(error, i))?;
-
-            if !field_writer.all_fields_were_written() {
-                return Err(Error {
-                    record_num: i,
-                    field: None,
-                    kind: ErrorKind::NotEnoughFields,
-                });
-            }
-            field_writer.fields_info = self.fields_info.iter().peekable();
-        }
-
-        self.dst
-            .write_u8(FILE_TERMINATOR)
-            .map_err(|error| Error::io_error(error, records.len()))?;
-
-        Ok(self.dst)
+            .map_err(|error| Error::io_error(error, 0))
     }
+}
 
-    fn update_header(&mut self, num_records: usize) {
-        let offset_to_first_record =
-            Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
-        let size_of_record = self
-            .fields_info
-            .iter()
-            .fold(0u16, |s, ref info| s + info.field_length as u16);
-
-        self.header.num_records = num_records as u32;
-        self.header.offset_to_first_record = offset_to_first_record as u16;
-        self.header.size_of_record = size_of_record;
+impl<T: Write + Seek> Drop for TableWriter<T> {
+    fn drop(&mut self) {
+        let _ = self.close();
     }
 }

@@ -141,7 +141,7 @@
 //!     .build_with_file_dest("stations.dbf").unwrap();
 //!
 //! stations[0].get_mut("line").and_then(|_old| Some("Red".to_string()));
-//! writer.write(&stations)?;
+//! writer.write_records(&stations)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -175,7 +175,7 @@
 //!     age: 32.0,
 //! }];
 //!
-//! writer.write(&records);
+//! writer.write_records(&records);
 //! ```
 //!
 //! If you use the serde optional feature and serde_derive crate you can have the
@@ -211,7 +211,7 @@
 //!     age: 32.0,
 //! }];
 //!
-//!     writer.write(&records);
+//!     writer.write_records(&records);
 //! # }
 //! # #[cfg(not(feature = "serde"))]
 //! # fn main() {}
