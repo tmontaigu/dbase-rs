@@ -449,6 +449,27 @@ impl<W: Write + Seek> TableWriter<W> {
         }
     }
 
+    /// Writes a record the inner destination
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::convert::TryFrom;
+    ///
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut writer = dbase::TableWriterBuilder::new()
+    ///     .add_character_field(dbase::FieldName::try_from("First Name").unwrap(), 50)
+    ///     .build_with_file_dest("records.dbf")?;
+    ///
+    /// let mut record = dbase::Record::default();
+    /// record.insert("First Name".to_string(), dbase::FieldValue::Character(Some("Yoshi".to_string())));
+    ///
+    /// writer.write_record(&record)?;
+    ///
+    /// # let ignored_result = std::fs::remove_file("record.dbf");
+    /// Ok(())
+    /// # }
+    /// ```
     pub fn write_record<R: WritableRecord>(&mut self, record: &R) -> Result<(), Error> {
         if self.header.num_records == 0 {
             // reserve the header
@@ -523,6 +544,12 @@ impl<W: Write + Seek> TableWriter<W> {
         Ok(())
     }
 
+    /// Close the writer
+    ///
+    /// Automatically closed when the writer is dropped,
+    /// use it if you want to handle error that can happen when the writer is closing
+    ///
+    /// Calling close on an already closed writer is a no-op
     fn close(&mut self) -> Result<(), Error> {
         if !self.closed {
             self.dst.seek(SeekFrom::Start(0))
