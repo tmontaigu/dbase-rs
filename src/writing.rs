@@ -203,8 +203,10 @@ impl TableWriterBuilder {
     pub fn build_with_file_dest<P: AsRef<Path>>(
         self,
         path: P,
-    ) -> std::io::Result<TableWriter<BufWriter<File>>> {
-        let dst = BufWriter::new(File::create(path)?);
+    ) -> Result<TableWriter<BufWriter<File>>, Error> {
+        let file = File::create(path)
+            .map_err(|err| Error::io_error(err, 0))?;
+        let dst = BufWriter::new(file);
         Ok(self.build_with_dest(dst))
     }
 
