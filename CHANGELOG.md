@@ -9,7 +9,7 @@
     - Changed `TableWriter<T>` now requires `T` to implement `std::io::Seek and std::io::Read`,
       both `std::fs::File` & `std::io::Cursor` are example of valid `T`.
     - Added `TableWriter::write_record` to be able to write one record at a time.
-    
+    - Increased byteorder dependency from 1.3.0 to 1.4.3
     
 
 # 0.1.2
