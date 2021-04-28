@@ -1,4 +1,4 @@
-# Unreleased
+# 0.2.0
     - Added a `seek` method to the `Reader`
     - Added a `TableInfo` struct and a `into_table_info` method on the `Reader`.
       This `TableInfo` contains informations that can be used to create a new `TableWriterBuilder`
