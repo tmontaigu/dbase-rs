@@ -141,7 +141,7 @@
 //!     .build_with_file_dest("stations.dbf").unwrap();
 //!
 //! stations[0].get_mut("line").and_then(|_old| Some("Red".to_string()));
-//! writer.write(&stations)?;
+//! writer.write_records(&stations)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -164,18 +164,18 @@
 //!     }
 //! }
 //!
-//! let writer = TableWriterBuilder::new()
+//! let mut writer = TableWriterBuilder::new()
 //!     .add_character_field(FieldName::try_from("Nick Name").unwrap(), 50)
 //!     .add_numeric_field(FieldName::try_from("Age").unwrap(), 20, 10)
 //!     .build_with_dest(Cursor::new(Vec::<u8>::new()));
 //!
 //!
-//! let records = vec![User{
+//! let records = User{
 //!     nick_name: "Yoshi".to_string(),
 //!     age: 32.0,
-//! }];
+//! };
 //!
-//! writer.write(&records);
+//! writer.write_record(&records);
 //! ```
 //!
 //! If you use the serde optional feature and serde_derive crate you can have the
@@ -211,7 +211,7 @@
 //!     age: 32.0,
 //! }];
 //!
-//!     writer.write(&records);
+//!     writer.write_records(&records);
 //! # }
 //! # #[cfg(not(feature = "serde"))]
 //! # fn main() {}

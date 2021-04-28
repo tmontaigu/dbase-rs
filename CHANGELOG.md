@@ -1,3 +1,17 @@
+# Unreleased
+    - Added a `seek` method to the `Reader`
+    - Added a `TableInfo` struct and a `into_table_info` method on the `Reader`.
+      This `TableInfo` contains informations that can be used to create a new `TableWriterBuilder`
+      that writes a dbf file with same 'layout' as the file from which the `TableInfo` comes from.
+    - Added `TableWriterBuilder::from_table_info`
+    - Changed `TableWriter::write` is now named `TableWriter::write_records` and takes any type that
+      implements `IntoIterator<Item=&RecordType>` (so &[RecordType] is still a valid input).
+    - Changed `TableWriter<T>` now requires `T` to implement `std::io::Seek and std::io::Read`,
+      both `std::fs::File` & `std::io::Cursor` are example of valid `T`.
+    - Added `TableWriter::write_record` to be able to write one record at a time.
+    
+    
+
 # 0.1.2
     - Fixed some files not being properly read, by ensuring the reader seeks to the begining
       of the records after reading the header. (issue #11, Pull Request #12)
