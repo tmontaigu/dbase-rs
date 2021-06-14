@@ -109,6 +109,18 @@ impl From<HashMap<String, FieldValue>> for Record {
     }
 }
 
+impl From<Record> for HashMap<String, FieldValue> {
+    fn from(record: Record) -> HashMap<String, FieldValue> {
+        record.map
+    }
+}
+
+impl From<&Record> for HashMap<String, FieldValue> {
+    fn from(record: &Record) -> HashMap<String, FieldValue> {
+        record.map.clone()
+    }
+}
+
 /// Structs containing the information allowing to
 /// create a new TableWriter which would write file
 /// with the same record structure as another dbase file.
@@ -247,11 +259,13 @@ impl<T: Read + Seek> Reader<T> {
         self.iter_records().collect::<Result<Vec<Record>, Error>>()
     }
 
-
     /// Seek to the start of the record at `index`
     pub fn seek(&mut self, index: usize) -> Result<(), Error> {
-        let offset = self.header.offset_to_first_record as usize + (index * self.header.size_of_record as usize);
-        self.source.seek(SeekFrom::Start(offset as u64)).map_err(|err| Error::io_error(err, 0))?;
+        let offset = self.header.offset_to_first_record as usize
+            + (index * self.header.size_of_record as usize);
+        self.source
+            .seek(SeekFrom::Start(offset as u64))
+            .map_err(|err| Error::io_error(err, 0))?;
         Ok(())
     }
 
@@ -276,7 +290,7 @@ impl<T: Read + Seek> Reader<T> {
     pub fn into_table_info(self) -> TableInfo {
         TableInfo {
             header: self.header,
-            fields_info: self.fields_info
+            fields_info: self.fields_info,
         }
     }
 }
