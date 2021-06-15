@@ -115,9 +115,15 @@ impl From<Record> for HashMap<String, FieldValue> {
     }
 }
 
-impl From<&Record> for HashMap<String, FieldValue> {
-    fn from(record: &Record) -> HashMap<String, FieldValue> {
-        record.map.clone()
+impl AsRef<HashMap<String, FieldValue>> for Record {
+    fn as_ref(&self) -> &HashMap<String, FieldValue> {
+        &self.map
+    }
+}
+
+impl AsMut<HashMap<String, FieldValue>> for Record {
+    fn as_mut(&mut self) -> &mut HashMap<String, FieldValue> {
+        &mut self.map
     }
 }
 
