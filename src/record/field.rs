@@ -873,6 +873,13 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
     let mut bytes = Vec::<u8>::new();
     bytes.resize(len as usize, 0u8);
     source.read_exact(&mut bytes)?;
+    // Trims the null bytes: string cannot be properly trimmed otherwise
+    let trimmed_bytes = bytes.split(|b| b == &b'\0').next();
+    let bytes = if let Some(a) = trimmed_bytes {
+        Vec::from(a)
+    } else {
+        bytes
+    };
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 

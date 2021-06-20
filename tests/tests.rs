@@ -12,6 +12,7 @@ use std::fmt::Debug;
 
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
+const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.dbf";
 
 fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
     records: &Vec<R>,
@@ -82,6 +83,18 @@ fn test_read_write_simple_file() {
     let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
     let records = reader.read().unwrap();
     assert_eq!(records.len(), 1);
+    assert_eq!(records[0], expected_fields);
+}
+
+#[test]
+fn test_read_numeric_value_null_padded() {
+    let records = dbase::read(NULL_PADDED_NUMERIC_DBF).unwrap();
+    assert_eq!(records.len(), 1);
+    let mut expected_fields = Record::default();
+    expected_fields.insert(
+        "number".to_owned(),
+        dbase::FieldValue::Numeric(Some(1234.)),
+    );
     assert_eq!(records[0], expected_fields);
 }
 
