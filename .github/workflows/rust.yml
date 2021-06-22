@@ -1,20 +1,35 @@
 name: Rust
 
-on: [push]
+on: [ push ]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Build
-      run: cargo build --verbose
-    - name: Build serde feature
-      run: cargo build --features serde --verbose
+      - uses: actions/checkout@v1
+      - name: Build
+        run: cargo build --verbose
+      - name: Build serde feature
+        run: cargo build --features serde --verbose
 
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Run test serde feature
-      run: cargo test --features serde --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Run test serde feature
+        run: cargo test --features serde --verbose
+
+  fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check

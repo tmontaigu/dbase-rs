@@ -75,8 +75,7 @@ fn test_read_write_simple_file() {
     assert_eq!(records[0], expected_fields);
 
     let mut dst = Cursor::new(Vec::<u8>::new());
-    let writer =
-        TableWriterBuilder::from_reader(reader).build_with_dest(&mut dst);
+    let writer = TableWriterBuilder::from_reader(reader).build_with_dest(&mut dst);
     writer.write_records(&records).unwrap();
     dst.set_position(0);
 
@@ -91,10 +90,7 @@ fn test_read_numeric_value_null_padded() {
     let records = dbase::read(NULL_PADDED_NUMERIC_DBF).unwrap();
     assert_eq!(records.len(), 1);
     let mut expected_fields = Record::default();
-    expected_fields.insert(
-        "number".to_owned(),
-        dbase::FieldValue::Numeric(Some(1234.)),
-    );
+    expected_fields.insert("number".to_owned(), dbase::FieldValue::Numeric(Some(1234.)));
     assert_eq!(records[0], expected_fields);
 }
 

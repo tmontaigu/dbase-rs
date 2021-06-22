@@ -1,6 +1,6 @@
 //! Module with all structs & functions charged of writing .dbf file content
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Write, Seek, SeekFrom};
+use std::io::{BufWriter, Cursor, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use byteorder::WriteBytesExt;
@@ -204,8 +204,7 @@ impl TableWriterBuilder {
         self,
         path: P,
     ) -> Result<TableWriter<BufWriter<File>>, Error> {
-        let file = File::create(path)
-            .map_err(|err| Error::io_error(err, 0))?;
+        let file = File::create(path).map_err(|err| Error::io_error(err, 0))?;
         let dst = BufWriter::new(file);
         Ok(self.build_with_dest(dst))
     }
@@ -424,7 +423,6 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     }
 }
 
-
 /// Structs that writes dBase records to a destination
 ///
 /// The only way to create a TableWriter is to use its
@@ -539,7 +537,10 @@ impl<W: Write + Seek> TableWriter<W> {
     /// writer.write_records(&records).unwrap();
     /// assert_eq!(cursor.position(), 117)
     /// ```
-    pub fn write_records<'a, R: WritableRecord + 'a, C: IntoIterator<Item=&'a R>>(mut self, records: C) -> Result<(), Error> {
+    pub fn write_records<'a, R: WritableRecord + 'a, C: IntoIterator<Item = &'a R>>(
+        mut self,
+        records: C,
+    ) -> Result<(), Error> {
         for record in records.into_iter() {
             self.write_record(record)?;
         }
@@ -554,11 +555,13 @@ impl<W: Write + Seek> TableWriter<W> {
     /// Calling close on an already closed writer is a no-op
     fn close(&mut self) -> Result<(), Error> {
         if !self.closed {
-            self.dst.seek(SeekFrom::Start(0))
+            self.dst
+                .seek(SeekFrom::Start(0))
                 .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
             self.update_header();
             self.write_header()?;
-            self.dst.seek(SeekFrom::End(0))
+            self.dst
+                .seek(SeekFrom::End(0))
                 .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
             self.dst
                 .write_u8(FILE_TERMINATOR)

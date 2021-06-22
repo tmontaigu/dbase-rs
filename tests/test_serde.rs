@@ -140,7 +140,9 @@ mod serde_tests {
             .add_character_field(FieldName::try_from("not present").unwrap(), 50)
             .build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-        let error = writer.write_records(&records).expect_err("We expected an Error");
+        let error = writer
+            .write_records(&records)
+            .expect_err("We expected an Error");
         match error.kind() {
             ErrorKind::NotEnoughFields => assert!(true),
             _ => assert!(false),
@@ -158,7 +160,9 @@ mod serde_tests {
 
         let writer = TableWriterBuilder::new().build_with_dest(Cursor::new(Vec::<u8>::new()));
 
-        let error = writer.write_records(&records).expect_err("Expected an error");
+        let error = writer
+            .write_records(&records)
+            .expect_err("Expected an error");
 
         match error.kind() {
             ErrorKind::TooManyFields => assert!(true),
