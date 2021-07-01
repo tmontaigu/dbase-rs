@@ -146,14 +146,14 @@ fn from_scratch_dbase() {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
             released: dbase::Date::new(22, 6, 2014),
-            playtime: 2481f64,
+            playtime: 2481.12f64,
             available: false,
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
             released: dbase::Date::new(24, 10, 2014),
-            playtime: 2481f64,
+            playtime: 24f64,
             available: true,
         },
     ];

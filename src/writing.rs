@@ -337,13 +337,18 @@ impl<'a, W: Write> FieldWriter<'a, W> {
                 {
                     // Depending on the locale, the dot might not be the delimiter for floating point
                     // but we are not yet ready to handle correctly codepages, etc
-                    let mut maybe_dot_pos = self.buffer.get_ref().iter().position(|b| *b == b'.');
+                    let mut maybe_dot_pos = self.buffer.get_ref()
+                        [..self.buffer.position() as usize]
+                        .iter()
+                        .position(|b| *b == b'.');
                     if maybe_dot_pos.is_none() {
                         write!(self.buffer, ".").map_err(|error| {
                             FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                         })?;
                         bytes_written = self.buffer.position();
-                        maybe_dot_pos = Some(bytes_written as usize)
+                        maybe_dot_pos = Some((bytes_written - 1) as usize)
+                    } else {
+                        maybe_dot_pos = Some(maybe_dot_pos.unwrap() + 1);
                     }
                     let dot_pos = maybe_dot_pos.unwrap();
                     let missing_decimals =
