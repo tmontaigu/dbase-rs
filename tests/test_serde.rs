@@ -44,7 +44,7 @@ mod serde_tests {
             price: 10.2,
             date: dbase::Date::new(01, 01, 2012),
             available: true,
-            score: 79.87,
+            score: 9.87,
         }];
 
         let writer_builder = TableWriterBuilder::new()
