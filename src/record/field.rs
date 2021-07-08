@@ -584,20 +584,20 @@ impl DateTime {
 }
 
 impl WritableAsDbaseField for FieldValue {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if self.field_type() != field_type {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if self.field_type() != field_info.field_type {
             Err(ErrorKind::IncompatibleType)
         } else {
             match self {
-                FieldValue::Character(value) => value.write_as(field_type, dst),
-                FieldValue::Numeric(value) => value.write_as(field_type, dst),
-                FieldValue::Logical(value) => value.write_as(field_type, dst),
-                FieldValue::Date(value) => value.write_as(field_type, dst),
-                FieldValue::Float(value) => value.write_as(field_type, dst),
-                FieldValue::Integer(value) => value.write_as(field_type, dst),
-                FieldValue::Currency(value) => value.write_as(field_type, dst),
-                FieldValue::DateTime(value) => value.write_as(field_type, dst),
-                FieldValue::Double(value) => value.write_as(field_type, dst),
+                FieldValue::Character(value) => value.write_as(field_info, dst),
+                FieldValue::Numeric(value) => value.write_as(field_info, dst),
+                FieldValue::Logical(value) => value.write_as(field_info, dst),
+                FieldValue::Date(value) => value.write_as(field_info, dst),
+                FieldValue::Float(value) => value.write_as(field_info, dst),
+                FieldValue::Integer(value) => value.write_as(field_info, dst),
+                FieldValue::Currency(value) => value.write_as(field_info, dst),
+                FieldValue::DateTime(value) => value.write_as(field_info, dst),
+                FieldValue::Double(value) => value.write_as(field_info, dst),
                 FieldValue::Memo(_) => unimplemented!("Cannot write memo"),
             }
         }
@@ -605,10 +605,15 @@ impl WritableAsDbaseField for FieldValue {
 }
 
 impl WritableAsDbaseField for f64 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        match field_type {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        match field_info.field_type {
             FieldType::Numeric => {
-                write!(dst, "{}", self)?;
+                write!(
+                    dst,
+                    "{value:.precision$}",
+                    value = self,
+                    precision = field_info.num_decimal_places as usize
+                )?;
                 Ok(())
             }
             FieldType::Currency | FieldType::Double => {
@@ -621,8 +626,8 @@ impl WritableAsDbaseField for f64 {
 }
 
 impl WritableAsDbaseField for Date {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Date {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Date {
             write!(dst, "{:04}{:02}{:02}", self.year, self.month, self.day)?;
             Ok(())
         } else {
@@ -632,10 +637,10 @@ impl WritableAsDbaseField for Date {
 }
 
 impl WritableAsDbaseField for Option<Date> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Date {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Date {
             if let Some(date) = self {
-                date.write_as(field_type, dst)?;
+                date.write_as(field_info, dst)?;
             } else {
                 for _ in 0..8 {
                     dst.write_u8(b' ')?;
@@ -649,10 +654,10 @@ impl WritableAsDbaseField for Option<Date> {
 }
 
 impl WritableAsDbaseField for Option<f64> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Numeric {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Numeric {
             if let Some(value) = self {
-                value.write_as(field_type, dst)
+                value.write_as(field_info, dst)
             } else {
                 Ok(())
             }
@@ -663,9 +668,14 @@ impl WritableAsDbaseField for Option<f64> {
 }
 
 impl WritableAsDbaseField for f32 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Float {
-            write!(dst, "{}", self)?;
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Float {
+            write!(
+                dst,
+                "{value:.precision$}",
+                value = self,
+                precision = field_info.num_decimal_places as usize
+            )?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -674,10 +684,10 @@ impl WritableAsDbaseField for f32 {
 }
 
 impl WritableAsDbaseField for Option<f32> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Float {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Float {
             if let Some(value) = self {
-                value.write_as(field_type, dst)?;
+                value.write_as(field_info, dst)?;
             }
             Ok(())
         } else {
@@ -687,8 +697,8 @@ impl WritableAsDbaseField for Option<f32> {
 }
 
 impl WritableAsDbaseField for String {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Character {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Character {
             dst.write_all(self.as_bytes())?;
             Ok(())
         } else {
@@ -698,10 +708,10 @@ impl WritableAsDbaseField for String {
 }
 
 impl WritableAsDbaseField for Option<String> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Character {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Character {
             if let Some(s) = self {
-                s.write_as(field_type, dst)?;
+                s.write_as(field_info, dst)?;
             }
             Ok(())
         } else {
@@ -711,8 +721,8 @@ impl WritableAsDbaseField for Option<String> {
 }
 
 impl WritableAsDbaseField for &str {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Character {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Character {
             dst.write_all(self.as_bytes())?;
             Ok(())
         } else {
@@ -722,8 +732,8 @@ impl WritableAsDbaseField for &str {
 }
 
 impl WritableAsDbaseField for bool {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Logical {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Logical {
             if *self {
                 write!(dst, "t")?;
             } else {
@@ -737,10 +747,10 @@ impl WritableAsDbaseField for bool {
 }
 
 impl WritableAsDbaseField for Option<bool> {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Logical {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Logical {
             if let Some(v) = self {
-                v.write_as(field_type, dst)?;
+                v.write_as(field_info, dst)?;
             }
             Ok(())
         } else {
@@ -750,8 +760,8 @@ impl WritableAsDbaseField for Option<bool> {
 }
 
 impl WritableAsDbaseField for i32 {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::Integer {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::Integer {
             dst.write_i32::<LittleEndian>(*self)?;
             Ok(())
         } else {
@@ -761,8 +771,8 @@ impl WritableAsDbaseField for i32 {
 }
 
 impl WritableAsDbaseField for DateTime {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind> {
-        if field_type == FieldType::DateTime {
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind> {
+        if field_info.field_type == FieldType::DateTime {
             self.write_to(dst)?;
             Ok(())
         } else {
@@ -903,7 +913,7 @@ mod test {
 
     fn test_we_can_read_back(field_info: &FieldInfo, value: &FieldValue) {
         let mut out = Cursor::new(Vec::<u8>::with_capacity(field_info.field_length as usize));
-        value.write_as(field_info.field_type, &mut out).unwrap();
+        value.write_as(field_info, &mut out).unwrap();
 
         out.set_position(0);
 
@@ -937,33 +947,6 @@ mod test {
 
         let record_info = create_temp_field_info(FieldType::Character, 10);
         test_we_can_read_back(&record_info, &field);
-    }
-
-    #[test]
-    fn write_read_utf8_char() {
-        let field = FieldValue::Character(Some(String::from("🤔")));
-
-        let mut out = Cursor::new(Vec::<u8>::new());
-        field.write_as(FieldType::Character, &mut out).unwrap();
-
-        let record_info = create_temp_field_info(FieldType::Character, out.position() as u8);
-        out.set_position(0);
-
-        match FieldValue::read_from(&mut out, &mut None, &record_info).unwrap() {
-            FieldValue::Character(s) => {
-                assert_eq!(s, Some(String::from("🤔")));
-            }
-            _ => assert!(false, "Did not read a Character field ??"),
-        }
-    }
-
-    #[test]
-    fn write_read_float() {
-        let field = FieldValue::Float(Some(12.43));
-
-        let record_info = create_temp_field_info(FieldType::Float, 5);
-
-        test_we_can_read_back(&record_info, &field)
     }
 
     #[test]

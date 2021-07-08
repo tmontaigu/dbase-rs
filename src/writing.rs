@@ -255,7 +255,7 @@ mod private {
 ///
 /// This trait is 'private' and cannot be implemented on your custom types.
 pub trait WritableAsDbaseField: private::Sealed {
-    fn write_as<W: Write>(&self, field_type: FieldType, dst: &mut W) -> Result<(), ErrorKind>;
+    fn write_as<W: Write>(&self, field_info: &FieldInfo, dst: &mut W) -> Result<(), ErrorKind>;
 }
 
 /// Trait to be implemented by struct that you want to be able to write to (serialize)
@@ -326,64 +326,27 @@ impl<'a, W: Write> FieldWriter<'a, W> {
             self.buffer.set_position(0);
 
             field_value
-                .write_as(field_info.field_type, &mut self.buffer)
+                .write_as(field_info, &mut self.buffer)
                 .map_err(|kind| FieldIOError::new(kind, Some(field_info.clone())))?;
 
-            let mut bytes_written = self.buffer.position();
-            let mut bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
+            let bytes_written = self.buffer.position();
+            let bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
             if bytes_to_pad > 0 {
-                if field_info.field_type == FieldType::Float
-                    || field_info.field_type == FieldType::Numeric
-                {
-                    // Depending on the locale, the dot might not be the delimiter for floating point
-                    // but we are not yet ready to handle correctly codepages, etc
-                    let mut maybe_dot_pos = self.buffer.get_ref()
-                        [..self.buffer.position() as usize]
-                        .iter()
-                        .position(|b| *b == b'.');
-                    if maybe_dot_pos.is_none() {
-                        write!(self.buffer, ".").map_err(|error| {
-                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                        })?;
-                        bytes_written = self.buffer.position();
-                        maybe_dot_pos = Some((bytes_written - 1) as usize)
-                    } else {
-                        maybe_dot_pos = Some(maybe_dot_pos.unwrap() + 1);
-                    }
-                    let dot_pos = maybe_dot_pos.unwrap();
-                    let missing_decimals =
-                        field_info.num_decimal_places - (bytes_written - dot_pos as u64) as u8;
-                    for _ in 0..missing_decimals {
-                        write!(self.buffer, "0").map_err(|error| {
-                            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                        })?;
-                    }
-                    bytes_written = self.buffer.position();
-                    bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
-                }
                 for _ in 0..bytes_to_pad {
                     write!(self.buffer, " ").map_err(|error| {
                         FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                     })?;
                 }
-                let field_bytes = self.buffer.get_ref();
-                debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
-                self.dst
-                    .write_all(&field_bytes[..self.buffer.position() as usize])
-                    .map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
-            } else {
-                // The current field value size exceeds the one one set
-                // when creating the writer, we just crop
-                let field_bytes = self.buffer.get_ref();
-                debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
-                self.dst
-                    .write_all(&field_bytes[..field_info.field_length as usize])
-                    .map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
             }
+            // If the current field value size exceeds the one one set
+            // when creating the writer, it will be cropped
+            let field_bytes = self.buffer.get_ref();
+            debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
+            self.dst
+                .write_all(&field_bytes[..field_info.field_length as usize])
+                .map_err(|error| {
+                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+                })?;
             Ok(())
         } else {
             Err(FieldIOError::new(ErrorKind::TooManyFields, None))
