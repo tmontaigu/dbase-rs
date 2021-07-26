@@ -38,7 +38,7 @@ pub trait ReadableRecord: Sized {
 
 /// Type definition of a generic record.
 /// A .dbf file is composed of many records
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Record {
     map: HashMap<String, FieldValue>,
 }
@@ -95,13 +95,6 @@ impl IntoIterator for Record {
     }
 }
 
-impl Default for Record {
-    fn default() -> Self {
-        Self {
-            map: Default::default(),
-        }
-    }
-}
 
 impl From<HashMap<String, FieldValue>> for Record {
     fn from(map: HashMap<String, FieldValue, RandomState>) -> Self {
