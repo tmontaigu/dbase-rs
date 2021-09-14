@@ -274,29 +274,26 @@ impl FieldValue {
             },
             FieldType::Character => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let trimmed_value = value.trim();
-                if trimmed_value.is_empty() {
+                if value.is_empty() {
                     FieldValue::Character(None)
                 } else {
-                    FieldValue::Character(Some(trimmed_value.to_owned()))
+                    FieldValue::Character(Some(value.to_owned()))
                 }
             }
             FieldType::Numeric => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let trimmed_value = value.trim();
-                if trimmed_value.is_empty() || value.chars().all(|c| c == '*') {
+                if value.is_empty() || value.chars().all(|c| c == '*') {
                     FieldValue::Numeric(None)
                 } else {
-                    FieldValue::Numeric(Some(trimmed_value.parse::<f64>()?))
+                    FieldValue::Numeric(Some(value.parse::<f64>()?))
                 }
             }
             FieldType::Float => {
                 let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let trimmed_value = value.trim();
-                if trimmed_value.is_empty() || value.chars().all(|c| c == '*') {
+                if value.is_empty() || value.chars().all(|c| c == '*') {
                     FieldValue::Float(None)
                 } else {
-                    FieldValue::Float(Some(trimmed_value.parse::<f32>()?))
+                    FieldValue::Float(Some(value.parse::<f32>()?))
                 }
             }
             FieldType::Date => {
@@ -314,11 +311,10 @@ impl FieldValue {
             FieldType::Memo => {
                 let index_in_memo = if field_info.field_length > 4 {
                     let string = read_string_of_len(&mut source, field_info.field_length)?;
-                    let trimmed_str = string.trim();
-                    if trimmed_str.is_empty() {
+                    if string.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
                     } else {
-                        trimmed_str.parse::<u32>()?
+                        string.parse::<u32>()?
                     }
                 } else {
                     source.read_u32::<LittleEndian>()?
@@ -880,14 +876,43 @@ mod ser {
 }
 
 fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::io::Error> {
-    let mut bytes = Vec::<u8>::new();
-    bytes.resize(len as usize, 0u8);
+    let mut bytes = vec![0u8; len as usize];
     source.read_exact(&mut bytes)?;
-    // Trims the null bytes: string cannot be properly trimmed otherwise
-    let trimmed_bytes = match bytes.split(|b| b == &b'\0').next() {
-        Some(trimmed_bytes) => trimmed_bytes,
-        None => &bytes,
-    };
+
+    // Value in the dbf file is surrounded by space characters (32u8). We discard them before
+    // parsing the bytes into string. Doing so doubles the performance in comparison to
+    // using String::trim() afterwards.
+    let mut first = usize::MAX;
+    let mut last = 0;
+    let ptr = bytes.as_ptr();
+
+    // Using unchecked indexing of the vector provides around 30% increase of reading speed.
+    // SAFETY: index is always between 0 and bytes.len(), so using pointers here is safe.
+    unsafe {
+        for i in 0..bytes.len() {
+            if *ptr.add(i) == 0u8 {
+                break;
+            }
+
+            if *ptr.add(i) != 32 {
+                if first == usize::MAX {
+                    first = i;
+                }
+
+                last = i;
+            }
+        }
+    }
+
+    // Input starts with zero character or consists only of spaces.
+    if first == usize::MAX {
+        return Ok(String::new());
+    }
+
+    // Discarding spaces in front and at the end. The space character (32u8) is 00110000 in binary
+    // format, which makes it safe to drop without checking, as it cannot be part of the multi-byte
+    // UTF-8 symbol (all such bytes must start with 10).
+    let trimmed_bytes = &bytes[first..(last + 1)];
     Ok(String::from_utf8_lossy(&trimmed_bytes).into_owned())
 }
 

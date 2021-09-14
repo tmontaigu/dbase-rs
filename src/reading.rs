@@ -95,7 +95,6 @@ impl IntoIterator for Record {
     }
 }
 
-
 impl From<HashMap<String, FieldValue>> for Record {
     fn from(map: HashMap<String, FieldValue, RandomState>) -> Self {
         Self { map }
