@@ -220,10 +220,16 @@ impl<T: Read + Seek> Reader<T> {
 
     /// Creates an iterator of records of the type you want
     pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
+        let record_size: usize = self
+            .fields_info
+            .iter()
+            .map(|i| i.field_length as usize)
+            .sum();
         RecordIterator {
             reader: self,
             record_type: std::marker::PhantomData,
             current_record: 0,
+            record_data_buffer: std::io::Cursor::new(vec![0u8; record_size]),
         }
     }
 
@@ -354,7 +360,7 @@ pub struct NamedValue<'a, T> {
 /// will be returned.
 pub struct FieldIterator<'a, T: Read + Seek> {
     /// The source from where we read the data
-    pub(crate) source: &'a mut T,
+    pub(crate) source: &'a mut std::io::Cursor<Vec<u8>>,
     /// The fields that make the record
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     /// The source where the Memo field data is read
@@ -535,6 +541,7 @@ pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
     reader: &'a mut Reader<T>,
     record_type: std::marker::PhantomData<R>,
     current_record: u32,
+    record_data_buffer: std::io::Cursor<Vec<u8>>,
 }
 
 impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R> {
@@ -544,8 +551,14 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
         if self.current_record >= self.reader.header.num_records {
             None
         } else {
+            self.reader
+                .source
+                .read_exact(self.record_data_buffer.get_mut())
+                .ok()?;
+            self.record_data_buffer.set_position(0);
+
             let mut iter = FieldIterator {
-                source: &mut self.reader.source,
+                source: &mut self.record_data_buffer,
                 fields_info: self.reader.fields_info.iter().peekable(),
                 memo_reader: &mut self.reader.memo_reader,
             };

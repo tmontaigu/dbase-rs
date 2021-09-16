@@ -260,9 +260,9 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T: Read + Seek>(
-        mut source: &mut T,
-        memo_reader: &mut Option<MemoReader<T>>,
+    pub(crate) fn read_from<T1: Read + Seek, T2: Read + Seek>(
+        mut source: &mut T1,
+        memo_reader: &mut Option<MemoReader<T2>>,
         field_info: &FieldInfo,
     ) -> Result<Self, ErrorKind> {
         let value = match field_info.field_type {
@@ -942,7 +942,9 @@ mod test {
 
         out.set_position(0);
 
-        let read_value = FieldValue::read_from(&mut out, &mut None, field_info).unwrap();
+        let read_value =
+            FieldValue::read_from::<_, std::io::Cursor<Vec<u8>>>(&mut out, &mut None, field_info)
+                .unwrap();
         assert_eq!(value, &read_value);
     }
 
