@@ -230,6 +230,7 @@ impl<T: Read + Seek> Reader<T> {
             record_type: std::marker::PhantomData,
             current_record: 0,
             record_data_buffer: std::io::Cursor::new(vec![0u8; record_size]),
+            field_data_buffer: [0u8; 255],
         }
     }
 
@@ -365,6 +366,8 @@ pub struct FieldIterator<'a, T: Read + Seek> {
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     /// The source where the Memo field data is read
     pub(crate) memo_reader: &'a mut Option<MemoReader<T>>,
+    /// Buffer where field data is stored
+    field_data_buffer: &'a mut [u8; 255],
 }
 
 impl<'a, T: Read + Seek> FieldIterator<'a, T> {
@@ -510,7 +513,9 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
 
     /// read the next field using the given info
     fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<FieldValue, FieldIOError> {
-        match FieldValue::read_from(self.source, self.memo_reader, field_info) {
+        let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
+        self.source.read_exact(field_data_buffer).unwrap();
+        match FieldValue::read_from(field_data_buffer, self.memo_reader, field_info) {
             Ok(value) => Ok(value),
             Err(kind) => Err(FieldIOError {
                 field: Some(field_info.clone()),
@@ -542,6 +547,9 @@ pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
     record_type: std::marker::PhantomData<R>,
     current_record: u32,
     record_data_buffer: std::io::Cursor<Vec<u8>>,
+    /// Non-Memo field length is stored on a u8,
+    /// so fields cannot exceed 255 bytes
+    field_data_buffer: [u8; 255],
 }
 
 impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R> {
@@ -561,6 +569,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
                 source: &mut self.record_data_buffer,
                 fields_info: self.reader.fields_info.iter().peekable(),
                 memo_reader: &mut self.reader.memo_reader,
+                field_data_buffer: &mut self.field_data_buffer,
             };
 
             let record = R::read_using(&mut iter)

@@ -260,64 +260,91 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T1: Read + Seek, T2: Read + Seek>(
-        mut source: &mut T1,
-        memo_reader: &mut Option<MemoReader<T2>>,
+    pub(crate) fn read_from<T: Read + Seek>(
+        mut field_bytes: &[u8],
+        memo_reader: &mut Option<MemoReader<T>>,
         field_info: &FieldInfo,
     ) -> Result<Self, ErrorKind> {
+        debug_assert_eq!(field_bytes.len(), field_info.length() as usize);
         let value = match field_info.field_type {
-            FieldType::Logical => match source.read_u8()? as char {
+            FieldType::Logical => match field_bytes[0] as char {
                 ' ' | '?' => FieldValue::Logical(None),
                 '1' | '0' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
                 'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(false)),
                 _ => FieldValue::Logical(None),
             },
             FieldType::Character => {
-                let value = read_string_of_len(&mut source, field_info.field_length)?;
+                // let value = read_string_of_len(&mut source, field_info.field_length)?;
+                let value = trim_field_data(field_bytes);
                 if value.is_empty() {
                     FieldValue::Character(None)
                 } else {
-                    FieldValue::Character(Some(value.to_owned()))
+                    FieldValue::Character(Some(String::from_utf8_lossy(value).to_string()))
                 }
             }
             FieldType::Numeric => {
-                let value = read_string_of_len(&mut source, field_info.field_length)?;
-                if value.is_empty() || value.chars().all(|c| c == '*') {
+                // let value = read_string_of_len(&mut source, field_info.field_length)?;
+                let value = trim_field_data(field_bytes);
+                if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Numeric(None)
                 } else {
-                    FieldValue::Numeric(Some(value.parse::<f64>()?))
+                    let value_str = String::from_utf8_lossy(value);
+                    FieldValue::Numeric(Some(value_str.parse::<f64>()?))
                 }
             }
             FieldType::Float => {
-                let value = read_string_of_len(&mut source, field_info.field_length)?;
-                if value.is_empty() || value.chars().all(|c| c == '*') {
+                // let value = read_string_of_len(&mut source, field_info.field_length)?;
+                let value = trim_field_data(field_bytes);
+                if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Float(None)
                 } else {
-                    FieldValue::Float(Some(value.parse::<f32>()?))
+                    let value_str = String::from_utf8_lossy(value);
+                    FieldValue::Float(Some(value_str.parse::<f32>()?))
                 }
             }
             FieldType::Date => {
-                let value = read_string_of_len(&mut source, field_info.field_length)?;
-                if value.chars().all(|c| c == ' ') {
+                // let value = read_string_of_len(&mut source, field_info.field_length)?;
+                let value = trim_field_data(field_bytes);
+                if value.iter().all(|c| c == &b' ') {
                     FieldValue::Date(None)
                 } else {
-                    FieldValue::Date(Some(value.parse::<Date>()?))
+                    let value_str = String::from_utf8_lossy(value);
+                    FieldValue::Date(Some(value_str.parse::<Date>()?))
                 }
             }
-            FieldType::Integer => FieldValue::Integer(source.read_i32::<LittleEndian>()?),
-            FieldType::Double => FieldValue::Double(source.read_f64::<LittleEndian>()?),
-            FieldType::Currency => FieldValue::Currency(source.read_f64::<LittleEndian>()?),
-            FieldType::DateTime => FieldValue::DateTime(DateTime::read_from(&mut source)?),
+            FieldType::Integer => {
+                let mut le_bytes = [0u8; std::mem::size_of::<i32>()];
+                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<i32>()]);
+                FieldValue::Integer(i32::from_le_bytes(le_bytes))
+            }
+            FieldType::Double => {
+                let mut le_bytes = [0u8; std::mem::size_of::<f64>()];
+                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<f64>()]);
+                FieldValue::Double(f64::from_le_bytes(le_bytes))
+            }
+            FieldType::Currency => {
+                let mut le_bytes = [0u8; std::mem::size_of::<f64>()];
+                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<f64>()]);
+                FieldValue::Currency(f64::from_le_bytes(le_bytes))
+            }
+            FieldType::DateTime => {
+                let mut source = std::io::Cursor::new(&mut field_bytes);
+                FieldValue::DateTime(DateTime::read_from(&mut source)?)
+            }
             FieldType::Memo => {
                 let index_in_memo = if field_info.field_length > 4 {
-                    let string = read_string_of_len(&mut source, field_info.field_length)?;
-                    if string.is_empty() {
+                    // let string = read_string_of_len(&mut source, field_info.field_length)?;
+                    let trimmed_value = trim_field_data(field_bytes);
+                    if trimmed_value.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
                     } else {
-                        string.parse::<u32>()?
+                        String::from_utf8_lossy(trimmed_value).parse::<u32>()?
+                        // string.parse::<u32>()?
                     }
                 } else {
-                    source.read_u32::<LittleEndian>()?
+                    let mut le_bytes = [0u8; std::mem::size_of::<u32>()];
+                    le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<u32>()]);
+                    u32::from_le_bytes(le_bytes)
                 };
 
                 if let Some(memo_reader) = memo_reader {
@@ -875,10 +902,7 @@ mod ser {
     }
 }
 
-fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::io::Error> {
-    let mut bytes = vec![0u8; len as usize];
-    source.read_exact(&mut bytes)?;
-
+fn trim_field_data(bytes: &[u8]) -> &[u8] {
     // Value in the dbf file is surrounded by space characters (32u8). We discard them before
     // parsing the bytes into string. Doing so doubles the performance in comparison to
     // using String::trim() afterwards.
@@ -906,14 +930,14 @@ fn read_string_of_len<T: Read>(source: &mut T, len: u8) -> Result<String, std::i
 
     // Input starts with zero character or consists only of spaces.
     if first == usize::MAX {
-        return Ok(String::new());
+        return &[];
     }
 
     // Discarding spaces in front and at the end. The space character (32u8) is 00110000 in binary
     // format, which makes it safe to drop without checking, as it cannot be part of the multi-byte
     // UTF-8 symbol (all such bytes must start with 10).
     let trimmed_bytes = &bytes[first..(last + 1)];
-    Ok(String::from_utf8_lossy(&trimmed_bytes).into_owned())
+    trimmed_bytes
 }
 
 #[cfg(test)]
@@ -939,11 +963,10 @@ mod test {
     fn test_we_can_read_back(field_info: &FieldInfo, value: &FieldValue) {
         let mut out = Cursor::new(Vec::<u8>::with_capacity(field_info.field_length as usize));
         value.write_as(field_info, &mut out).unwrap();
-
         out.set_position(0);
 
         let read_value =
-            FieldValue::read_from::<_, std::io::Cursor<Vec<u8>>>(&mut out, &mut None, field_info)
+            FieldValue::read_from::<std::io::Cursor<Vec<u8>>>(out.get_mut(), &mut None, field_info)
                 .unwrap();
         assert_eq!(value, &read_value);
     }
