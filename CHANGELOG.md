@@ -1,3 +1,10 @@
+# 0.2.1
+    - Implement `From<Record>` for `HashMap`
+    - Implement `AsRef<HashMap>` & `AsMut<HashMap>` for `Record`
+    - Add `derive(Clone)` for Record
+    - Fix decimal places in writing numeric values
+    - Performance improvement when reading (PR #21 and #23)
+
 # 0.2.0
     - Added a `seek` method to the `Reader`
     - Added a `TableInfo` struct and a `into_table_info` method on the `Reader`.
