@@ -557,6 +557,21 @@ impl Time {
         }
     }
 
+    /// Returns the hours.
+    pub fn hours(&self) -> u32 {
+        self.hours
+    }
+
+    /// Returns the minutes.
+    pub fn minutes(&self) -> u32 {
+        self.minutes
+    }
+
+    /// Returns the seconds.
+    pub fn seconds(&self) -> u32 {
+        self.seconds
+    }
+
     fn from_word(mut time_word: i32) -> Self {
         let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
         time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
@@ -589,6 +604,16 @@ impl DateTime {
     /// Creates a new DateTime from a date and a time
     pub fn new(date: Date, time: Time) -> Self {
         Self { date, time }
+    }
+
+    /// Returns the [Date] part.
+    pub fn date(&self) -> Date {
+        self.date
+    }
+
+    /// Returns the [Time] part.
+    pub fn time(&self) -> Time {
+        self.time
     }
 
     fn read_from<T: Read>(src: &mut T) -> Result<Self, ErrorKind> {
