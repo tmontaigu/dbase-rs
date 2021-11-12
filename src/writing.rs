@@ -545,7 +545,7 @@ impl<W: Write + Seek> TableWriter<W> {
         let size_of_record = self
             .fields_info
             .iter()
-            .fold(0u16, |s, ref info| s + info.field_length as u16);
+            .fold(1u16, |s, ref info| s + info.field_length as u16);
 
         self.header.offset_to_first_record = offset_to_first_record as u16;
         self.header.size_of_record = size_of_record;
