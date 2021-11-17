@@ -1,3 +1,7 @@
+# 0.2.2
+    - Fixed files written, their record size was wrong by one byte
+    - Added the missing accessors for the `DateTime` and `Time` structs members
+
 # 0.2.1
     - Implement `From<Record>` for `HashMap`
     - Implement `AsRef<HashMap>` & `AsMut<HashMap>` for `Record`
