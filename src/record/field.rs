@@ -969,7 +969,7 @@ fn trim_field_data(bytes: &[u8]) -> &[u8] {
 mod test {
     use super::*;
 
-    use record::FieldFlags;
+    use crate::record::FieldFlags;
     use std::io::Cursor;
 
     fn create_temp_field_info(field_type: FieldType, len: u8) -> FieldInfo {

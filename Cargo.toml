@@ -8,7 +8,7 @@ readme = "README.md"
 keywords = ["dbase", "dbf"]
 homepage = "https://github.com/tmontaigu/dbase-rs"
 repository = "https://github.com/tmontaigu/dbase-rs"
-# edition = "2018"
+edition = "2018"
 
 [dependencies]
 byteorder = "1.4.3"
