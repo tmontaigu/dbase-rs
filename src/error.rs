@@ -119,6 +119,12 @@ impl From<FieldConversionError> for ErrorKind {
     }
 }
 
+impl From<FieldConversionError> for FieldIOError {
+    fn from(e: FieldConversionError) -> Self {
+        FieldIOError::new(ErrorKind::BadConversion(e), None)
+    }
+}
+
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(field_info) = &self.field {
