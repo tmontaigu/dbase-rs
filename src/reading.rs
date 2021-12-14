@@ -436,14 +436,6 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         }
     }
 
-    /// Use this to create an error if your custom logic failed
-    pub fn user_error(&self, msg: impl ToString) -> FieldIOError {
-        FieldIOError {
-            field: None,
-            kind: ErrorKind::Message(msg.to_string()),
-        }
-    }
-
     /// Skips all the remaining field of the record
     ///
     /// used internally to make sure the data stream is at the right position

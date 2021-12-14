@@ -79,7 +79,7 @@ pub struct FieldIOError {
 }
 
 impl FieldIOError {
-    pub(crate) fn new(kind: ErrorKind, field: Option<FieldInfo>) -> Self {
+    pub fn new(kind: ErrorKind, field: Option<FieldInfo>) -> Self {
         Self { field, kind }
     }
 
