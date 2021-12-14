@@ -143,6 +143,8 @@ impl std::fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
