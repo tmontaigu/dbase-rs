@@ -4,7 +4,9 @@ use std::io::{Read, Seek};
 use serde::de::{DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::Deserializer;
 
-use crate::{ErrorKind, FieldIOError, FieldIterator, FieldValue, ReadableRecord};
+use crate::{
+    ErrorKind, FieldConversionError, FieldIOError, FieldIterator, FieldValue, ReadableRecord,
+};
 
 impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
     type Error = FieldIOError;
@@ -32,7 +34,7 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
     where
         V: Visitor<'de>,
     {
-        unimplemented!("Dbase cannot deserialize any")
+        Err(FieldConversionError::IncompatibleType.into())
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -43,19 +45,30 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
         visitor.visit_bool(value)
     }
 
-    fn deserialize_i8<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!("DBase cannot deserialize i8")
-    }
-
-    fn deserialize_i16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_i8<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
         let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_i32(value.try_into()?)
+        visitor.visit_i8(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
+    }
+
+    fn deserialize_i16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_i16(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -74,11 +87,17 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
         visitor.visit_i64(value.into())
     }
 
-    fn deserialize_u8<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_u8<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize u8")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_u8(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
     }
 
     fn deserialize_u16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>

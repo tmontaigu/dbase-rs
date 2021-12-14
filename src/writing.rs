@@ -6,10 +6,10 @@ use std::path::Path;
 use byteorder::WriteBytesExt;
 
 use crate::header::Header;
+use crate::reading::TableInfo;
 use crate::reading::TERMINATOR_VALUE;
 use crate::record::{field::FieldType, FieldInfo, FieldName};
 use crate::{Error, ErrorKind, FieldIOError, Record};
-use crate::reading::TableInfo;
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
