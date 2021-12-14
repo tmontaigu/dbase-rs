@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::io::{Read, Seek};
 
-use serde::de::{DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
+use serde::de::{DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::Deserializer;
 
 use crate::{ErrorKind, FieldIOError, FieldIterator, FieldValue, ReadableRecord};
@@ -54,7 +54,8 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize i16")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_i32(value.try_into()?)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -65,11 +66,12 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
         visitor.visit_i32(value)
     }
 
-    fn deserialize_i64<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_i64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize i64")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_i64(value.into())
     }
 
     fn deserialize_u8<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -257,12 +259,13 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize enum")
+        let value = self.read_next_field_as::<String>()?.value;
+        visitor.visit_enum(value.into_deserializer())
     }
 
     fn deserialize_identifier<V>(
