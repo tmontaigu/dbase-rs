@@ -7,3 +7,4 @@ support/
 *.dbf
 .DS_Store
 .vscode
+!tests/data/*.dbf

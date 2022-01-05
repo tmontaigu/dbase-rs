@@ -57,6 +57,29 @@ mod serde_tests {
         write_read_compare(&records, writer_builder);
     }
 
+    #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+    struct DeserializableStation {
+        name: String,
+        marker_col: Option<String>,
+        marker_symbol: String,
+        line: Option<String>,
+    }
+
+    #[test]
+    fn test_serde_stations_optional() {
+        let mut reader = dbase::Reader::from_path("tests/data/stations_optional.dbf").unwrap();
+        let records = reader.read_as::<DeserializableStation>().unwrap();
+        assert_eq!(
+            records[3],
+            DeserializableStation {
+                name: String::from("Judiciary Sq"),
+                marker_col: None,
+                marker_symbol: "rail-metro".to_string(),
+                line: Some("blue".to_string())
+            }
+        );
+    }
+
     #[test]
     fn test_serde_optional_types() {
         #[derive(Serialize, Deserialize, PartialEq, Debug)]
