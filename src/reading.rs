@@ -382,10 +382,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             .ok_or_else(|| FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
-                Err(FieldIOError {
-                    field: Some(field_info.clone()),
-                    kind: ErrorKind::IoError(e),
-                })
+                Err(e)
             } else {
                 self.read_next_field_impl()
             }
@@ -429,7 +426,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// but the ones after do.
     ///
     /// Does nothing if the last field of the record was already skipped or read.
-    pub fn skip_next_field(&mut self) -> std::io::Result<()> {
+    pub fn skip_next_field(&mut self) -> Result<(), FieldIOError> {
         match self.fields_info.next() {
             None => Ok(()),
             Some(field_info) => self.skip_field(field_info),
@@ -444,12 +441,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// Does nothing if the last field of the record was already skipped or read.
     fn skip_remaining_fields(&mut self) -> Result<(), FieldIOError> {
         while let Some(field_info) = self.fields_info.next() {
-            if let Err(error) = self.skip_field(field_info) {
-                return Err(FieldIOError {
-                    field: Some(field_info.clone()),
-                    kind: error.into(),
-                });
-            }
+            self.skip_field(field_info)?;
         }
         Ok(())
     }
@@ -462,9 +454,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             .next()
             .ok_or(FieldIOError::end_of_record())?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info).map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-            })?;
+            self.skip_field(field_info)?;
             self.read_next_field_raw()
         } else {
             let mut buf = vec![0u8; field_info.field_length as usize];
@@ -482,9 +472,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             kind: ErrorKind::EndOfRecord,
         })?;
         if field_info.is_deletion_flag() {
-            self.skip_field(field_info).map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-            })?;
+            self.skip_field(field_info)?;
             self.fields_info.next().unwrap();
             field_info = self
                 .fields_info
@@ -505,9 +493,12 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     }
 
     /// Advance the source to skip the field
-    fn skip_field(&mut self, field_info: &FieldInfo) -> std::io::Result<()> {
+    fn skip_field(&mut self, field_info: &FieldInfo) -> Result<(), FieldIOError> {
         self.source
-            .seek(SeekFrom::Current(i64::from(field_info.field_length)))?;
+            .seek(SeekFrom::Current(i64::from(field_info.field_length)))
+            .map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+            })?;
         Ok(())
     }
 

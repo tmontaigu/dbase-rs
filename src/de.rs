@@ -187,11 +187,26 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
             FieldValue::Numeric(Some(_)) => visitor.visit_some(self),
             FieldValue::Float(Some(_)) => visitor.visit_some(self),
             FieldValue::Date(Some(_)) => visitor.visit_some(self),
-            FieldValue::Character(None) => visitor.visit_none(),
-            FieldValue::Logical(None) => visitor.visit_none(),
-            FieldValue::Numeric(None) => visitor.visit_none(),
-            FieldValue::Float(None) => visitor.visit_none(),
-            FieldValue::Date(None) => visitor.visit_none(),
+            FieldValue::Character(None) => {
+                self.skip_next_field()?;
+                visitor.visit_none()
+            }
+            FieldValue::Logical(None) => {
+                self.skip_next_field()?;
+                visitor.visit_none()
+            }
+            FieldValue::Numeric(None) => {
+                self.skip_next_field()?;
+                visitor.visit_none()
+            }
+            FieldValue::Float(None) => {
+                self.skip_next_field()?;
+                visitor.visit_none()
+            }
+            FieldValue::Date(None) => {
+                self.skip_next_field()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
