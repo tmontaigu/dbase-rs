@@ -1,3 +1,8 @@
+# 0.2.3
+    - Added `impl std::error::Error for dbase::Error`
+    - Fixed deserialization implementation that would fail to deserialize if one `None`
+      value was encountered (issue #30, PR #31)
+
 # 0.2.2
     - Fixed files written, their record size was wrong by one byte
     - Added the missing accessors for the `DateTime` and `Time` structs members
