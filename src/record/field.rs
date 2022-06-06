@@ -5,8 +5,6 @@ use std::str::FromStr;
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use chrono::Datelike;
-
 use crate::error::ErrorKind;
 use crate::record::FieldInfo;
 use crate::writing::WritableAsDbaseField;
@@ -498,28 +496,22 @@ impl std::string::ToString for Date {
     }
 }
 
-impl From<Date> for chrono::NaiveDate {
-    fn from(d: Date) -> Self {
-        Self::from_ymd(d.year as i32, d.month, d.day)
+impl std::convert::TryFrom<Date> for time::Date {
+    type Error = time::error::ComponentRange;
+
+    fn try_from(d: Date) -> Result<Self, Self::Error> {
+        let month: time::Month = (d.month as u8).try_into()?;
+        Self::from_calendar_date(d.year as i32, month, d.day as u8)
     }
 }
 
-impl From<chrono::NaiveDate> for Date {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Self {
-            year: d.year().try_into().unwrap(),
-            month: d.month(),
-            day: d.day(),
-        }
-    }
-}
-
-impl<Tz: chrono::TimeZone> From<chrono::Date<Tz>> for Date {
-    fn from(d: chrono::Date<Tz>) -> Self {
+impl From<time::Date> for Date {
+    fn from(d: time::Date) -> Self {
+        let month: u8 = d.month().into();
         Self {
             year: d.year() as u32,
-            month: d.month(),
-            day: d.day(),
+            month: month as u32,
+            day: d.day() as u32,
         }
     }
 }
@@ -961,8 +953,7 @@ fn trim_field_data(bytes: &[u8]) -> &[u8] {
     // Discarding spaces in front and at the end. The space character (32u8) is 00110000 in binary
     // format, which makes it safe to drop without checking, as it cannot be part of the multi-byte
     // UTF-8 symbol (all such bytes must start with 10).
-    let trimmed_bytes = &bytes[first..(last + 1)];
-    trimmed_bytes
+    &bytes[first..(last + 1)]
 }
 
 #[cfg(test)]

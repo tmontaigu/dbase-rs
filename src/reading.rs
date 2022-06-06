@@ -379,7 +379,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         let field_info = self
             .fields_info
             .next()
-            .ok_or_else(|| FieldIOError::end_of_record())?;
+            .ok_or_else(FieldIOError::end_of_record)?;
         if field_info.is_deletion_flag() {
             if let Err(e) = self.skip_field(field_info) {
                 Err(e)

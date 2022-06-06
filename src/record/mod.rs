@@ -34,9 +34,7 @@ impl TryFrom<&str> for FieldName {
         if name.as_bytes().len() > FIELD_NAME_LENGTH {
             Err("FieldName byte representation cannot exceed 11 bytes")
         } else {
-            Ok(Self {
-                0: name.to_string(),
-            })
+            Ok(Self(name.to_string()))
         }
     }
 }
@@ -95,9 +93,7 @@ impl FieldInfo {
         let record_length = source.read_u8()?;
         let num_decimal_places = source.read_u8()?;
 
-        let flags = FieldFlags {
-            0: source.read_u8()?,
-        };
+        let flags = FieldFlags(source.read_u8()?);
 
         let mut autoincrement_next_val = [0u8; 5];
 
@@ -152,7 +148,7 @@ impl FieldInfo {
             displacement_field: [0u8; 4],
             field_length: 1,
             num_decimal_places: 0,
-            flags: FieldFlags { 0: 0u8 },
+            flags: FieldFlags(0u8),
             autoincrement_next_val: [0u8; 5],
             autoincrement_step: 0u8,
         }
@@ -174,14 +170,8 @@ impl std::fmt::Display for FieldInfo {
 }
 
 /// Flags describing a field
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub(crate) struct FieldFlags(u8);
-
-impl Default for FieldFlags {
-    fn default() -> Self {
-        Self { 0: 0 }
-    }
-}
 
 /// Errors that can happen when trying to convert a FieldValue into
 /// a more concrete type

@@ -1,5 +1,3 @@
-use chrono;
-
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::io::{Read, Write};
@@ -45,10 +43,7 @@ impl Version {
     }
 
     pub(crate) fn is_visual_fox_pro(self) -> bool {
-        match self {
-            Version::VisualFoxPro => true,
-            _ => false,
-        }
+        matches!(self, Version::VisualFoxPro)
     }
 }
 
@@ -158,18 +153,18 @@ impl Header {
             size_of_record: size_of_records,
             is_transaction_incomplete: false,
             encryption_flag: 0,
-            table_flags: TableFlags { 0: 0 },
+            table_flags: TableFlags(0),
             code_page_mark: 0,
         }
     }
 
     fn get_today_date() -> Date {
-        let current_date: Date = chrono::Utc::now().date().into();
+        let current_date = time::OffsetDateTime::now_utc().date();
         // The year will be saved a a u8 offset from 1900
         if current_date.year() < 1900 || current_date.year() > 2155 {
             panic!("the year current date is out of range");
         } else {
-            current_date
+            current_date.into()
         }
     }
 
@@ -200,9 +195,7 @@ impl Header {
         let mut _reserved = [0u8; 12];
         source.read_exact(&mut _reserved)?;
 
-        let table_flags = TableFlags {
-            0: source.read_u8()?,
-        };
+        let table_flags = TableFlags(source.read_u8()?);
 
         let code_page_mark = source.read_u8()?;
 

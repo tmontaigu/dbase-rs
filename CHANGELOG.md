@@ -1,3 +1,6 @@
+# Next
+    - Replaced `chrono` with `time` v0.3
+
 # 0.2.3
     - Added `impl std::error::Error for dbase::Error`
     - Fixed deserialization implementation that would fail to deserialize if one `None`

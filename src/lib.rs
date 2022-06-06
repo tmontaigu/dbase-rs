@@ -220,9 +220,9 @@
 #![deny(unstable_features)]
 
 extern crate byteorder;
-extern crate chrono;
 #[cfg(feature = "serde")]
 extern crate serde;
+extern crate time;
 
 #[cfg(feature = "serde")]
 mod de;
