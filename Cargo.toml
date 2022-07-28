@@ -14,6 +14,7 @@ edition = "2021"
 byteorder = "1.4.3"
 time = {version = "0.3", features=["std"]}
 serde = {version = "1.0.102", optional = true}
+yore = {version = "0.3.3", optional = true}
 
 [dev-dependencies]
 serde_derive = "1.0.102"

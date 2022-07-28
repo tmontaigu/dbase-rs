@@ -9,7 +9,7 @@ use crate::header::Header;
 use crate::reading::TableInfo;
 use crate::reading::TERMINATOR_VALUE;
 use crate::record::{field::FieldType, FieldInfo, FieldName};
-use crate::{Error, ErrorKind, FieldIOError, Record};
+use crate::{Encoding, Error, ErrorKind, FieldIOError, Record};
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
@@ -65,8 +65,8 @@ impl TableWriterBuilder {
     /// let writing_result = writer.write_records(&stations);
     /// assert_eq!(writing_result.is_ok(), true);
     /// ```
-    pub fn from_reader<T: std::io::Read + std::io::Seek>(
-        reader: crate::reading::Reader<T>,
+    pub fn from_reader<T: std::io::Read + std::io::Seek, E: Encoding>(
+        reader: crate::reading::Reader<T, E>,
     ) -> Self {
         Self::from_table_info(reader.into_table_info())
     }

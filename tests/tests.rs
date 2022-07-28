@@ -4,7 +4,7 @@ extern crate dbase;
 use std::io::{Cursor, Read, Seek, Write};
 
 use dbase::{
-    Date, DateTime, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
+    Date, DateTime, Encoding, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
     ReadableRecord, Reader, Record, TableWriterBuilder, Time, WritableRecord,
 };
 use std::convert::{TryFrom, TryInto};
@@ -13,6 +13,8 @@ use std::fmt::Debug;
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.dbf";
+#[cfg(feature = "yore")]
+const CP850_DBF: &str = "tests/data/cp850.dbf";
 
 fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
     records: &Vec<R>,
@@ -104,9 +106,10 @@ struct Album {
 }
 
 impl ReadableRecord for Album {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
+    fn read_using<T, E>(field_iterator: &mut FieldIterator<T, E>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
+        E: Encoding,
     {
         Ok(Self {
             artist: field_iterator.read_next_field_as()?.value,
@@ -258,4 +261,18 @@ fn the_classical_user_record_example() {
     let read_records = reader.read_as::<User>().unwrap();
 
     assert_eq!(read_records, users);
+}
+
+#[cfg(feature = "yore")]
+#[test]
+fn non_unicode_codepages() {
+    let mut reader =
+        dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", yore::code_pages::CP850)
+            .unwrap();
+    let records = reader.read().unwrap();
+
+    assert_eq!(
+        records[0].get("TEXT"),
+        Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+    );
 }

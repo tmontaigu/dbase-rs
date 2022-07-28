@@ -3,6 +3,7 @@ use std::fmt;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::str::FromStr;
 
+use crate::Encoding;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::error::ErrorKind;
@@ -258,10 +259,11 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
-    pub(crate) fn read_from<T: Read + Seek>(
+    pub(crate) fn read_from<T: Read + Seek, E: Encoding>(
         mut field_bytes: &[u8],
         memo_reader: &mut Option<MemoReader<T>>,
         field_info: &FieldInfo,
+        encoding: &E,
     ) -> Result<Self, ErrorKind> {
         debug_assert_eq!(field_bytes.len(), field_info.length() as usize);
         let value = match field_info.field_type {
@@ -277,7 +279,7 @@ impl FieldValue {
                 if value.is_empty() {
                     FieldValue::Character(None)
                 } else {
-                    FieldValue::Character(Some(String::from_utf8_lossy(value).to_string()))
+                    FieldValue::Character(Some(encoding.decode(value)?.to_string()))
                 }
             }
             FieldType::Numeric => {
@@ -286,7 +288,7 @@ impl FieldValue {
                 if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Numeric(None)
                 } else {
-                    let value_str = String::from_utf8_lossy(value);
+                    let value_str = encoding.decode(value)?;
                     FieldValue::Numeric(Some(value_str.parse::<f64>()?))
                 }
             }
@@ -296,7 +298,7 @@ impl FieldValue {
                 if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Float(None)
                 } else {
-                    let value_str = String::from_utf8_lossy(value);
+                    let value_str = encoding.decode(value)?;
                     FieldValue::Float(Some(value_str.parse::<f32>()?))
                 }
             }
@@ -306,7 +308,7 @@ impl FieldValue {
                 if value.iter().all(|c| c == &b' ') {
                     FieldValue::Date(None)
                 } else {
-                    let value_str = String::from_utf8_lossy(value);
+                    let value_str = encoding.decode(value)?;
                     FieldValue::Date(Some(value_str.parse::<Date>()?))
                 }
             }
@@ -336,7 +338,7 @@ impl FieldValue {
                     if trimmed_value.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
                     } else {
-                        String::from_utf8_lossy(trimmed_value).parse::<u32>()?
+                        encoding.decode(trimmed_value)?.parse::<u32>()?
                         // string.parse::<u32>()?
                     }
                 } else {
@@ -347,7 +349,7 @@ impl FieldValue {
 
                 if let Some(memo_reader) = memo_reader {
                     let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
-                    FieldValue::Memo(String::from_utf8_lossy(data_from_memo).to_string())
+                    FieldValue::Memo(encoding.decode(data_from_memo)?.to_string())
                 } else {
                     return Err(ErrorKind::MissingMemoFile);
                 }
@@ -960,6 +962,7 @@ fn trim_field_data(bytes: &[u8]) -> &[u8] {
 mod test {
     use super::*;
 
+    use crate::codepages::UnicodeLossy;
     use crate::record::FieldFlags;
     use std::io::Cursor;
 
@@ -981,9 +984,13 @@ mod test {
         value.write_as(field_info, &mut out).unwrap();
         out.set_position(0);
 
-        let read_value =
-            FieldValue::read_from::<std::io::Cursor<Vec<u8>>>(out.get_mut(), &mut None, field_info)
-                .unwrap();
+        let read_value = FieldValue::read_from::<std::io::Cursor<Vec<u8>>, _>(
+            out.get_mut(),
+            &mut None,
+            field_info,
+            &UnicodeLossy,
+        )
+        .unwrap();
         assert_eq!(value, &read_value);
     }
 

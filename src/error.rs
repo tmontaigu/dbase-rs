@@ -26,6 +26,8 @@ pub enum ErrorKind {
     /// The type of the value for the field is not compatible with the
     /// dbase field's type
     IncompatibleType,
+    /// A string from the database could not be decoded
+    StringDecodeError(DecodeError),
     Message(String),
 }
 
@@ -119,6 +121,12 @@ impl From<FieldConversionError> for ErrorKind {
     }
 }
 
+impl From<DecodeError> for ErrorKind {
+    fn from(e: DecodeError) -> Self {
+        ErrorKind::StringDecodeError(e)
+    }
+}
+
 impl From<FieldConversionError> for FieldIOError {
     fn from(e: FieldConversionError) -> Self {
         FieldIOError::new(ErrorKind::BadConversion(e), None)
@@ -175,6 +183,7 @@ impl std::error::Error for FieldIOError {
             }
             ErrorKind::TooManyFields => "The writer expected to write more fields for the record",
             ErrorKind::IncompatibleType => "The types are not compatible",
+            ErrorKind::StringDecodeError(_) => "A string from the database could not be decoded",
             ErrorKind::Message(ref msg) => msg,
         }
     }
@@ -193,3 +202,31 @@ impl std::fmt::Display for FieldIOError {
         }
     }
 }
+
+#[derive(Debug)]
+pub enum DecodeError {
+    Message(String),
+    #[cfg(feature = "yore")]
+    Yore(yore::DecodeError),
+}
+
+impl DecodeError {
+    pub fn new_from_message(message: String) -> Self {
+        Self::Message(message)
+    }
+}
+
+#[cfg(feature = "yore")]
+impl From<yore::DecodeError> for DecodeError {
+    fn from(e: yore::DecodeError) -> Self {
+        DecodeError::Yore(e)
+    }
+}
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for DecodeError {}

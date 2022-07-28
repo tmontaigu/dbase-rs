@@ -119,6 +119,30 @@
 //! # }
 //! ```
 //!
+//! ## Other Codepages / Encodings
+//!
+//! Support for encodings other than Unicode is provided via the crate [`yore`].
+//! This crate only supports some basic single-byte codepages, but many of those
+//! were used by older systems, which dBase databases you may want to open might use.
+//!
+//! ```
+//! # #[cfg(feature = "yore")]
+//! use yore::code_pages::CP850;
+//!
+//! # #[cfg(feature = "yore")]
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", CP850)?;
+//! let records = reader.read()?;
+//!
+//! assert_eq!(records[0].get("TEXT"), Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string()))));
+//!
+//! # Ok(())
+//! # }
+//!
+//! # #[cfg(feature = "yore")]
+//! # fn main() {
+//! # }
+//! ```
 //!
 //! # Writing
 //!
@@ -229,12 +253,14 @@ mod de;
 #[cfg(feature = "serde")]
 mod ser;
 
+mod codepages;
 mod error;
 mod header;
 mod reading;
 mod record;
 mod writing;
 
+pub use crate::codepages::Encoding;
 pub use crate::error::{Error, ErrorKind, FieldIOError};
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
@@ -276,8 +302,8 @@ macro_rules! dbase_record {
         }
 
         impl dbase::ReadableRecord for $name {
-            fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
-                where T: std::io::Read + std::io::Seek
+            fn read_using<T, E>(field_iterator: &mut dbase::FieldIterator<T, E>) -> Result<Self, dbase::FieldIOError>
+                where T: std::io::Read + std::io::Seek, E: $crate::Encoding
                 {
                     Ok(Self {
                         $(

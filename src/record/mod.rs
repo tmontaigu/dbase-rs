@@ -6,7 +6,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 pub mod field;
 
 use self::field::{Date, DateTime, FieldType};
-use crate::{ErrorKind, FieldValue};
+use crate::{Encoding, ErrorKind, FieldValue};
 
 const DELETION_FLAG_NAME: &str = "DeletionFlag";
 const FIELD_NAME_LENGTH: usize = 11;
@@ -82,7 +82,10 @@ impl FieldInfo {
         }
     }
 
-    pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, ErrorKind> {
+    pub(crate) fn read_from<T: Read, E: Encoding>(
+        source: &mut T,
+        encoding: &E,
+    ) -> Result<Self, ErrorKind> {
         let mut name = [0u8; FIELD_NAME_LENGTH];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
@@ -103,7 +106,8 @@ impl FieldInfo {
         let mut _reserved = [0u8; 7];
         source.read_exact(&mut _reserved)?;
 
-        let s = String::from_utf8_lossy(&name)
+        let s = encoding
+            .decode(&name)?
             .trim_matches(|c| c == '\u{0}')
             .to_owned();
 
