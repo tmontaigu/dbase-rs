@@ -253,14 +253,14 @@ mod de;
 #[cfg(feature = "serde")]
 mod ser;
 
-mod codepages;
+mod encoding;
 mod error;
 mod header;
 mod reading;
 mod record;
 mod writing;
 
-pub use crate::codepages::Encoding;
+pub use crate::encoding::Encoding;
 pub use crate::error::{Error, ErrorKind, FieldIOError};
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,

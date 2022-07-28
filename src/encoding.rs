@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 /// Trait for reading strings from the database files.
 ///
-/// If the `yore` feature isn't on, this is implemented only be [`UnicodeLossy`].
+/// If the `yore` feature isn't on, this is implemented only by [`UnicodeLossy`].
 ///
 /// If the `yore` feature is on, this is implemented by all [`yore::CodePage`].
 ///

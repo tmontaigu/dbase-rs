@@ -962,7 +962,7 @@ fn trim_field_data(bytes: &[u8]) -> &[u8] {
 mod test {
     use super::*;
 
-    use crate::codepages::UnicodeLossy;
+    use crate::encoding::UnicodeLossy;
     use crate::record::FieldFlags;
     use std::io::Cursor;
 

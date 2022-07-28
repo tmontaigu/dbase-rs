@@ -10,7 +10,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::iter::FusedIterator;
 use std::path::Path;
 
-use crate::codepages::UnicodeLossy;
+use crate::encoding::UnicodeLossy;
 use crate::error::{Error, ErrorKind, FieldIOError};
 use crate::header::Header;
 use crate::record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
