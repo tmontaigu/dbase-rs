@@ -212,9 +212,9 @@ pub enum DecodeError {
     Yore(yore::DecodeError),
 }
 
-impl DecodeError {
-    pub fn new_from_message(message: String) -> Self {
-        Self::Message(message)
+impl From<String> for DecodeError {
+    fn from(msg: String) -> Self {
+        Self::Message(msg)
     }
 }
 
