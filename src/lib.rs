@@ -144,6 +144,11 @@
 //! # }
 //! ```
 //!
+//! The functions that do not take an encoding as parameter, use [`UnicodeLossy`] by default,
+//! they try to read all data as Unicode and replace unrepresentable characters with the unicode
+//! replacement character. Alternatively [`Unicode`] is available, to return an [`Err`] when data
+//! can't be represented as Unicode.
+//!
 //! # Writing
 //!
 //! In order to get a [TableWriter](struct.TableWriter.html) you will need to build it using
@@ -260,7 +265,7 @@ mod reading;
 mod record;
 mod writing;
 
-pub use crate::encoding::Encoding;
+pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
