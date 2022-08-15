@@ -82,7 +82,14 @@ impl FieldInfo {
         }
     }
 
-    pub(crate) fn read_from<T: Read, E: Encoding>(
+    pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, ErrorKind> {
+        Self::read_with_encoding(source, &crate::encoding::Ascii)
+    }
+
+    /// Reads with the given encoding.
+    ///
+    /// The encoding is used only for the name
+    fn read_with_encoding<T: Read, E: Encoding>(
         source: &mut T,
         encoding: &E,
     ) -> Result<Self, ErrorKind> {

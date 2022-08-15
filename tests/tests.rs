@@ -267,8 +267,7 @@ fn the_classical_user_record_example() {
 #[test]
 fn non_unicode_codepages() {
     let mut reader =
-        dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", yore::code_pages::CP850)
-            .unwrap();
+        dbase::Reader::from_path_with_encoding(CP850_DBF, yore::code_pages::CP850).unwrap();
     let records = reader.read().unwrap();
 
     assert_eq!(

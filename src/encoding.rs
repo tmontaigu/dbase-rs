@@ -23,6 +23,10 @@ pub struct UnicodeLossy;
 /// and returning an error if unknown codepoints are encountered.
 pub struct Unicode;
 
+/// This unit struct can be used as an [`Encoding`] to try to decode characters as ASCII,
+/// and returning an error if non-ascii codepoints are encountered.
+pub struct Ascii;
+
 /// Tries to decode as Unicode, replaces unknown codepoints with the replacement character.
 impl Encoding for UnicodeLossy {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
@@ -36,6 +40,19 @@ impl Encoding for Unicode {
         String::from_utf8(bytes.to_vec())
             .map(Cow::Owned)
             .map_err(DecodeError::FromUtf8)
+    }
+}
+
+/// Tries to decode as ASCII, if unrepresentable characters are found, an [`Err`] is returned.
+impl Encoding for Ascii {
+    fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
+        if bytes.is_ascii() {
+            // Since all ascii code points are compatible with utf-8
+            // it is ok to unwrap here.
+            Ok(String::from_utf8(bytes.to_vec()).unwrap().into())
+        } else {
+            Err(DecodeError::NotAscii)
+        }
     }
 }
 

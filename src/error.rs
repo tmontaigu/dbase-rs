@@ -1,5 +1,5 @@
-use std::string::FromUtf8Error;
 use crate::{FieldConversionError, FieldInfo};
+use std::string::FromUtf8Error;
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -205,9 +205,11 @@ impl std::fmt::Display for FieldIOError {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum DecodeError {
     Message(String),
     FromUtf8(FromUtf8Error),
+    NotAscii,
     #[cfg(feature = "yore")]
     Yore(yore::DecodeError),
 }

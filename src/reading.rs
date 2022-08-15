@@ -195,7 +195,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
         let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize + 1);
         fields_info.push(FieldInfo::new_deletion_flag());
         for _ in 0..num_fields {
-            let info = FieldInfo::read_from(&mut source, &encoding).map_err(|error| Error {
+            let info = FieldInfo::read_from(&mut source).map_err(|error| Error {
                 record_num: 0,
                 field: None,
                 kind: error,

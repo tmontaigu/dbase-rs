@@ -51,8 +51,10 @@
 //! the [ReadbableRecord](trait.ReadableRecord.html) trait to "deserialize" the record into
 //! your custom struct:
 //!
-//! ```
+//!```
 //! use std::io::{Read, Seek};
+//! use dbase::Encoding;
+//!
 //! struct StationRecord {
 //!     name: String,
 //!     marker_col: String,
@@ -61,9 +63,10 @@
 //! }
 //!
 //! impl dbase::ReadableRecord for StationRecord {
-//!     fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
-//!          where T: Read + Seek{
-//!         Ok(Self {
+//!     fn read_using<T, E>(field_iterator: &mut dbase::FieldIterator<T, E>) -> Result<Self, dbase::FieldIOError>
+//!          where T: Read + Seek,
+//!                 E: Encoding {
+//!         use dbase::Encoding;Ok(Self {
 //!             name: field_iterator.read_next_field_as()?.value,
 //!             marker_col: field_iterator.read_next_field_as()?.value,
 //!             marker_sym: field_iterator.read_next_field_as()?.value,
@@ -139,7 +142,7 @@
 //! # Ok(())
 //! # }
 //!
-//! # #[cfg(feature = "yore")]
+//! # #[cfg(not(feature = "yore"))]
 //! # fn main() {
 //! # }
 //! ```
