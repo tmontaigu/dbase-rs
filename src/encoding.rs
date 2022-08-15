@@ -1,6 +1,6 @@
 //! Support for working with different codepages / encodings.
 
-use crate::error::DecodeError;
+use crate::error::{DecodeError, EncodeError};
 use std::borrow::Cow;
 
 /// Trait for reading strings from the database files.
@@ -13,24 +13,33 @@ use std::borrow::Cow;
 pub trait Encoding {
     /// Decode encoding into UTF-8 string. If codepoints can't be represented, an error is returned.
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError>;
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError>;
 }
 
 /// This unit struct can be used as an [`Encoding`] to try to decode characters as Unicode,
 /// falling back to the replacement character for unknown codepoints.
+#[derive(Copy, Clone)]
 pub struct UnicodeLossy;
 
 /// This unit struct can be used as an [`Encoding`] to try to decode a string as Unicode,
 /// and returning an error if unknown codepoints are encountered.
+#[derive(Copy, Clone)]
 pub struct Unicode;
 
 /// This unit struct can be used as an [`Encoding`] to try to decode characters as ASCII,
 /// and returning an error if non-ascii codepoints are encountered.
+#[derive(Copy, Clone)]
 pub struct Ascii;
 
 /// Tries to decode as Unicode, replaces unknown codepoints with the replacement character.
 impl Encoding for UnicodeLossy {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         Ok(String::from_utf8_lossy(bytes))
+    }
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
+        Ok(s.as_bytes().into())
     }
 }
 
@@ -40,6 +49,10 @@ impl Encoding for Unicode {
         String::from_utf8(bytes.to_vec())
             .map(Cow::Owned)
             .map_err(DecodeError::FromUtf8)
+    }
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
+        Ok(s.as_bytes().into())
     }
 }
 
@@ -54,6 +67,10 @@ impl Encoding for Ascii {
             Err(DecodeError::NotAscii)
         }
     }
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
+        Ok(s.as_bytes().into())
+    }
 }
 
 #[cfg(feature = "yore")]
@@ -63,5 +80,9 @@ where
 {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         self.decode(bytes).map_err(Into::into)
+    }
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
+        self.encode(s).map_err(Into::into)
     }
 }

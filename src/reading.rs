@@ -20,7 +20,7 @@ use crate::{Encoding, FieldConversionError};
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
 
-const BACKLINK_SIZE: u16 = 263;
+pub(crate) const BACKLINK_SIZE: u16 = 263;
 
 /// Trait to be implemented by structs that represent records read from a
 /// dBase file.
@@ -128,9 +128,10 @@ impl AsMut<HashMap<String, FieldValue>> for Record {
 ///
 /// You can get this by using [Reader::into_table_info].
 #[derive(Clone, Debug)]
-pub struct TableInfo {
+pub struct TableInfo<E> {
     pub(crate) header: Header,
     pub(crate) fields_info: Vec<FieldInfo>,
+    pub(crate) encoding: E,
 }
 
 /// Struct with the handle to the source .dbf file
@@ -185,6 +186,9 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
         let offset = if header.file_type.is_visual_fox_pro() {
+            if BACKLINK_SIZE > header.offset_to_first_record {
+                panic!("Invalid file");
+            }
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
             header.offset_to_first_record
@@ -306,10 +310,11 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     /// # }
     ///
     /// ```
-    pub fn into_table_info(self) -> TableInfo {
+    pub fn into_table_info(self) -> TableInfo<E> {
         TableInfo {
             header: self.header,
             fields_info: self.fields_info,
+            encoding: self.encoding,
         }
     }
 }

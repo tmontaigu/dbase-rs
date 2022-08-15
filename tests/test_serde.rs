@@ -9,13 +9,16 @@ mod serde_tests {
 
     use serde_derive::{Deserialize, Serialize};
 
-    use dbase::{ErrorKind, FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
+    use dbase::{
+        Encoding, ErrorKind, FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord,
+    };
     use std::fmt::Debug;
 
-    fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
-        records: &Vec<R>,
-        writer_builder: TableWriterBuilder,
-    ) {
+    fn write_read_compare<R, E>(records: &Vec<R>, writer_builder: TableWriterBuilder<E>)
+    where
+        R: WritableRecord + ReadableRecord + Debug + PartialEq,
+        E: Encoding,
+    {
         let mut dst = Cursor::new(Vec::<u8>::new());
         let writer = writer_builder.build_with_dest(&mut dst);
 

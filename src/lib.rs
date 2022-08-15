@@ -178,8 +178,8 @@
 //! # }
 //! ```
 //!
-//! ```
-//! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, FieldIOError};
+//!```
+//! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, FieldIOError, Encoding};
 //! use std::convert::TryFrom;
 //! use std::io::{Cursor, Write};
 //!
@@ -189,7 +189,9 @@
 //! }
 //!
 //! impl WritableRecord for User {
-//!     fn write_using<'a, W: Write>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError> {
+//!     fn write_using<'a, W, E>(&self, field_writer: &mut FieldWriter<'a, W, E>) -> Result<(), FieldIOError>
+//!         where W: Write,
+//!               E: Encoding, {
 //!         field_writer.write_next_field_value(&self.nick_name)?;
 //!         field_writer.write_next_field_value(&self.age)?;
 //!         Ok(())
@@ -261,6 +263,9 @@ mod de;
 #[cfg(feature = "serde")]
 mod ser;
 
+#[cfg(feature = "yore")]
+pub use yore;
+
 mod encoding;
 mod error;
 mod header;
@@ -324,7 +329,9 @@ macro_rules! dbase_record {
         }
 
        impl dbase::WritableRecord for $name {
-           fn write_using<'a, W: std::io::Write>(&self, field_writer: &mut dbase::FieldWriter<'a, W>) -> Result<(), dbase::FieldIOError> {
+           fn write_using<'a, W, E>(&self, field_writer: &mut dbase::FieldWriter<'a, W, E>) -> Result<(), dbase::FieldIOError>
+           where W: std::io::Write,
+                 E: $crate::Encoding{
                 $(
                     field_writer.write_next_field_value(&self.$field_name)?;
                 )+

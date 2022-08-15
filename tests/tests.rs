@@ -16,10 +16,11 @@ const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.
 #[cfg(feature = "yore")]
 const CP850_DBF: &str = "tests/data/cp850.dbf";
 
-fn write_read_compare<R: WritableRecord + ReadableRecord + Debug + PartialEq>(
-    records: &Vec<R>,
-    writer_builder: TableWriterBuilder,
-) {
+fn write_read_compare<R, E>(records: &Vec<R>, writer_builder: TableWriterBuilder<E>)
+where
+    R: WritableRecord + ReadableRecord + Debug + PartialEq,
+    E: Encoding,
+{
     let mut dst = Cursor::new(Vec::<u8>::new());
     let writer = writer_builder.build_with_dest(&mut dst);
 
@@ -122,9 +123,9 @@ impl ReadableRecord for Album {
 }
 
 impl WritableRecord for Album {
-    fn write_using<'a, W: Write>(
+    fn write_using<'a, W: Write, E: Encoding>(
         &self,
-        field_writer: &mut FieldWriter<'a, W>,
+        field_writer: &mut FieldWriter<'a, W, E>,
     ) -> Result<(), FieldIOError> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;
@@ -268,6 +269,24 @@ fn the_classical_user_record_example() {
 fn non_unicode_codepages() {
     let mut reader =
         dbase::Reader::from_path_with_encoding(CP850_DBF, yore::code_pages::CP850).unwrap();
+    let records = reader.read().unwrap();
+
+    assert_eq!(
+        records[0].get("TEXT"),
+        Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+    );
+
+    // Write back with same encoding
+    let mut cursor = Cursor::new(Vec::<u8>::new());
+    {
+        let writer = TableWriterBuilder::from_reader(reader).build_with_dest(&mut cursor);
+        writer.write_records(&records).unwrap();
+    }
+
+    cursor.set_position(0);
+
+    // Read again
+    let mut reader = Reader::new_with_encoding(cursor, yore::code_pages::CP850).unwrap();
     let records = reader.read().unwrap();
 
     assert_eq!(

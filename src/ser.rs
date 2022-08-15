@@ -3,22 +3,22 @@ use std::io::Write;
 
 use crate::record::field::FieldType;
 use crate::writing::FieldWriter;
-use crate::{Date, FieldIOError};
+use crate::{Date, Encoding, FieldIOError};
 use crate::{ErrorKind, WritableRecord};
 
 impl<T> WritableRecord for T
 where
     T: Serialize,
 {
-    fn write_using<'a, W: Write>(
+    fn write_using<'a, W: Write, E: Encoding>(
         &self,
-        field_writer: &mut FieldWriter<'a, W>,
+        field_writer: &mut FieldWriter<'a, W, E>,
     ) -> Result<(), FieldIOError> {
         self.serialize(field_writer)
     }
 }
 
-impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> Serializer for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
     type SerializeSeq = Self;
@@ -212,7 +212,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -232,7 +232,7 @@ impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeStruct for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -252,7 +252,7 @@ impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeSeq for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -268,7 +268,7 @@ impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeMap for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -291,7 +291,7 @@ impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -307,7 +307,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W>
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
@@ -323,7 +323,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> 
     }
 }
 
-impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
+impl<'a, W: Write, E: Encoding> serde::ser::SerializeTuple for &mut FieldWriter<'a, W, E> {
     type Ok = ();
     type Error = FieldIOError;
 
