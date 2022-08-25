@@ -10,7 +10,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::iter::FusedIterator;
 use std::path::Path;
 
-use crate::encoding::UnicodeLossy;
+use crate::encoding::{DynEncoding, UnicodeLossy};
 use crate::error::{Error, ErrorKind, FieldIOError};
 use crate::header::Header;
 use crate::record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
@@ -32,10 +32,9 @@ pub(crate) const BACKLINK_SIZE: u16 = 263;
 pub trait ReadableRecord: Sized {
     /// function to be implemented that returns a new instance of your type
     /// using values read from the `FieldIterator'
-    fn read_using<T, E>(field_iterator: &mut FieldIterator<T, E>) -> Result<Self, FieldIOError>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
     where
-        T: Read + Seek,
-        E: Encoding;
+        T: Read + Seek;
 }
 
 /// Type definition of a generic record.
@@ -46,10 +45,9 @@ pub struct Record {
 }
 
 impl ReadableRecord for Record {
-    fn read_using<T, E>(field_iterator: &mut FieldIterator<T, E>) -> Result<Self, FieldIOError>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
-        E: Encoding,
     {
         let mut map = HashMap::<String, FieldValue>::new();
         for result in field_iterator {
@@ -127,26 +125,27 @@ impl AsMut<HashMap<String, FieldValue>> for Record {
 /// with the same record structure as another dbase file.
 ///
 /// You can get this by using [Reader::into_table_info].
-#[derive(Clone, Debug)]
-pub struct TableInfo<E> {
+#[derive(Clone)]
+pub struct TableInfo {
     pub(crate) header: Header,
     pub(crate) fields_info: Vec<FieldInfo>,
-    pub(crate) encoding: E,
+    pub(crate) encoding: DynEncoding,
 }
 
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
-#[derive(Clone, Debug)]
-pub struct Reader<T: Read + Seek, E: Encoding> {
+// TODO Debug impl
+#[derive(Clone)]
+pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
     source: T,
     memo_reader: Option<MemoReader<T>>,
     header: Header,
     fields_info: Vec<FieldInfo>,
-    encoding: E,
+    encoding: DynEncoding,
 }
 
-impl<T: Read + Seek> Reader<T, UnicodeLossy> {
+impl<T: Read + Seek> Reader<T> {
     /// Creates a new reader from the source.
     ///
     /// Reads the header and fields information as soon as its created.
@@ -176,13 +175,14 @@ impl<T: Read + Seek> Reader<T, UnicodeLossy> {
     pub fn new(source: T) -> Result<Self, Error> {
         Self::new_with_encoding(source, UnicodeLossy)
     }
-}
 
-impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     /// Creates a new reader from the source and reads strings using the encoding provided.
     ///
     /// See [`Self::new`] for more information.
-    pub fn new_with_encoding(mut source: T, encoding: E) -> Result<Self, Error> {
+    pub fn new_with_encoding<E: Encoding + 'static>(
+        mut source: T,
+        encoding: E,
+    ) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
         let offset = if header.file_type.is_visual_fox_pro() {
@@ -222,7 +222,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
             memo_reader: None,
             header,
             fields_info,
-            encoding,
+            encoding: DynEncoding::new(encoding),
         })
     }
 
@@ -237,7 +237,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     }
 
     /// Creates an iterator of records of the type you want
-    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R, E> {
+    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
         let record_size: usize = self
             .fields_info
             .iter()
@@ -253,7 +253,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     }
 
     /// Shortcut function to get an iterator over the [Records](struct.Record.html) in the file
-    pub fn iter_records(&mut self) -> RecordIterator<T, Record, E> {
+    pub fn iter_records(&mut self) -> RecordIterator<T, Record> {
         self.iter_records_as::<Record>()
     }
 
@@ -310,7 +310,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     /// # }
     ///
     /// ```
-    pub fn into_table_info(self) -> TableInfo<E> {
+    pub fn into_table_info(self) -> TableInfo {
         TableInfo {
             header: self.header,
             fields_info: self.fields_info,
@@ -319,7 +319,7 @@ impl<T: Read + Seek, E: Encoding> Reader<T, E> {
     }
 }
 
-impl Reader<BufReader<File>, UnicodeLossy> {
+impl Reader<BufReader<File>> {
     /// Creates a new dbase Reader from a path
     ///
     /// # Example
@@ -333,11 +333,12 @@ impl Reader<BufReader<File>, UnicodeLossy> {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         Self::from_path_with_encoding(path, UnicodeLossy)
     }
-}
 
-impl<E: Encoding> Reader<BufReader<File>, E> {
     /// Creates a new dbase Reader from a path and reads string using the encoding provided.
-    pub fn from_path_with_encoding<P: AsRef<Path>>(path: P, encoding: E) -> Result<Self, Error> {
+    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
+        path: P,
+        encoding: E,
+    ) -> Result<Self, Error> {
         let p = path.as_ref().to_owned();
         let bufreader =
             BufReader::new(File::open(path).map_err(|error| Error::io_error(error, 0))?);
@@ -385,7 +386,7 @@ pub struct NamedValue<'a, T> {
 ///
 /// When trying to read more fields than there are, an EndOfRecord error
 /// will be returned.
-pub struct FieldIterator<'a, T: Read + Seek, E: Encoding> {
+pub struct FieldIterator<'a, T: Read + Seek> {
     /// The source from where we read the data
     pub(crate) source: &'a mut std::io::Cursor<Vec<u8>>,
     /// The fields that make the record
@@ -395,10 +396,10 @@ pub struct FieldIterator<'a, T: Read + Seek, E: Encoding> {
     /// Buffer where field data is stored
     field_data_buffer: &'a mut [u8; 255],
     /// The string encoding
-    encoding: &'a E,
+    encoding: &'a DynEncoding,
 }
 
-impl<'a, T: Read + Seek, E: Encoding> FieldIterator<'a, T, E> {
+impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     /// Reads the next field and returns its name and value
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
@@ -538,7 +539,7 @@ impl<'a, T: Read + Seek, E: Encoding> FieldIterator<'a, T, E> {
             field_data_buffer,
             self.memo_reader,
             field_info,
-            self.encoding,
+            &*self.encoding,
         ) {
             Ok(value) => Ok(value),
             Err(kind) => Err(FieldIOError {
@@ -549,7 +550,7 @@ impl<'a, T: Read + Seek, E: Encoding> FieldIterator<'a, T, E> {
     }
 }
 
-impl<'a, T: Read + Seek, E: Encoding> Iterator for FieldIterator<'a, T, E> {
+impl<'a, T: Read + Seek> Iterator for FieldIterator<'a, T> {
     type Item = Result<NamedValue<'a, FieldValue>, FieldIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -563,11 +564,11 @@ impl<'a, T: Read + Seek, E: Encoding> Iterator for FieldIterator<'a, T, E> {
     }
 }
 
-impl<'a, T: Read + Seek, E: Encoding> FusedIterator for FieldIterator<'a, T, E> {}
+impl<'a, T: Read + Seek> FusedIterator for FieldIterator<'a, T> {}
 
 /// Iterator over records contained in the dBase
-pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord, E: Encoding> {
-    reader: &'a mut Reader<T, E>,
+pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
+    reader: &'a mut Reader<T>,
     record_type: std::marker::PhantomData<R>,
     current_record: u32,
     record_data_buffer: std::io::Cursor<Vec<u8>>,
@@ -576,7 +577,7 @@ pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord, E: Encoding> {
     field_data_buffer: [u8; 255],
 }
 
-impl<'a, T: Read + Seek, R: ReadableRecord, E: Encoding> Iterator for RecordIterator<'a, T, R, E> {
+impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R> {
     type Item = Result<R, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -600,7 +601,6 @@ impl<'a, T: Read + Seek, R: ReadableRecord, E: Encoding> Iterator for RecordIter
             let record = R::read_using(&mut iter)
                 .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
                 .map_err(|error| Error::new(error, self.current_record as usize));
-
             self.current_record += 1;
             Some(record)
         }

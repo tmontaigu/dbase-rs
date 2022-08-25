@@ -4,7 +4,7 @@ extern crate dbase;
 use std::io::{Cursor, Read, Seek, Write};
 
 use dbase::{
-    Date, DateTime, Encoding, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
+    Date, DateTime, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
     ReadableRecord, Reader, Record, TableWriterBuilder, Time, WritableRecord,
 };
 use std::convert::{TryFrom, TryInto};
@@ -16,10 +16,9 @@ const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.
 #[cfg(feature = "yore")]
 const CP850_DBF: &str = "tests/data/cp850.dbf";
 
-fn write_read_compare<R, E>(records: &Vec<R>, writer_builder: TableWriterBuilder<E>)
+fn write_read_compare<R>(records: &Vec<R>, writer_builder: TableWriterBuilder)
 where
     R: WritableRecord + ReadableRecord + Debug + PartialEq,
-    E: Encoding,
 {
     let mut dst = Cursor::new(Vec::<u8>::new());
     let writer = writer_builder.build_with_dest(&mut dst);
@@ -107,10 +106,9 @@ struct Album {
 }
 
 impl ReadableRecord for Album {
-    fn read_using<T, E>(field_iterator: &mut FieldIterator<T, E>) -> Result<Self, FieldIOError>
+    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
-        E: Encoding,
     {
         Ok(Self {
             artist: field_iterator.read_next_field_as()?.value,
@@ -123,9 +121,9 @@ impl ReadableRecord for Album {
 }
 
 impl WritableRecord for Album {
-    fn write_using<'a, W: Write, E: Encoding>(
+    fn write_using<'a, W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W, E>,
+        field_writer: &mut FieldWriter<'a, W>,
     ) -> Result<(), FieldIOError> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;

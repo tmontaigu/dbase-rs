@@ -2,6 +2,7 @@
 
 use crate::error::{DecodeError, EncodeError};
 use std::borrow::Cow;
+use std::fmt::Debug;
 
 /// Trait for reading strings from the database files.
 ///
@@ -10,26 +11,45 @@ use std::borrow::Cow;
 /// If the `yore` feature is on, this is implemented by all [`yore::CodePage`].
 ///
 /// Note: This trait might be extended with an `encode` function in the future.
-pub trait Encoding {
+pub trait Encoding: EncodingClone {
     /// Decode encoding into UTF-8 string. If codepoints can't be represented, an error is returned.
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError>;
 
     fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError>;
 }
 
+pub trait EncodingClone {
+    fn clone_box(&self) -> Box<dyn Encoding>;
+}
+
+impl<T> EncodingClone for T
+where
+    T: 'static + Encoding + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Encoding> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Encoding> {
+    fn clone(&self) -> Box<dyn Encoding> {
+        self.clone_box()
+    }
+}
+
 /// This unit struct can be used as an [`Encoding`] to try to decode characters as Unicode,
 /// falling back to the replacement character for unknown codepoints.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct UnicodeLossy;
 
 /// This unit struct can be used as an [`Encoding`] to try to decode a string as Unicode,
 /// and returning an error if unknown codepoints are encountered.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Unicode;
 
 /// This unit struct can be used as an [`Encoding`] to try to decode characters as ASCII,
 /// and returning an error if non-ascii codepoints are encountered.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Ascii;
 
 /// Tries to decode as Unicode, replaces unknown codepoints with the replacement character.
@@ -73,10 +93,33 @@ impl Encoding for Ascii {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct DynEncoding {
+    inner: Box<dyn Encoding>,
+}
+
+impl DynEncoding {
+    pub(crate) fn new<E: Encoding + 'static>(encoding: E) -> Self {
+        Self {
+            inner: Box::new(encoding) as Box<dyn Encoding>,
+        }
+    }
+}
+
+impl Encoding for DynEncoding {
+    fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
+        self.inner.decode(bytes)
+    }
+
+    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
+        self.inner.encode(s)
+    }
+}
+
 #[cfg(feature = "yore")]
 impl<T> Encoding for T
 where
-    T: yore::CodePage,
+    T: 'static + yore::CodePage + Clone,
 {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         self.decode(bytes).map_err(Into::into)

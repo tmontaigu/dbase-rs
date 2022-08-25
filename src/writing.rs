@@ -5,6 +5,7 @@ use std::path::Path;
 
 use byteorder::WriteBytesExt;
 
+use crate::encoding::DynEncoding;
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{TableInfo, BACKLINK_SIZE};
@@ -35,32 +36,30 @@ const FILE_TERMINATOR: u8 = 0x1A;
 ///     .add_character_field(FieldName::try_from("Last Name").unwrap(), 50)
 ///     .build_with_dest(Cursor::new(Vec::<u8>::new()));
 /// ```
-pub struct TableWriterBuilder<E> {
+pub struct TableWriterBuilder {
     v: Vec<FieldInfo>,
     hdr: Header,
-    encoding: E,
+    encoding: DynEncoding,
 }
 
-impl TableWriterBuilder<UnicodeLossy> {
+impl TableWriterBuilder {
     /// Creates a new builder with an empty dBase record definition
     ///
     /// Sets the encoding to [UnicodeLossy]
-    pub fn new() -> TableWriterBuilder<UnicodeLossy> {
-        TableWriterBuilder::<UnicodeLossy> {
-            v: vec![],
-            hdr: Header::new(0, 0, 0),
-            encoding: UnicodeLossy,
-        }
-    }
-}
-
-impl<E: Encoding> TableWriterBuilder<E> {
-    /// Creates a new builder with an empty dBase record definition with the given encoding
-    pub fn with_encoding(encoding: E) -> TableWriterBuilder<E> {
+    pub fn new() -> Self {
         Self {
             v: vec![],
             hdr: Header::new(0, 0, 0),
-            encoding,
+            encoding: DynEncoding::new(UnicodeLossy),
+        }
+    }
+
+    /// Creates a new builder with an empty dBase record definition with the given encoding
+    pub fn with_encoding<E: Encoding + 'static>(encoding: E) -> Self {
+        Self {
+            v: vec![],
+            hdr: Header::new(0, 0, 0),
+            encoding: DynEncoding::new(encoding),
         }
     }
 
@@ -83,13 +82,11 @@ impl<E: Encoding> TableWriterBuilder<E> {
     /// let writing_result = writer.write_records(&stations);
     /// assert_eq!(writing_result.is_ok(), true);
     /// ```
-    pub fn from_reader<T: std::io::Read + std::io::Seek>(
-        reader: crate::reading::Reader<T, E>,
-    ) -> Self {
+    pub fn from_reader<T: std::io::Read + Seek>(reader: crate::reading::Reader<T>) -> Self {
         Self::from_table_info(reader.into_table_info())
     }
 
-    pub fn from_table_info(table_info: TableInfo<E>) -> Self {
+    pub fn from_table_info(table_info: TableInfo) -> Self {
         let mut fields_info = table_info.fields_info;
         if let Some(i) = fields_info.first() {
             if i.is_deletion_flag() {
@@ -107,12 +104,9 @@ impl<E: Encoding> TableWriterBuilder<E> {
     }
 
     /// Changes the encoding of the writer.
-    pub fn set_encoding<E2: Encoding>(self, encoding: E2) -> TableWriterBuilder<E2> {
-        TableWriterBuilder {
-            v: self.v,
-            hdr: self.hdr,
-            encoding,
-        }
+    pub fn set_encoding<E: Encoding + 'static>(mut self, encoding: E) -> Self {
+        self.encoding = DynEncoding::new(encoding);
+        self
     }
 
     /// Adds a Character field to the record definition,
@@ -221,7 +215,7 @@ impl<E: Encoding> TableWriterBuilder<E> {
         self
     }
     /// Builds the writer and set the dst as where the file data will be written
-    pub fn build_with_dest<W: Write + Seek>(self, dst: W) -> TableWriter<W, E> {
+    pub fn build_with_dest<W: Write + Seek>(self, dst: W) -> TableWriter<W> {
         TableWriter::new(dst, self.v, self.hdr, self.encoding)
     }
 
@@ -232,13 +226,13 @@ impl<E: Encoding> TableWriterBuilder<E> {
     pub fn build_with_file_dest<P: AsRef<Path>>(
         self,
         path: P,
-    ) -> Result<TableWriter<BufWriter<File>, E>, Error> {
+    ) -> Result<TableWriter<BufWriter<File>>, Error> {
         let file = File::create(path).map_err(|err| Error::io_error(err, 0))?;
         let dst = BufWriter::new(file);
         Ok(self.build_with_dest(dst))
     }
 
-    pub fn build_table_info(self) -> TableInfo<E> {
+    pub fn build_table_info(self) -> TableInfo {
         TableInfo {
             header: self.hdr,
             fields_info: self.v,
@@ -288,16 +282,16 @@ pub trait WritableAsDbaseField: private::Sealed {
 /// a dBase file
 pub trait WritableRecord {
     /// Use the FieldWriter to write the fields of the record
-    fn write_using<'a, W: Write, E: Encoding>(
+    fn write_using<'a, W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W, E>,
+        field_writer: &mut FieldWriter<'a, W>,
     ) -> Result<(), FieldIOError>;
 }
 
 impl WritableRecord for Record {
-    fn write_using<'a, W: Write, E: Encoding>(
+    fn write_using<'a, W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W, E>,
+        field_writer: &mut FieldWriter<'a, W>,
     ) -> Result<(), FieldIOError> {
         while let Some(name) = field_writer.next_field_name() {
             let value = self.get(name).ok_or_else(|| {
@@ -320,14 +314,14 @@ impl WritableRecord for Record {
 /// You give it the values you want to write and it writes them.
 /// The order and type of value must match the one given when creating the
 /// [TableWriter](struct.TableWriter.html), otherwise an error will occur.
-pub struct FieldWriter<'a, W: Write, E> {
+pub struct FieldWriter<'a, W: Write> {
     pub(crate) dst: &'a mut W,
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     pub(crate) buffer: &'a mut Cursor<Vec<u8>>,
-    pub(crate) encoding: &'a E,
+    pub(crate) encoding: &'a DynEncoding,
 }
 
-impl<'a, W: Write, E: Encoding> FieldWriter<'a, W, E> {
+impl<'a, W: Write> FieldWriter<'a, W> {
     /// Returns the name of the next field that is expected to be written
     pub fn next_field_name(&mut self) -> Option<&'a str> {
         self.fields_info.peek().map(|info| info.name.as_str())
@@ -422,7 +416,7 @@ impl<'a, W: Write, E: Encoding> FieldWriter<'a, W, E> {
 ///
 /// The only way to create a TableWriter is to use its
 /// [TableWriterBuilder](struct.TableWriterBuilder.html)
-pub struct TableWriter<W: Write + Seek, E: Encoding> {
+pub struct TableWriter<W: Write + Seek> {
     dst: W,
     fields_info: Vec<FieldInfo>,
     /// contains the header of the input file
@@ -431,11 +425,16 @@ pub struct TableWriter<W: Write + Seek, E: Encoding> {
     /// Buffer used by the FieldWriter
     buffer: Cursor<Vec<u8>>,
     closed: bool,
-    encoding: E,
+    encoding: DynEncoding,
 }
 
-impl<W: Write + Seek, E: Encoding> TableWriter<W, E> {
-    fn new(dst: W, fields_info: Vec<FieldInfo>, origin_header: Header, encoding: E) -> Self {
+impl<W: Write + Seek> TableWriter<W> {
+    fn new(
+        dst: W,
+        fields_info: Vec<FieldInfo>,
+        origin_header: Header,
+        encoding: DynEncoding,
+    ) -> Self {
         Self {
             dst,
             fields_info,
@@ -518,9 +517,8 @@ impl<W: Write + Seek, E: Encoding> TableWriter<W, E> {
     /// }
     ///
     /// impl WritableRecord for User {
-    ///     fn write_using<'a, W, E>(&self,field_writer: &mut FieldWriter<'a, W, E>) -> Result<(), FieldIOError>
-    ///         where W: Write,
-    ///               E: Encoding {
+    ///     fn write_using<'a, W>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError>
+    ///         where W: Write {
     ///         field_writer.write_next_field_value(&self.first_name)
     ///     }
     /// }
@@ -617,7 +615,7 @@ impl<W: Write + Seek, E: Encoding> TableWriter<W, E> {
     }
 }
 
-impl<T: Write + Seek, E: Encoding> Drop for TableWriter<T, E> {
+impl<T: Write + Seek> Drop for TableWriter<T> {
     fn drop(&mut self) {
         let _ = self.close();
     }

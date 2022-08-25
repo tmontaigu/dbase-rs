@@ -63,9 +63,9 @@
 //! }
 //!
 //! impl dbase::ReadableRecord for StationRecord {
-//!     fn read_using<T, E>(field_iterator: &mut dbase::FieldIterator<T, E>) -> Result<Self, dbase::FieldIOError>
-//!          where T: Read + Seek,
-//!                 E: Encoding {
+//!     fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
+//!          where T: Read + Seek
+//!    {
 //!         use dbase::Encoding;Ok(Self {
 //!             name: field_iterator.read_next_field_as()?.value,
 //!             marker_col: field_iterator.read_next_field_as()?.value,
@@ -189,9 +189,9 @@
 //! }
 //!
 //! impl WritableRecord for User {
-//!     fn write_using<'a, W, E>(&self, field_writer: &mut FieldWriter<'a, W, E>) -> Result<(), FieldIOError>
-//!         where W: Write,
-//!               E: Encoding, {
+//!     fn write_using<'a, W>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError>
+//!         where W: Write
+//!     {
 //!         field_writer.write_next_field_value(&self.nick_name)?;
 //!         field_writer.write_next_field_value(&self.age)?;
 //!         Ok(())
@@ -315,8 +315,8 @@ macro_rules! dbase_record {
         }
 
         impl dbase::ReadableRecord for $name {
-            fn read_using<T, E>(field_iterator: &mut dbase::FieldIterator<T, E>) -> Result<Self, dbase::FieldIOError>
-                where T: std::io::Read + std::io::Seek, E: $crate::Encoding
+            fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
+                where T: std::io::Read + std::io::Seek
                 {
                     Ok(Self {
                         $(
@@ -329,9 +329,9 @@ macro_rules! dbase_record {
         }
 
        impl dbase::WritableRecord for $name {
-           fn write_using<'a, W, E>(&self, field_writer: &mut dbase::FieldWriter<'a, W, E>) -> Result<(), dbase::FieldIOError>
+           fn write_using<'a, W>(&self, field_writer: &mut dbase::FieldWriter<'a, W>) -> Result<(), dbase::FieldIOError>
            where W: std::io::Write,
-                 E: $crate::Encoding{
+           {
                 $(
                     field_writer.write_next_field_value(&self.$field_name)?;
                 )+
