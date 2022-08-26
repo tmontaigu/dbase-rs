@@ -1,7 +1,8 @@
-use crate::{FieldConversionError, FieldInfo};
+use crate::{CodePageMark, FieldConversionError, FieldInfo};
 use std::string::FromUtf8Error;
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ErrorKind {
     /// Wrapper of `std::io::Error` to forward any reading/writing error
     IoError(std::io::Error),
@@ -27,6 +28,8 @@ pub enum ErrorKind {
     /// The type of the value for the field is not compatible with the
     /// dbase field's type
     IncompatibleType,
+    /// The Code Page is not supported
+    UnsupportedCodePage(CodePageMark),
     /// A string from the database could not be decoded
     StringDecodeError(DecodeError),
     /// A string from the database could not be encoded
@@ -194,6 +197,7 @@ impl std::error::Error for FieldIOError {
             ErrorKind::IncompatibleType => "The types are not compatible",
             ErrorKind::StringDecodeError(_) => "A string from the database could not be decoded",
             ErrorKind::StringEncodeError(_) => "A string from the database could not be encoded",
+            ErrorKind::UnsupportedCodePage(_) => "The code page is not supported",
             ErrorKind::Message(ref msg) => msg,
         }
     }

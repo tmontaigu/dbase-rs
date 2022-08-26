@@ -209,11 +209,11 @@
 //!     age: 32.0,
 //! };
 //!
-//! writer.write_record(&records);
+//! writer.write_record(&records).unwrap();
 //! ```
 //!
 //! If you use the serde optional feature and serde_derive crate you can have the
-//! [WritableRecord](trait.WritableRecord.html) impletemented for you.
+//! [WritableRecord](trait.WritableRecord.html) implemented for you.
 //!
 //! ```
 //! # #[cfg(feature = "serde")]
@@ -275,6 +275,7 @@ mod writing;
 
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
+pub use crate::header::CodePageMark;
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
 };

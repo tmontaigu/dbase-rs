@@ -5,7 +5,7 @@ use std::path::Path;
 
 use byteorder::WriteBytesExt;
 
-use crate::encoding::DynEncoding;
+use crate::encoding::{AsCodePageMark, DynEncoding};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{TableInfo, BACKLINK_SIZE};
@@ -585,6 +585,7 @@ impl<W: Write + Seek> TableWriter<W> {
 
         self.header.offset_to_first_record = offset_to_first_record as u16;
         self.header.size_of_record = size_of_record;
+        self.header.code_page_mark = self.encoding.code_page_mark();
     }
 
     fn write_header(&mut self) -> Result<(), Error> {

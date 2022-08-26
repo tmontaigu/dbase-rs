@@ -10,11 +10,12 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::iter::FusedIterator;
 use std::path::Path;
 
-use crate::encoding::{DynEncoding, UnicodeLossy};
+use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
 use crate::header::Header;
 use crate::record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use crate::record::FieldInfo;
+use crate::ErrorKind::UnsupportedCodePage;
 use crate::{Encoding, FieldConversionError};
 
 /// Value of the byte between the last RecordFieldInfo and the first record
@@ -172,17 +173,7 @@ impl<T: Read + Seek> Reader<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(source: T) -> Result<Self, Error> {
-        Self::new_with_encoding(source, UnicodeLossy)
-    }
-
-    /// Creates a new reader from the source and reads strings using the encoding provided.
-    ///
-    /// See [`Self::new`] for more information.
-    pub fn new_with_encoding<E: Encoding + 'static>(
-        mut source: T,
-        encoding: E,
-    ) -> Result<Self, Error> {
+    pub fn new(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
         let offset = if header.file_type.is_visual_fox_pro() {
@@ -217,13 +208,26 @@ impl<T: Read + Seek> Reader<T> {
             .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
             .map_err(|error| Error::io_error(error, 0))?;
 
+        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
+            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
+            Error::new(field_error, 0)
+        })?;
         Ok(Self {
             source,
             memo_reader: None,
             header,
             fields_info,
-            encoding: DynEncoding::new(encoding),
+            encoding,
         })
+    }
+
+    /// Creates a new reader from the source and reads strings using the encoding provided.
+    ///
+    /// See [`Self::new`] for more information.
+    pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
+        let mut reader = Self::new(source)?;
+        reader.encoding = DynEncoding::new(encoding);
+        Ok(reader)
     }
 
     /// Returns the header of the file
@@ -331,18 +335,10 @@ impl Reader<BufReader<File>> {
     /// # }
     /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        Self::from_path_with_encoding(path, UnicodeLossy)
-    }
-
-    /// Creates a new dbase Reader from a path and reads string using the encoding provided.
-    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
-        path: P,
-        encoding: E,
-    ) -> Result<Self, Error> {
         let p = path.as_ref().to_owned();
         let bufreader =
             BufReader::new(File::open(path).map_err(|error| Error::io_error(error, 0))?);
-        let mut reader = Reader::new_with_encoding(bufreader, encoding)?;
+        let mut reader = Reader::new(bufreader)?;
         let at_least_one_field_is_memo = reader
             .fields_info
             .iter()
@@ -367,6 +363,16 @@ impl Reader<BufReader<File>> {
                 reader.memo_reader = Some(memo_reader);
             }
         }
+        Ok(reader)
+    }
+
+    /// Creates a new dbase Reader from a path and reads string using the encoding provided.
+    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
+        path: P,
+        encoding: E,
+    ) -> Result<Self, Error> {
+        let mut reader = Self::from_path(path)?;
+        reader.encoding = DynEncoding::new(encoding);
         Ok(reader)
     }
 }
