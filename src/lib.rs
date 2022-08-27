@@ -266,7 +266,7 @@ mod ser;
 #[cfg(feature = "yore")]
 pub use yore;
 
-mod encoding;
+pub mod encoding;
 mod error;
 mod header;
 mod reading;

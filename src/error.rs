@@ -38,6 +38,7 @@ pub enum ErrorKind {
 }
 
 /// The error type for this crate
+#[derive(Debug)]
 pub struct Error {
     pub(crate) record_num: usize,
     pub(crate) field: Option<FieldInfo>,
@@ -145,60 +146,79 @@ impl From<FieldConversionError> for FieldIOError {
     }
 }
 
-impl std::fmt::Debug for Error {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(field_info) = &self.field {
             write!(
                 f,
-                "ReadingError {{ record_num: {}, kind: {:?}, {} }}",
+                "Error {{ record_num: {}, kind: {}, {} }}",
                 self.record_num, self.kind, field_info
             )
         } else {
             write!(
                 f,
-                "ReadingError {{ record_num: {}, kind: {:?} }}",
+                "Error {{ record_num: {}, kind: {} }}",
                 self.record_num, self.kind
             )
         }
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+// impl std::fmt::Display for Error {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self)
+//     }
+// }
 
 impl std::error::Error for Error {}
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for FieldIOError {
-    fn description(&self) -> &str {
-        match self.kind {
-            ErrorKind::IoError(_) => "An I/O error happened",
-            ErrorKind::ParseFloatError(_) => "Float value could not be obtained",
-            ErrorKind::ParseIntError(_) => "Float value could not be obtained",
-            ErrorKind::InvalidFieldType(_) => "The FieldType code is note a valid one",
-            ErrorKind::MissingMemoFile => "The memo file could not be found",
-            ErrorKind::ErrorOpeningMemoFile(_) => {
-                "An error occurred when trying to open the memo file"
+        match self {
+            ErrorKind::IoError(err) => write!(f, "An I/O error happened: {}", err),
+            ErrorKind::ParseFloatError(err) => {
+                write!(f, "Float value could not be obtained: {}", err)
             }
-            ErrorKind::BadConversion(_) => "The convertion cannot be made",
-            ErrorKind::EndOfRecord => "End of record reached, no more fields left",
+            ErrorKind::ParseIntError(err) => {
+                write!(f, "Integer value could not be obtained: {}", err)
+            }
+            ErrorKind::InvalidFieldType(c) => {
+                write!(f, "The FieldType code '{}' is note a valid one", c)
+            }
+            ErrorKind::MissingMemoFile => write!(f, "The memo file could not be found"),
+            ErrorKind::ErrorOpeningMemoFile(err) => {
+                write!(
+                    f,
+                    "An error occurred when trying to open the memo file: {}",
+                    err
+                )
+            }
+            ErrorKind::BadConversion(err) => write!(f, "The convertion cannot be made: {}", err),
+            ErrorKind::EndOfRecord => write!(f, "End of record reached, no more fields left"),
             ErrorKind::NotEnoughFields => {
-                "The writer did not expected that many fields for the record"
+                write!(
+                    f,
+                    "The writer did not expected that many fields for the record"
+                )
             }
-            ErrorKind::TooManyFields => "The writer expected to write more fields for the record",
-            ErrorKind::IncompatibleType => "The types are not compatible",
-            ErrorKind::StringDecodeError(_) => "A string from the database could not be decoded",
-            ErrorKind::StringEncodeError(_) => "A string from the database could not be encoded",
-            ErrorKind::UnsupportedCodePage(_) => "The code page is not supported",
-            ErrorKind::Message(ref msg) => msg,
+            ErrorKind::TooManyFields => {
+                write!(f, "The writer expected to write more fields for the record")
+            }
+            ErrorKind::IncompatibleType => write!(f, "The types are not compatible"),
+            ErrorKind::StringDecodeError(err) => write!(
+                f,
+                "A string from the database could not be decoded: {}",
+                err
+            ),
+            ErrorKind::StringEncodeError(err) => write!(
+                f,
+                "A string from the database could not be encoded: {}",
+                err
+            ),
+            ErrorKind::UnsupportedCodePage(code) => {
+                write!(f, "The code page '{:?}' is not supported", code)
+            }
+            ErrorKind::Message(ref msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -206,16 +226,14 @@ impl std::error::Error for FieldIOError {
 impl std::fmt::Display for FieldIOError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(field_info) = &self.field {
-            write!(
-                f,
-                "FieldIOError {{ kind: {:?}, {} }}",
-                self.kind, field_info
-            )
+            write!(f, "FieldIOError {{ kind: {}, {} }}", self.kind, field_info)
         } else {
-            write!(f, "ReadingError {{ kind: {:?} }}", self.kind)
+            write!(f, "FieldIOError {{ kind: {:?} }}", self.kind)
         }
     }
 }
+
+impl std::error::Error for FieldIOError {}
 
 #[derive(Debug)]
 #[non_exhaustive]

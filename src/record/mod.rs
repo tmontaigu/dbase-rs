@@ -202,6 +202,22 @@ pub enum FieldConversionError {
     NoneValue,
 }
 
+impl std::fmt::Display for FieldConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldConversionError::FieldTypeNotAsExpected { expected, actual } => {
+                write!(f, "Cannot convert from {} to {}", expected, actual)
+            }
+            FieldConversionError::IncompatibleType => write!(f, "The type is not compatible"),
+            FieldConversionError::NoneValue => {
+                write!(f, "Value is not initialized, which is not allowed")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FieldConversionError {}
+
 macro_rules! impl_try_from_field_value_for_ {
     (FieldValue::$variant:ident => $out_type:ty) => {
         impl TryFrom<FieldValue> for $out_type {
