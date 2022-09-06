@@ -1,7 +1,7 @@
-# Next
+# 0.3.0
     - Replaced `chrono` with `time` v0.3
     - Added support for reading/writing non-unicode database files via custom encodings.
-      The optional `yore` feature/crate can be used for support for basic codepages.
+      The optional `yore` feature/crate can be used for supporting basic codepages.
       The `code_page_mark` contained in the header is used to create the correct decoder.
     - Fixed writing visual fox pro files
     - Added `FieldType` to publicly exported types
