@@ -226,8 +226,12 @@ impl<T: Read + Seek> Reader<T> {
     /// See [`Self::new`] for more information.
     pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
         let mut reader = Self::new(source)?;
-        reader.encoding = DynEncoding::new(encoding);
+        reader.set_encoding(encoding);
         Ok(reader)
+    }
+
+    pub fn set_encoding<E: Encoding + 'static>(&mut self, encoding: E) {
+        self.encoding = DynEncoding::new(encoding);
     }
 
     /// Returns the header of the file
