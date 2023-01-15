@@ -402,7 +402,7 @@ impl Date {
     ///
     /// panics if the year has more than 4 digits or if the day is greater than 31 or
     /// the month greater than 12
-    pub fn new(day: u32, month: u32, year: u32) -> Self {
+    pub const fn new(day: u32, month: u32, year: u32) -> Self {
         if year > 9999 {
             panic!("Year cannot have more than 4 digits")
         }
