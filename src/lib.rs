@@ -304,15 +304,15 @@ pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableR
 macro_rules! dbase_record {
     (
         $(#[derive($($derives:meta),*)])?
-        struct $name:ident {
-            $( $field_name:ident: $field_type:ty),+
+        $vis:vis struct $name:ident {
+            $( $visf:vis $field_name:ident: $field_type:ty),+
             $(,)?
         }
     ) => {
 
         $(#[derive($($derives),*)])?
-        struct $name {
-            $($field_name: $field_type),+
+        $vis struct $name {
+            $($visf $field_name: $field_type),+
         }
 
         impl dbase::ReadableRecord for $name {
