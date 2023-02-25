@@ -63,15 +63,17 @@
 //! }
 //!
 //! impl dbase::ReadableRecord for StationRecord {
-//!     fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
-//!          where T: Read + Seek
+//!     fn read_using<R1, R2>(field_iterator: &mut dbase::FieldIterator<R1, R2>) -> Result<Self, dbase::FieldIOError>
+//!          where R1: Read + Seek,
+//!                R2: Read + Seek,
 //!    {
-//!         use dbase::Encoding;Ok(Self {
-//!             name: field_iterator.read_next_field_as()?.value,
-//!             marker_col: field_iterator.read_next_field_as()?.value,
-//!             marker_sym: field_iterator.read_next_field_as()?.value,
-//!             line: field_iterator.read_next_field_as()?.value,
-//!         })
+//!        use dbase::Encoding;
+//!        Ok(Self {
+//!            name: field_iterator.read_next_field_as()?.value,
+//!            marker_col: field_iterator.read_next_field_as()?.value,
+//!            marker_sym: field_iterator.read_next_field_as()?.value,
+//!            line: field_iterator.read_next_field_as()?.value,
+//!        })
 //!     }
 //! }
 //! # fn main() -> Result<(), dbase::Error> {
@@ -268,10 +270,13 @@ pub use yore;
 
 pub mod encoding;
 mod error;
+mod file;
 mod header;
 mod reading;
 mod record;
 mod writing;
+
+pub use file::{FieldRef, File, RecordRef};
 
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
@@ -316,8 +321,9 @@ macro_rules! dbase_record {
         }
 
         impl dbase::ReadableRecord for $name {
-            fn read_using<T>(field_iterator: &mut dbase::FieldIterator<T>) -> Result<Self, dbase::FieldIOError>
-                where T: std::io::Read + std::io::Seek
+            fn read_using<Source, MemoSource>(field_iterator: &mut dbase::FieldIterator<Source, MemoSource>) -> Result<Self, dbase::FieldIOError>
+                where Source: std::io::Read + std::io::Seek,
+                      MemoSource: std::io::Read + std::io::Seek
                 {
                     Ok(Self {
                         $(

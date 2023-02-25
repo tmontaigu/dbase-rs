@@ -8,7 +8,11 @@ use crate::{
     ErrorKind, FieldConversionError, FieldIOError, FieldIterator, FieldValue, ReadableRecord,
 };
 
-impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
+impl<'de, 'a, 'f, R1, R2> SeqAccess<'de> for &mut FieldIterator<'a, R1, R2>
+where
+    R1: Read + Seek,
+    R2: Read + Seek,
+{
     type Error = FieldIOError;
 
     fn next_element_seed<T>(
@@ -27,7 +31,11 @@ impl<'de, 'a, 'f, R: Read + Seek> SeqAccess<'de> for &mut FieldIterator<'a, R> {
 }
 
 //TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
-impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T> {
+impl<'de, 'a, 'f, T, R> Deserializer<'de> for &mut FieldIterator<'a, T, R>
+where
+    T: Read + Seek,
+    R: Read + Seek,
+{
     type Error = FieldIOError;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -324,9 +332,10 @@ impl<'de, 'a, 'f, T: Read + Seek> Deserializer<'de> for &mut FieldIterator<'a, T
 }
 
 impl<S: DeserializeOwned> ReadableRecord for S {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
+    fn read_using<T, R>(field_iterator: &mut FieldIterator<T, R>) -> Result<Self, FieldIOError>
     where
         T: Read + Seek,
+        R: Read + Seek,
     {
         S::deserialize(field_iterator)
     }

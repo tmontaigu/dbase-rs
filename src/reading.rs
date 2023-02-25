@@ -1,7 +1,5 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
-use byteorder::ReadBytesExt;
-
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -15,7 +13,6 @@ use crate::error::{Error, ErrorKind, FieldIOError};
 use crate::header::Header;
 use crate::record::field::{FieldType, FieldValue, MemoFileType, MemoReader};
 use crate::record::FieldInfo;
-use crate::ErrorKind::UnsupportedCodePage;
 use crate::{Encoding, FieldConversionError};
 
 /// Value of the byte between the last RecordFieldInfo and the first record
@@ -33,9 +30,12 @@ pub(crate) const BACKLINK_SIZE: u16 = 263;
 pub trait ReadableRecord: Sized {
     /// function to be implemented that returns a new instance of your type
     /// using values read from the `FieldIterator'
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
+    fn read_using<Source, MemoSource>(
+        field_iterator: &mut FieldIterator<Source, MemoSource>,
+    ) -> Result<Self, FieldIOError>
     where
-        T: Read + Seek;
+        Source: Read + Seek,
+        MemoSource: Read + Seek;
 }
 
 /// Type definition of a generic record.
@@ -46,9 +46,12 @@ pub struct Record {
 }
 
 impl ReadableRecord for Record {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
+    fn read_using<Source, MemoSource>(
+        field_iterator: &mut FieldIterator<Source, MemoSource>,
+    ) -> Result<Self, FieldIOError>
     where
-        T: Read + Seek,
+        Source: Read + Seek,
+        MemoSource: Read + Seek,
     {
         let mut map = HashMap::<String, FieldValue>::new();
         for result in field_iterator {
@@ -173,51 +176,14 @@ impl<T: Read + Seek> Reader<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(mut source: T) -> Result<Self, Error> {
-        let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
-
-        let offset = if header.file_type.is_visual_fox_pro() {
-            if BACKLINK_SIZE > header.offset_to_first_record {
-                panic!("Invalid file");
-            }
-            header.offset_to_first_record - BACKLINK_SIZE
-        } else {
-            header.offset_to_first_record
-        };
-        let num_fields =
-            (offset as usize - Header::SIZE - std::mem::size_of::<u8>()) / FieldInfo::SIZE;
-
-        let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize + 1);
-        fields_info.push(FieldInfo::new_deletion_flag());
-        for _ in 0..num_fields {
-            let info = FieldInfo::read_from(&mut source).map_err(|error| Error {
-                record_num: 0,
-                field: None,
-                kind: error,
-            })?;
-            fields_info.push(info);
-        }
-
-        let terminator = source
-            .read_u8()
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        debug_assert_eq!(terminator, TERMINATOR_VALUE);
-
-        source
-            .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
-            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
-            Error::new(field_error, 0)
-        })?;
+    pub fn new(source: T) -> Result<Self, Error> {
+        let file = crate::File::new(source)?;
         Ok(Self {
-            source,
+            source: file.inner,
             memo_reader: None,
-            header,
-            fields_info,
-            encoding,
+            header: file.header,
+            fields_info: file.fields_info,
+            encoding: file.encoding,
         })
     }
 
@@ -396,20 +362,20 @@ pub struct NamedValue<'a, T> {
 ///
 /// When trying to read more fields than there are, an EndOfRecord error
 /// will be returned.
-pub struct FieldIterator<'a, T: Read + Seek> {
+pub struct FieldIterator<'a, Source: Read + Seek, MemoSource: Read + Seek> {
     /// The source from where we read the data
-    pub(crate) source: &'a mut std::io::Cursor<Vec<u8>>,
-    /// The fields that make the record
+    pub(crate) source: &'a mut Source,
+    /// The fields that make the records
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     /// The source where the Memo field data is read
-    pub(crate) memo_reader: &'a mut Option<MemoReader<T>>,
+    pub(crate) memo_reader: &'a mut Option<MemoReader<MemoSource>>,
     /// Buffer where field data is stored
-    field_data_buffer: &'a mut [u8; 255],
+    pub(crate) field_data_buffer: &'a mut [u8; 255],
     /// The string encoding
-    encoding: &'a DynEncoding,
+    pub(crate) encoding: &'a DynEncoding,
 }
 
-impl<'a, T: Read + Seek> FieldIterator<'a, T> {
+impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source, MemoSource> {
     /// Reads the next field and returns its name and value
     ///
     /// If the "DeletionFlag" field is present in the file it won't be returned
@@ -560,7 +526,9 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     }
 }
 
-impl<'a, T: Read + Seek> Iterator for FieldIterator<'a, T> {
+impl<'a, Source: Read + Seek, MemoSource: Read + Seek> Iterator
+    for FieldIterator<'a, Source, MemoSource>
+{
     type Item = Result<NamedValue<'a, FieldValue>, FieldIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -574,7 +542,10 @@ impl<'a, T: Read + Seek> Iterator for FieldIterator<'a, T> {
     }
 }
 
-impl<'a, T: Read + Seek> FusedIterator for FieldIterator<'a, T> {}
+impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
+    for FieldIterator<'a, Source, MemoSource>
+{
+}
 
 /// Iterator over records contained in the dBase
 pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {

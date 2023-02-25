@@ -106,9 +106,10 @@ struct Album {
 }
 
 impl ReadableRecord for Album {
-    fn read_using<T>(field_iterator: &mut FieldIterator<T>) -> Result<Self, FieldIOError>
+    fn read_using<R1, R2>(field_iterator: &mut FieldIterator<R1, R2>) -> Result<Self, FieldIOError>
     where
-        T: Read + Seek,
+        R1: Read + Seek,
+        R2: Read + Seek,
     {
         Ok(Self {
             artist: field_iterator.read_next_field_as()?.value,

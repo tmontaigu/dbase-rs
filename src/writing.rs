@@ -317,7 +317,7 @@ impl WritableRecord for Record {
 pub struct FieldWriter<'a, W: Write> {
     pub(crate) dst: &'a mut W,
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
-    pub(crate) buffer: &'a mut Cursor<Vec<u8>>,
+    pub(crate) field_buffer: &'a mut Cursor<&'a mut [u8]>,
     pub(crate) encoding: &'a DynEncoding,
 }
 
@@ -344,25 +344,25 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         field_value: &T,
     ) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
-            self.buffer.set_position(0);
+            self.field_buffer.set_position(0);
 
             field_value
-                .write_as(field_info, self.encoding, &mut self.buffer)
+                .write_as(field_info, self.encoding, &mut self.field_buffer)
                 .map_err(|kind| FieldIOError::new(kind, Some(field_info.clone())))?;
 
-            let bytes_written = self.buffer.position();
+            let bytes_written = self.field_buffer.position();
             let bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
             if bytes_to_pad > 0 {
                 for _ in 0..bytes_to_pad {
-                    write!(self.buffer, " ").map_err(|error| {
+                    write!(self.field_buffer, " ").map_err(|error| {
                         FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                     })?;
                 }
             }
             // If the current field value size exceeds the one one set
             // when creating the writer, it will be cropped
-            let field_bytes = self.buffer.get_ref();
-            debug_assert_eq!(self.buffer.position(), field_info.field_length as u64);
+            let field_bytes = self.field_buffer.get_ref();
+            debug_assert_eq!(self.field_buffer.position(), field_info.field_length as u64);
             self.dst
                 .write_all(&field_bytes[..field_info.field_length as usize])
                 .map_err(|error| {
@@ -403,7 +403,12 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         }
     }
 
-    fn write_deletion_flag(&mut self) -> std::io::Result<()> {
+    pub(crate) fn write_deletion_flag(&mut self) -> std::io::Result<()> {
+        if let Some(info) = self.fields_info.peek() {
+            if info.is_deletion_flag() {
+                self.fields_info.next();
+            }
+        }
         self.dst.write_u8(b' ')
     }
 
@@ -423,7 +428,7 @@ pub struct TableWriter<W: Write + Seek> {
     /// if this writer was created form a reader
     header: Header,
     /// Buffer used by the FieldWriter
-    buffer: Cursor<Vec<u8>>,
+    buffer: [u8; 255],
     closed: bool,
     encoding: DynEncoding,
 }
@@ -439,7 +444,7 @@ impl<W: Write + Seek> TableWriter<W> {
             dst,
             fields_info,
             header: origin_header,
-            buffer: Cursor::new(vec![0u8; 255]),
+            buffer: [0u8; 255],
             closed: false,
             encoding,
         }
@@ -475,7 +480,7 @@ impl<W: Write + Seek> TableWriter<W> {
         let mut field_writer = FieldWriter {
             dst: &mut self.dst,
             fields_info: self.fields_info.iter().peekable(),
-            buffer: &mut self.buffer,
+            field_buffer: &mut Cursor::new(&mut self.buffer),
             encoding: &self.encoding,
         };
 

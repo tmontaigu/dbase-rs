@@ -405,6 +405,16 @@ impl Header {
         dest.write_u8(0)?;
         Ok(())
     }
+
+    pub(crate) fn record_position(&self, index: usize) -> Option<usize> {
+        if index >= self.num_records as usize {
+            None
+        } else {
+            let offset =
+                self.offset_to_first_record as usize + (index * self.size_of_record as usize);
+            Some(offset)
+        }
+    }
 }
 
 #[cfg(test)]
