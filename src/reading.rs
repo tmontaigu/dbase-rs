@@ -1,6 +1,7 @@
 //! Module with the definition of fn's and struct's to read .dbf files
 
 use byteorder::ReadBytesExt;
+use std::borrow::Cow;
 
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
@@ -53,7 +54,7 @@ impl ReadableRecord for Record {
         let mut map = HashMap::<String, FieldValue>::new();
         for result in field_iterator {
             let NamedValue { name, value } = result?;
-            map.insert(name.to_owned(), value);
+            map.insert(name.to_owned().into(), value);
         }
         Ok(Self { map })
     }
@@ -385,7 +386,7 @@ impl Reader<BufReader<File>> {
 /// of the field it belongs to
 pub struct NamedValue<'a, T> {
     /// Reference to the field name the value belongs to
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// The value
     pub value: T,
 }
@@ -437,7 +438,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
     pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
         self.read_next_field_impl()
             .map(|(field_info, field_value)| NamedValue {
-                name: field_info.name(),
+                name: field_info.name().into(),
                 value: field_value,
             })
     }
@@ -454,7 +455,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
         self.read_next_field_impl()
             .and_then(|(field_info, field_value)| match F::try_from(field_value) {
                 Ok(v) => Ok(NamedValue {
-                    name: field_info.name(),
+                    name: field_info.name().into(),
                     value: v,
                 }),
                 Err(e) => Err(FieldIOError::new(e.into(), Some(field_info.to_owned()))),
@@ -526,7 +527,7 @@ impl<'a, T: Read + Seek> FieldIterator<'a, T> {
             })?;
 
         Ok(NamedValue {
-            name: field_info.name(),
+            name: field_info.name().into(),
             value,
         })
     }
