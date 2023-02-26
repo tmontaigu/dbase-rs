@@ -3,7 +3,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::encoding::DynEncoding;
 use std::io::{Read, Write};
 
-use crate::field::field::Date;
+use crate::field::types::Date;
 use crate::memo::MemoFileType;
 
 // Used this as source: https://blog.codetitans.pl/post/dbf-and-language-code-page/

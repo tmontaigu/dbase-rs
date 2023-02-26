@@ -6,7 +6,7 @@ use std::path::Path;
 use byteorder::WriteBytesExt;
 
 use crate::encoding::{AsCodePageMark, DynEncoding};
-use crate::field::{field::FieldType, FieldInfo, FieldName};
+use crate::field::{types::FieldType, FieldInfo, FieldName};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{TableInfo, BACKLINK_SIZE};
@@ -260,10 +260,10 @@ mod private {
     impl_sealed_for!(i32);
     impl_sealed_for!(Option<f64>);
     impl_sealed_for!(Option<f32>);
-    impl_sealed_for!(crate::field::field::Date);
-    impl_sealed_for!(Option<crate::field::field::Date>);
-    impl_sealed_for!(crate::field::field::FieldValue);
-    impl_sealed_for!(crate::field::field::DateTime);
+    impl_sealed_for!(crate::field::types::Date);
+    impl_sealed_for!(Option<crate::field::types::Date>);
+    impl_sealed_for!(crate::field::types::FieldValue);
+    impl_sealed_for!(crate::field::types::DateTime);
 }
 
 /// Trait implemented by types we can write as dBase types

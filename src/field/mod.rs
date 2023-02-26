@@ -3,9 +3,9 @@ use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-pub mod field;
+pub mod types;
 
-use self::field::{Date, DateTime, FieldType};
+use self::types::{Date, DateTime, FieldType};
 use crate::{Encoding, ErrorKind, FieldValue};
 
 const DELETION_FLAG_NAME: &str = "DeletionFlag";
@@ -258,8 +258,8 @@ impl_try_from_field_value_for_!(FieldValue::Numeric => Option<f64>);
 impl_try_from_field_value_for_!(FieldValue::Float => Option<f32>);
 impl_try_from_field_value_for_!(FieldValue::Float(Some(v)) => f32);
 
-impl_try_from_field_value_for_!(FieldValue::Date => Option<field::Date>);
-impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => field::Date);
+impl_try_from_field_value_for_!(FieldValue::Date => Option<types::Date>);
+impl_try_from_field_value_for_!(FieldValue::Date(Some(v)) => types::Date);
 
 impl_try_from_field_value_for_!(FieldValue::Character => Option<String>);
 impl_try_from_field_value_for_!(FieldValue::Character(Some(string)) => String);

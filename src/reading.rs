@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
-use crate::field::field::{FieldType, FieldValue};
+use crate::field::types::{FieldType, FieldValue};
 use crate::field::FieldInfo;
 use crate::header::Header;
 use crate::memo::{MemoFileType, MemoReader};
