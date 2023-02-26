@@ -275,6 +275,7 @@ mod file;
 mod header;
 mod memo;
 mod reading;
+mod record;
 mod writing;
 
 pub use file::{FieldRef, File, RecordRef};
@@ -285,8 +286,9 @@ pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time};
 pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::header::CodePageMark;
 pub use crate::reading::{
-    read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
+    read, FieldIterator, NamedValue, ReadableRecord, Reader, RecordIterator, TableInfo,
 };
+pub use crate::record::Record;
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
 /// macro to define a struct that implements the ReadableRecord and WritableRecord
