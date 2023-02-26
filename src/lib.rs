@@ -273,7 +273,7 @@ mod error;
 mod file;
 mod header;
 mod reading;
-mod record;
+mod field;
 mod writing;
 
 pub use file::{FieldRef, File, RecordRef};
@@ -284,8 +284,8 @@ pub use crate::header::CodePageMark;
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
 };
-pub use crate::record::field::{Date, DateTime, FieldType, FieldValue, Time};
-pub use crate::record::{FieldConversionError, FieldInfo, FieldName};
+pub use crate::field::field::{Date, DateTime, FieldType, FieldValue, Time};
+pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
 /// macro to define a struct that implements the ReadableRecord and WritableRecord

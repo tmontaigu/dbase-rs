@@ -9,7 +9,7 @@ use crate::encoding::{AsCodePageMark, DynEncoding};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{TableInfo, BACKLINK_SIZE};
-use crate::record::{field::FieldType, FieldInfo, FieldName};
+use crate::field::{field::FieldType, FieldInfo, FieldName};
 use crate::{Encoding, Error, ErrorKind, FieldIOError, Record, UnicodeLossy};
 
 /// A dbase file ends with this byte
@@ -260,10 +260,10 @@ mod private {
     impl_sealed_for!(i32);
     impl_sealed_for!(Option<f64>);
     impl_sealed_for!(Option<f32>);
-    impl_sealed_for!(crate::record::field::Date);
-    impl_sealed_for!(Option<crate::record::field::Date>);
-    impl_sealed_for!(crate::record::field::FieldValue);
-    impl_sealed_for!(crate::record::field::DateTime);
+    impl_sealed_for!(crate::field::field::Date);
+    impl_sealed_for!(Option<crate::field::field::Date>);
+    impl_sealed_for!(crate::field::field::FieldValue);
+    impl_sealed_for!(crate::field::field::DateTime);
 }
 
 /// Trait implemented by types we can write as dBase types

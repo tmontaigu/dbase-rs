@@ -7,7 +7,7 @@ use crate::Encoding;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::error::ErrorKind;
-use crate::record::FieldInfo;
+use crate::field::FieldInfo;
 use crate::writing::WritableAsDbaseField;
 
 /// The different types of Memo file structure there seem to exist
@@ -1041,7 +1041,7 @@ mod test {
     use super::*;
 
     use crate::encoding::UnicodeLossy;
-    use crate::record::FieldFlags;
+    use crate::field::FieldFlags;
     use std::io::Cursor;
 
     fn create_temp_field_info(field_type: FieldType, len: u8) -> FieldInfo {
@@ -1104,7 +1104,7 @@ mod test {
 
     #[test]
     fn test_write_read_integer_via_enum() {
-        use crate::record::FieldName;
+        use crate::field::FieldName;
 
         let value = FieldValue::Integer(1457);
 

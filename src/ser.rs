@@ -1,7 +1,7 @@
 use serde::{Serialize, Serializer};
 use std::io::Write;
 
-use crate::record::field::FieldType;
+use crate::field::field::FieldType;
 use crate::writing::FieldWriter;
 use crate::{Date, FieldIOError};
 use crate::{ErrorKind, WritableRecord};
