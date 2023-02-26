@@ -3,7 +3,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::encoding::DynEncoding;
 use std::io::{Read, Write};
 
-use crate::field::field::{Date, MemoFileType};
+use crate::field::field::Date;
+use crate::memo::MemoFileType;
 
 // Used this as source: https://blog.codetitans.pl/post/dbf-and-language-code-page/
 // also https://github.com/ethanfurman/dbf/blob/4f8ff35bec18ca167981ba741bfe353f5f362f99/dbf/__init__.py#L8299

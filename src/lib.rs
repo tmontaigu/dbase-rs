@@ -270,22 +270,23 @@ pub use yore;
 
 pub mod encoding;
 mod error;
+mod field;
 mod file;
 mod header;
+mod memo;
 mod reading;
-mod field;
 mod writing;
 
 pub use file::{FieldRef, File, RecordRef};
 
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
+pub use crate::field::field::{Date, DateTime, FieldType, FieldValue, Time};
+pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::header::CodePageMark;
 pub use crate::reading::{
     read, FieldIterator, NamedValue, ReadableRecord, Reader, Record, RecordIterator, TableInfo,
 };
-pub use crate::field::field::{Date, DateTime, FieldType, FieldValue, Time};
-pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
 /// macro to define a struct that implements the ReadableRecord and WritableRecord

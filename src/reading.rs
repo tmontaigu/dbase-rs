@@ -10,9 +10,10 @@ use std::path::Path;
 
 use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
-use crate::header::Header;
-use crate::field::field::{FieldType, FieldValue, MemoFileType, MemoReader};
+use crate::field::field::{FieldType, FieldValue};
 use crate::field::FieldInfo;
+use crate::header::Header;
+use crate::memo::{MemoFileType, MemoReader};
 use crate::{Encoding, FieldConversionError};
 
 /// Value of the byte between the last RecordFieldInfo and the first record
