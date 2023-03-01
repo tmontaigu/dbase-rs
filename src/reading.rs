@@ -90,7 +90,7 @@ impl<T: Read + Seek> Reader<T> {
     /// # }
     /// ```
     pub fn new(source: T) -> Result<Self, Error> {
-        let file = crate::File::new(source)?;
+        let file = crate::File::open(source)?;
         Ok(Self {
             source: file.inner,
             memo_reader: None,

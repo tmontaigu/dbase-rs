@@ -1,11 +1,11 @@
 use crate::encoding::DynEncoding;
 use crate::header::Header;
 use crate::reading::{BACKLINK_SIZE, TERMINATOR_VALUE};
-use crate::writing::WritableAsDbaseField;
+use crate::writing::{write_header_parts, WritableAsDbaseField};
 use crate::ErrorKind::UnsupportedCodePage;
 use crate::{
     Error, ErrorKind, FieldConversionError, FieldIOError, FieldInfo, FieldIterator, FieldValue,
-    FieldWriter, ReadableRecord, WritableRecord,
+    FieldWriter, ReadableRecord, TableInfo, WritableRecord,
 };
 use byteorder::ReadBytesExt;
 use std::fmt::{Debug, Formatter};
@@ -270,7 +270,7 @@ impl<T> File<T> {
 }
 
 impl<T: Read + Seek> File<T> {
-    pub fn new(mut source: T) -> Result<Self, Error> {
+    pub fn open(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
         let offset = if header.file_type.is_visual_fox_pro() {
@@ -339,6 +339,18 @@ impl<T: Read + Seek> File<T> {
 }
 
 impl<T: Write + Seek> File<T> {
+    pub fn create_new(mut dst: T, table_info: TableInfo) -> Result<Self, Error> {
+        write_header_parts(&mut dst, &table_info.header, &table_info.fields_info)?;
+
+        Ok(Self {
+            inner: dst,
+            header: table_info.header,
+            fields_info: table_info.fields_info,
+            encoding: table_info.encoding,
+            field_data_buffer: [0u8; 255],
+        })
+    }
+
     pub fn append_record<R>(&mut self, record: &R) -> Result<(), FieldIOError>
     where
         R: WritableRecord,
@@ -396,14 +408,14 @@ impl File<std::fs::File> {
         let file = options
             .open(path)
             .map_err(|error| Error::io_error(error, 0))?;
-        File::new(file)
+        File::open(file)
     }
 
     /// Opens an existing dBase file in read only mode
     pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = std::fs::File::open(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::new(file)
+        File::open(file)
     }
 
     /// Opens an existing dBase file in write only mode
@@ -427,9 +439,9 @@ impl File<std::fs::File> {
     }
 
     /// This function will create a file if it does not exist, and will truncate it if it does.
-    pub fn create<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+    pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
         let file = std::fs::File::create(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::new(file)
+        File::create_new(file, table_info)
     }
 }

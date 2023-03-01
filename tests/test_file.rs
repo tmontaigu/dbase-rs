@@ -90,7 +90,7 @@ fn test_file_read_only() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_file_read_write() -> Result<(), Box<dyn std::error::Error>> {
     let tmp_file = copy_to_tmp_file("tests/data/stations.dbf")?;
-    let mut file = dbase::File::new(tmp_file)?;
+    let mut file = dbase::File::open(tmp_file)?;
 
     assert_eq!(file.num_records(), 6);
 
@@ -236,6 +236,51 @@ fn test_file_append_record() -> Result<(), Box<dyn std::error::Error>> {
         let record = file.record(6).unwrap().read()?;
         assert_eq!(record, new_record);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_file_classical_user_record_example() -> Result<(), Box<dyn std::error::Error>> {
+    dbase::dbase_record! {
+        #[derive(Clone, Debug, PartialEq)]
+        struct User {
+            first_name: String,
+            last_name: String,
+        }
+    }
+
+    let users = vec![
+        User {
+            first_name: "Ferrys".to_string(),
+            last_name: "Rust".to_string(),
+        },
+        User {
+            first_name: "Alex".to_string(),
+            last_name: "Rider".to_string(),
+        },
+        User {
+            first_name: "Jamie".to_string(),
+            last_name: "Oliver".to_string(),
+        },
+    ];
+
+    let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let table_info = dbase::TableWriterBuilder::new()
+        .add_character_field("First Name".try_into().unwrap(), 50)
+        .add_character_field("Last Name".try_into().unwrap(), 50)
+        .build_table_info();
+
+    {
+        let mut file = dbase::File::create_new(&mut cursor, table_info)?;
+        file.append_records(&users)?;
+    }
+
+    cursor.set_position(0);
+
+    let mut reader = dbase::Reader::new(cursor).unwrap();
+    let read_records = reader.read_as::<User>().unwrap();
+    assert_eq!(read_records, users);
 
     Ok(())
 }

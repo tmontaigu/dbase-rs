@@ -15,6 +15,37 @@ use crate::{Encoding, Error, ErrorKind, FieldIOError, Record, UnicodeLossy};
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
+pub(crate) fn write_header_parts<W>(
+    dst: &mut W,
+    header: &Header,
+    fields_info: &[FieldInfo],
+) -> Result<(), Error>
+where
+    W: Write,
+{
+    header
+        .write_to(dst)
+        .map_err(|error| Error::io_error(error, 0))?;
+
+    for record_info in fields_info.iter() {
+        record_info
+            .write_to(dst)
+            .map_err(|error| Error::io_error(error, 0))?;
+    }
+    dst.write_u8(TERMINATOR_VALUE)
+        .map_err(|error| Error::io_error(error, 0))?;
+
+    // TODO foxpro adds this backlink thing
+    //  Since we don't have a spec for we just write zeros
+    if header.file_type.is_visual_fox_pro() {
+        for _ in 0..BACKLINK_SIZE {
+            dst.write_u8(0).map_err(|error| Error::io_error(error, 0))?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Builder to be used to create a [TableWriter](struct.TableWriter.html).
 ///
 /// The dBase format is akin to a database, thus you have to specify the fields
@@ -214,8 +245,28 @@ impl TableWriterBuilder {
         };
         self
     }
+
+    fn sync_header(&mut self) {
+        let mut offset_to_first_record =
+            Header::SIZE + (self.v.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
+
+        if self.hdr.file_type.is_visual_fox_pro() {
+            offset_to_first_record += BACKLINK_SIZE as usize;
+        }
+
+        let size_of_record = self
+            .v
+            .iter()
+            .fold(1u16, |s, info| s + info.field_length as u16);
+
+        self.hdr.offset_to_first_record = offset_to_first_record as u16;
+        self.hdr.size_of_record = size_of_record;
+        self.hdr.code_page_mark = self.encoding.code_page_mark();
+    }
+
     /// Builds the writer and set the dst as where the file data will be written
-    pub fn build_with_dest<W: Write + Seek>(self, dst: W) -> TableWriter<W> {
+    pub fn build_with_dest<W: Write + Seek>(mut self, dst: W) -> TableWriter<W> {
+        self.sync_header();
         TableWriter::new(dst, self.v, self.hdr, self.encoding)
     }
 
@@ -232,7 +283,8 @@ impl TableWriterBuilder {
         Ok(self.build_with_dest(dst))
     }
 
-    pub fn build_table_info(self) -> TableInfo {
+    pub fn build_table_info(mut self) -> TableInfo {
+        self.sync_header();
         TableInfo {
             header: self.hdr,
             fields_info: self.v,
@@ -562,7 +614,6 @@ impl<W: Write + Seek> TableWriter<W> {
             self.dst
                 .seek(SeekFrom::Start(0))
                 .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
-            self.update_header();
             self.write_header()?;
             self.dst
                 .seek(SeekFrom::End(0))
@@ -575,49 +626,8 @@ impl<W: Write + Seek> TableWriter<W> {
         Ok(())
     }
 
-    fn update_header(&mut self) {
-        let mut offset_to_first_record =
-            Header::SIZE + (self.fields_info.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
-
-        if self.header.file_type.is_visual_fox_pro() {
-            offset_to_first_record += BACKLINK_SIZE as usize;
-        }
-
-        let size_of_record = self
-            .fields_info
-            .iter()
-            .fold(1u16, |s, info| s + info.field_length as u16);
-
-        self.header.offset_to_first_record = offset_to_first_record as u16;
-        self.header.size_of_record = size_of_record;
-        self.header.code_page_mark = self.encoding.code_page_mark();
-    }
-
     fn write_header(&mut self) -> Result<(), Error> {
-        self.header
-            .write_to(&mut self.dst)
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        for record_info in &self.fields_info {
-            record_info
-                .write_to(&mut self.dst)
-                .map_err(|error| Error::io_error(error, 0))?;
-        }
-        self.dst
-            .write_u8(TERMINATOR_VALUE)
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        // TODO foxpro adds this backlink thing
-        //  Since we don't have a spec for we just write zeros
-        if self.header.file_type.is_visual_fox_pro() {
-            for _ in 0..BACKLINK_SIZE {
-                self.dst
-                    .write_u8(0)
-                    .map_err(|error| Error::io_error(error, 0))?;
-            }
-        }
-
-        Ok(())
+        write_header_parts(&mut self.dst, &self.header, &self.fields_info)
     }
 }
 
