@@ -51,7 +51,7 @@ impl_as_code_page_mark!(
 /// If the `yore` feature is on, this is implemented by all [`yore::CodePage`].
 ///
 /// Note: This trait might be extended with an `encode` function in the future.
-pub trait Encoding: EncodingClone + AsCodePageMark {
+pub trait Encoding: EncodingClone + AsCodePageMark + Send {
     /// Decode encoding into UTF-8 string. If codepoints can't be represented, an error is returned.
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError>;
 
@@ -170,7 +170,7 @@ impl Encoding for DynEncoding {
 #[cfg(feature = "yore")]
 impl<T> Encoding for T
 where
-    T: 'static + yore::CodePage + Clone + AsCodePageMark,
+    T: 'static + yore::CodePage + Clone + AsCodePageMark + Send,
 {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         self.decode(bytes).map_err(Into::into)
@@ -198,7 +198,7 @@ where
 #[cfg(feature = "yore")]
 impl<CP> Encoding for LossyCodePage<CP>
 where
-    CP: 'static + yore::CodePage + Clone + AsCodePageMark,
+    CP: 'static + yore::CodePage + Clone + AsCodePageMark + Send,
 {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         Ok(self.0.decode_lossy(bytes))

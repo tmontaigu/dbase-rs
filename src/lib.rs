@@ -268,6 +268,9 @@ mod ser;
 #[cfg(feature = "yore")]
 pub use yore;
 
+#[cfg(feature = "datafusion")]
+mod datafusion;
+
 pub mod encoding;
 mod error;
 mod field;
@@ -280,6 +283,8 @@ mod writing;
 
 pub use file::{FieldRef, File, RecordRef};
 
+#[cfg(feature = "datafusion")]
+pub use crate::datafusion::{DbaseTable, DbaseTableFactory};
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
 pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time};

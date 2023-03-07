@@ -314,6 +314,11 @@ impl Date {
         self.day
     }
 
+    pub fn to_unix_days(&self) -> i32 {
+        let julian_day = self.to_julian_day_number();
+        return julian_day - 2440588;
+    }
+
     // https://en.wikipedia.org/wiki/Julian_day
     // at "Julian or Gregorian calendar from Julian day number"
     fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
@@ -492,6 +497,13 @@ impl DateTime {
     /// Returns the [Time] part.
     pub fn time(&self) -> Time {
         self.time
+    }
+
+    pub fn to_unix_timestamp(&self) -> i64 {
+        return self.date().to_unix_days() as i64 * 86400
+            + self.time().hours() as i64 * 3600
+            + self.time().minutes() as i64 * 60
+            + self.time().seconds() as i64;
     }
 
     fn read_from<T: Read>(src: &mut T) -> Result<Self, ErrorKind> {
@@ -1017,5 +1029,21 @@ mod test {
             day: 20,
         };
         assert_eq!(date.to_julian_day_number(), 2458685);
+    }
+
+    #[test]
+    fn test_to_unix_days() {
+        let date = Date {
+            year: 1970,
+            month: 1,
+            day: 1,
+        };
+        assert_eq!(date.to_unix_days(), 0);
+    }
+
+    #[test]
+    fn test_to_unix_timestamp() {
+        let datetime = DateTime::new(Date::new(1, 1, 1970), Time::new(1, 1, 1));
+        assert_eq!(datetime.to_unix_timestamp(), 3661);
     }
 }
