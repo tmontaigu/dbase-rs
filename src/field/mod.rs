@@ -10,7 +10,7 @@ use self::types::FieldType;
 use crate::{Encoding, ErrorKind, FieldValue};
 pub use conversion::FieldConversionError;
 
-const DELETION_FLAG_NAME: &str = "DeletionFlag";
+pub(crate) const DELETION_FLAG_SIZE: usize = 1; // 1 byte
 const FIELD_NAME_LENGTH: usize = 11;
 
 #[derive(Debug)]
@@ -153,23 +153,6 @@ impl FieldInfo {
 
         Ok(())
     }
-
-    pub(crate) fn new_deletion_flag() -> Self {
-        Self {
-            name: DELETION_FLAG_NAME.to_owned(),
-            field_type: FieldType::Character,
-            displacement_field: [0u8; 4],
-            field_length: 1,
-            num_decimal_places: 0,
-            flags: FieldFlags(0u8),
-            autoincrement_next_val: [0u8; 5],
-            autoincrement_step: 0u8,
-        }
-    }
-
-    pub(crate) fn is_deletion_flag(&self) -> bool {
-        self.name == DELETION_FLAG_NAME
-    }
 }
 
 impl std::fmt::Display for FieldInfo {
@@ -182,6 +165,30 @@ impl std::fmt::Display for FieldInfo {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum DeletionFlag {
+    NotDeleted,
+    Deleted,
+}
+
+impl DeletionFlag {
+    pub(crate) fn read_from<T: Read>(source: &mut T) -> std::io::Result<Self> {
+        let byte = source.read_u8()?;
+        match byte {
+            0x20 => Ok(Self::NotDeleted),
+            0x2A => Ok(Self::Deleted),
+            // Silently consider other values as not deleted
+            _ => Ok(Self::NotDeleted),
+        }
+    }
+
+    pub(crate) fn write_to<T: Write>(self, dst: &mut T) -> std::io::Result<()> {
+        match self {
+            Self::NotDeleted => dst.write_u8(0x20),
+            Self::Deleted => dst.write_u8(0x2A),
+        }
+    }
+}
 /// Flags describing a field
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub(crate) struct FieldFlags(u8);

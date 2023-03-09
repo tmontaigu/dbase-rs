@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
 use crate::field::types::{FieldType, FieldValue};
-use crate::field::FieldInfo;
+use crate::field::{DeletionFlag, FieldInfo};
 use crate::header::Header;
 use crate::memo::{MemoFileType, MemoReader};
 use crate::{Encoding, FieldConversionError, Record};
@@ -290,29 +290,15 @@ pub struct FieldIterator<'a, Source: Read + Seek, MemoSource: Read + Seek> {
 
 impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source, MemoSource> {
     /// Reads the next field and returns its name and value
-    ///
-    /// If the "DeletionFlag" field is present in the file it won't be returned
-    /// and instead go to the next field.
     pub fn read_next_field_impl(&mut self) -> Result<(&'a FieldInfo, FieldValue), FieldIOError> {
         let field_info = self
             .fields_info
             .next()
             .ok_or_else(FieldIOError::end_of_record)?;
-        if field_info.is_deletion_flag() {
-            if let Err(e) = self.skip_field(field_info) {
-                Err(e)
-            } else {
-                self.read_next_field_impl()
-            }
-        } else {
-            Ok((field_info, self.read_field(field_info)?))
-        }
+        Ok((field_info, self.read_field(field_info)?))
     }
 
     /// Reads the next field and returns its name and value
-    ///
-    /// If the "DeletionFlag" field is present in the file it won't be returned
-    /// and instead go to the next field.
     pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
         self.read_next_field_impl()
             .map(|(field_info, field_value)| NamedValue {
@@ -323,9 +309,6 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
 
     /// Reads the next field and tries to convert into the requested type
     /// using [TryFrom]
-    ///
-    /// If the "DeletionFlag" field is present in the file it won't be returned
-    /// and instead go to the next field.
     pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, FieldIOError>
     where
         F: TryFrom<FieldValue, Error = FieldConversionError>,
@@ -371,32 +354,19 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
             .fields_info
             .next()
             .ok_or(FieldIOError::end_of_record())?;
-        if field_info.is_deletion_flag() {
-            self.skip_field(field_info)?;
-            self.read_next_field_raw()
-        } else {
-            let mut buf = vec![0u8; field_info.field_length as usize];
-            self.source.read_exact(&mut buf).map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-            })?;
-            Ok(buf)
-        }
+        let mut buf = vec![0u8; field_info.field_length as usize];
+        self.source.read_exact(&mut buf).map_err(|error| {
+            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
+        })?;
+        Ok(buf)
     }
 
     #[cfg(feature = "serde")]
     pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
-        let mut field_info = *self.fields_info.peek().ok_or(FieldIOError {
+        let field_info = *self.fields_info.peek().ok_or(FieldIOError {
             field: None,
             kind: ErrorKind::EndOfRecord,
         })?;
-        if field_info.is_deletion_flag() {
-            self.skip_field(field_info)?;
-            self.fields_info.next().unwrap();
-            field_info = self
-                .fields_info
-                .peek()
-                .ok_or(FieldIOError::end_of_record())?;
-        }
         let value = self.read_field(field_info)?;
         self.source
             .seek(SeekFrom::Current(-i64::from(field_info.field_length)))
@@ -478,6 +448,18 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
         if self.current_record >= self.reader.header.num_records {
             None
         } else {
+            let deletion_flag = DeletionFlag::read_from(&mut self.reader.source).ok()?;
+
+            if deletion_flag == DeletionFlag::Deleted {
+                self.reader
+                    .source
+                    .seek(SeekFrom::Current(
+                        self.record_data_buffer.get_ref().len() as i64
+                    ))
+                    .ok()?;
+                return self.next();
+            }
+
             self.reader
                 .source
                 .read_exact(self.record_data_buffer.get_mut())
@@ -527,10 +509,10 @@ mod test {
         let mut reader = Reader::new(file).unwrap();
         let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
 
-        // Do not count the the "DeletionFlag record info that is added
-        let mut expected_pos = Header::SIZE + ((reader.fields_info.len() - 1) * FieldInfo::SIZE);
-        // Add the terminator
+        let mut expected_pos = Header::SIZE + ((reader.fields_info.len()) * FieldInfo::SIZE);
+        // Don't forget terminator
         expected_pos += std::mem::size_of::<u8>();
+
         assert_eq!(pos_after_reading, expected_pos as u64);
     }
 }

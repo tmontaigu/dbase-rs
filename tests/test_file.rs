@@ -1,5 +1,7 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 
+const STATIONS_WITH_DELETED: &str = "./tests/data/stations_with_deleted.dbf";
+
 fn copy_to_tmp_file(origin: &str) -> std::io::Result<std::fs::File> {
     let mut data = vec![];
     std::fs::File::open(origin).and_then(|mut f| f.read_to_end(&mut data))?;
@@ -282,5 +284,17 @@ fn test_file_classical_user_record_example() -> Result<(), Box<dyn std::error::E
     let read_records = reader.read_as::<User>().unwrap();
     assert_eq!(read_records, users);
 
+    Ok(())
+}
+
+#[test]
+fn test_file_is_record_deleted() -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = dbase::File::open_read_only(STATIONS_WITH_DELETED)?;
+
+    let is_first_record_deleted = file.record(0).unwrap().is_deleted()?;
+    assert!(is_first_record_deleted);
+
+    let is_second_record_deleted = file.record(1).unwrap().is_deleted()?;
+    assert!(!is_second_record_deleted);
     Ok(())
 }

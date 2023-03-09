@@ -6,7 +6,7 @@ use std::path::Path;
 use byteorder::WriteBytesExt;
 
 use crate::encoding::{AsCodePageMark, DynEncoding};
-use crate::field::{types::FieldType, FieldInfo, FieldName};
+use crate::field::{types::FieldType, DeletionFlag, FieldInfo, FieldName};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{TableInfo, BACKLINK_SIZE};
@@ -118,12 +118,7 @@ impl TableWriterBuilder {
     }
 
     pub fn from_table_info(table_info: TableInfo) -> Self {
-        let mut fields_info = table_info.fields_info;
-        if let Some(i) = fields_info.first() {
-            if i.is_deletion_flag() {
-                fields_info.remove(0);
-            }
-        }
+        let fields_info = table_info.fields_info;
         let mut hdr = table_info.header;
         hdr.update_date();
         hdr.num_records = 0;
@@ -456,12 +451,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     }
 
     pub(crate) fn write_deletion_flag(&mut self) -> std::io::Result<()> {
-        if let Some(info) = self.fields_info.peek() {
-            if info.is_deletion_flag() {
-                self.fields_info.next();
-            }
-        }
-        self.dst.write_u8(b' ')
+        DeletionFlag::NotDeleted.write_to(self.dst)
     }
 
     fn all_fields_were_written(&mut self) -> bool {

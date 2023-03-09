@@ -13,6 +13,7 @@ use std::fmt::Debug;
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.dbf";
+const STATIONS_WITH_DELETED: &str = "./tests/data/stations_with_deleted.dbf";
 #[cfg(feature = "yore")]
 const CP850_DBF: &str = "tests/data/cp850.dbf";
 
@@ -292,4 +293,33 @@ fn non_unicode_codepages() {
         records[0].get("TEXT"),
         Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string())))
     );
+}
+
+dbase::dbase_record!(
+    #[derive(PartialOrd, PartialEq, Debug)]
+    struct StationRecord {
+        name: String,
+        marker_col: String,
+        marker_sym: String,
+        line: String,
+    }
+);
+
+#[test]
+fn test_record_marked_as_deleted_are_skipped_by_reader() -> Result<(), Box<dyn std::error::Error>> {
+    let mut reader = dbase::Reader::from_path(STATIONS_WITH_DELETED)?;
+    let records = reader.read_as::<StationRecord>()?;
+
+    // We have one deleted record in the file
+    assert_eq!(records.len() as u32, reader.header().num_records - 1);
+
+    let expected = StationRecord {
+        name: "Franconia-Springfield".to_string(),
+        marker_col: "#0000ff".to_string(),
+        marker_sym: "rail-metro".to_string(),
+        line: "blue".to_string(),
+    };
+    assert_eq!(records[0], expected);
+
+    Ok(())
 }

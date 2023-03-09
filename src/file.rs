@@ -1,4 +1,5 @@
 use crate::encoding::DynEncoding;
+use crate::field::{DeletionFlag, DELETION_FLAG_SIZE};
 use crate::header::Header;
 use crate::reading::{BACKLINK_SIZE, TERMINATOR_VALUE};
 use crate::writing::{write_header_parts, WritableAsDbaseField};
@@ -174,6 +175,19 @@ impl<'a, T> RecordRef<'a, T>
 where
     T: Read + Seek,
 {
+    pub fn is_deleted(&mut self) -> Result<bool, FieldIOError> {
+        let deletion_flag_pos = self.position_in_source() - DELETION_FLAG_SIZE as u64;
+        self.file
+            .inner
+            .seek(SeekFrom::Start(deletion_flag_pos))
+            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))?;
+
+        let deletion_flag = DeletionFlag::read_from(&mut self.file.inner)
+            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))?;
+
+        Ok(deletion_flag == DeletionFlag::Deleted)
+    }
+
     pub fn read(&mut self) -> Result<crate::Record, FieldIOError> {
         self.read_as()
     }
@@ -284,8 +298,7 @@ impl<T: Read + Seek> File<T> {
         let num_fields =
             (offset as usize - Header::SIZE - std::mem::size_of::<u8>()) / FieldInfo::SIZE;
 
-        let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize + 1);
-        fields_info.push(FieldInfo::new_deletion_flag());
+        let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields as usize);
         for _ in 0..num_fields {
             let info = FieldInfo::read_from(&mut source).map_err(|error| Error {
                 record_num: 0,
