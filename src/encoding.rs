@@ -120,10 +120,14 @@ impl Encoding for Unicode {
 /// Tries to decode as ASCII, if unrepresentable characters are found, an [`Err`] is returned.
 impl Encoding for Ascii {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
-        if bytes.is_ascii() {
+        // header can be ASCIIZ, terminated by \0, so only read up to this character
+        let zero_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        let str_bytes = &bytes[0..zero_pos];
+
+        if str_bytes.is_ascii() {
             // Since all ascii code points are compatible with utf-8
             // it is ok to unwrap here.
-            Ok(String::from_utf8(bytes.to_vec()).unwrap().into())
+            Ok(String::from_utf8(str_bytes.to_vec()).unwrap().into())
         } else {
             Err(DecodeError::NotAscii)
         }
