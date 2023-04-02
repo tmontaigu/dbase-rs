@@ -20,6 +20,9 @@ jobs:
       - name: Run test yore feature
         run: cargo test --features yore
 
+      - name: Run test datafusion feature
+        run: cargo test --features datafusion
+
       - name: Run test all feature
         run: cargo test --all-features
 
