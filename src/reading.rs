@@ -228,7 +228,7 @@ impl Reader<BufReader<File>> {
             .any(|f_info| f_info.field_type == FieldType::Memo);
 
         if at_least_one_field_is_memo {
-            let memo_type = dbg!(reader.header.file_type.supported_memo_type());
+            let memo_type = reader.header.file_type.supported_memo_type();
             if let Some(mt) = memo_type {
                 let memo_path = match mt {
                     MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
