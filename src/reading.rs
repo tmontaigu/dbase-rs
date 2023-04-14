@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
-use crate::field::types::{FieldType, FieldValue};
+use crate::field::types::{FieldType, FieldValue, TrimOption};
 use crate::field::{DeletionFlag, FieldInfo};
 use crate::header::Header;
 use crate::memo::{MemoFileType, MemoReader};
@@ -49,6 +49,30 @@ pub struct TableInfo {
     pub(crate) encoding: DynEncoding,
 }
 
+/// Options related to reading
+#[derive(Copy, Clone, Debug)]
+pub struct ReadingOptions {
+    character_trim: TrimOption,
+}
+
+impl Default for ReadingOptions {
+    fn default() -> Self {
+        Self {
+            character_trim: TrimOption::BeginEnd,
+        }
+    }
+}
+
+impl ReadingOptions {
+    /// Customize how spaces ` ` are trimmed within [FieldValue::Charater]
+    ///
+    /// By default they are trimmed at the begining and the end
+    pub fn character_trim(mut self, trim_option: TrimOption) -> Self {
+        self.character_trim = trim_option;
+        self
+    }
+}
+
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 // TODO Debug impl
@@ -60,6 +84,7 @@ pub struct Reader<T: Read + Seek> {
     header: Header,
     fields_info: Vec<FieldInfo>,
     encoding: DynEncoding,
+    options: ReadingOptions,
 }
 
 impl<T: Read + Seek> Reader<T> {
@@ -97,6 +122,7 @@ impl<T: Read + Seek> Reader<T> {
             header: file.header,
             fields_info: file.fields_info,
             encoding: file.encoding,
+            options: ReadingOptions::default(),
         })
     }
 
@@ -111,6 +137,10 @@ impl<T: Read + Seek> Reader<T> {
 
     pub fn set_encoding<E: Encoding + 'static>(&mut self, encoding: E) {
         self.encoding = DynEncoding::new(encoding);
+    }
+
+    pub fn set_options(&mut self, options: ReadingOptions) {
+        self.options = options;
     }
 
     /// Returns the header of the file
@@ -286,6 +316,7 @@ pub struct FieldIterator<'a, Source: Read + Seek, MemoSource: Read + Seek> {
     pub(crate) field_data_buffer: &'a mut [u8; 255],
     /// The string encoding
     pub(crate) encoding: &'a DynEncoding,
+    pub(crate) options: ReadingOptions,
 }
 
 impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source, MemoSource> {
@@ -399,6 +430,7 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
             self.memo_reader,
             field_info,
             &*self.encoding,
+            self.options.character_trim,
         ) {
             Ok(value) => Ok(value),
             Err(kind) => Err(FieldIOError {
@@ -473,6 +505,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
                     memo_reader: &mut self.reader.memo_reader,
                     field_data_buffer: &mut self.field_data_buffer,
                     encoding: &self.reader.encoding,
+                    options: self.reader.options,
                 };
 
                 let record = R::read_using(&mut iter)

@@ -1,7 +1,8 @@
 use crate::encoding::DynEncoding;
+use crate::field::types::TrimOption;
 use crate::field::{DeletionFlag, DELETION_FLAG_SIZE};
 use crate::header::Header;
-use crate::reading::{BACKLINK_SIZE, TERMINATOR_VALUE};
+use crate::reading::{ReadingOptions, BACKLINK_SIZE, TERMINATOR_VALUE};
 use crate::writing::{write_header_parts, WritableAsDbaseField};
 use crate::ErrorKind::UnsupportedCodePage;
 use crate::{
@@ -84,6 +85,7 @@ where
             &mut None,
             field_info,
             &self.file.encoding,
+            TrimOption::BeginEnd,
         )
         .map_err(|e| FieldIOError::new(e, Some(field_info.clone())))
     }
@@ -169,6 +171,13 @@ where
             .seek(SeekFrom::Start(self.position_in_source()))
             .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
     }
+
+    pub fn seek_before_deletion_flag(&mut self) -> Result<u64, FieldIOError> {
+        self.file
+            .inner
+            .seek(SeekFrom::Start(self.position_in_source() - 1))
+            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
+    }
 }
 
 impl<'a, T> RecordRef<'a, T>
@@ -204,6 +213,7 @@ where
             memo_reader: &mut None,
             field_data_buffer: &mut self.file.field_data_buffer,
             encoding: &self.file.encoding,
+            options: self.file.options,
         };
         R::read_using(&mut field_iterator)
     }
@@ -217,7 +227,7 @@ where
     where
         R: WritableRecord,
     {
-        self.seek_to_beginning()?;
+        self.seek_before_deletion_flag()?;
 
         let mut field_writer = FieldWriter {
             dst: &mut self.file.inner,
@@ -264,6 +274,7 @@ pub struct File<T> {
     /// Non-Memo field length is stored on a u8,
     /// so fields cannot exceed 255 bytes
     field_data_buffer: [u8; 255],
+    pub(crate) options: ReadingOptions,
 }
 
 impl<T> File<T> {
@@ -280,6 +291,10 @@ impl<T> File<T> {
 
     pub fn num_records(&self) -> usize {
         self.header.num_records as usize
+    }
+
+    pub fn set_options(&mut self, options: ReadingOptions) {
+        self.options = options;
     }
 }
 
@@ -329,6 +344,7 @@ impl<T: Read + Seek> File<T> {
             fields_info,
             encoding,
             field_data_buffer: [0u8; 255],
+            options: ReadingOptions::default(),
         })
     }
 
@@ -361,6 +377,7 @@ impl<T: Write + Seek> File<T> {
             fields_info: table_info.fields_info,
             encoding: table_info.encoding,
             field_data_buffer: [0u8; 255],
+            options: ReadingOptions::default(),
         })
     }
 
@@ -376,7 +393,8 @@ impl<T: Write + Seek> File<T> {
         R: WritableRecord,
     {
         let end_of_last_record = self.header.offset_to_first_record as u64
-            + self.num_records() as u64 * self.header.size_of_record as u64;
+            + self.num_records() as u64
+                * (DELETION_FLAG_SIZE as u64 + self.header.size_of_record as u64);
         self.inner
             .seek(SeekFrom::Start(end_of_last_record))
             .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;

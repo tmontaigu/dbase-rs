@@ -287,11 +287,12 @@ pub use file::{FieldRef, File, RecordRef};
 pub use crate::datafusion::{DbaseTable, DbaseTableFactory};
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
-pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time};
+pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time, TrimOption};
 pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::header::CodePageMark;
 pub use crate::reading::{
-    read, FieldIterator, NamedValue, ReadableRecord, Reader, RecordIterator, TableInfo,
+    read, FieldIterator, NamedValue, ReadableRecord, Reader, ReadingOptions, RecordIterator,
+    TableInfo,
 };
 pub use crate::record::Record;
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
