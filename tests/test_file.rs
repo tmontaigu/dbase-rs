@@ -288,6 +288,52 @@ fn test_file_classical_user_record_example() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
+fn test_file_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
+    dbase::dbase_record!(
+        #[derive(PartialOrd, PartialEq, Debug)]
+        struct StationRecord {
+            name: String,
+            marker_col: String,
+            marker_sym: String,
+            line: String,
+        }
+    );
+
+    let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
+    let reading = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::Begin);
+    file.set_options(reading);
+
+    let expected = StationRecord {
+        name: format!(
+            "{:width$}",
+            "Franconia-Springfield",
+            width = file.fields()[0].length() as usize
+        ),
+        marker_col: format!(
+            "{:width$}",
+            "#0000ff",
+            width = file.fields()[0].length() as usize
+        ),
+        marker_sym: format!(
+            "{:width$}",
+            "rail-metro",
+            width = file.fields()[0].length() as usize
+        ),
+        line: format!(
+            "{:width$}",
+            "blue",
+            width = file.fields()[0].length() as usize
+        ),
+    };
+
+    let record = file.record(1).unwrap().read_as::<StationRecord>()?;
+
+    assert_eq!(record, expected);
+
+    Ok(())
+}
+
+#[test]
 fn test_file_is_record_deleted() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = dbase::File::open_read_only(STATIONS_WITH_DELETED)?;
 

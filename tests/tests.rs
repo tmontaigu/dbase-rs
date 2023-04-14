@@ -13,6 +13,7 @@ use std::fmt::Debug;
 const LINE_DBF: &str = "./tests/data/line.dbf";
 const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
 const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.dbf";
+const STATIONS: &str = "./tests/data/stations.dbf";
 const STATIONS_WITH_DELETED: &str = "./tests/data/stations_with_deleted.dbf";
 #[cfg(feature = "yore")]
 const CP850_DBF: &str = "tests/data/cp850.dbf";
@@ -304,6 +305,43 @@ dbase::dbase_record!(
         line: String,
     }
 );
+
+#[test]
+fn test_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
+    let mut reader = dbase::Reader::from_path(STATIONS)?;
+    let options = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::Begin);
+
+    reader.set_options(options);
+    let records = reader.read_as::<StationRecord>()?;
+
+    assert_eq!(records.len() as u32, reader.header().num_records);
+
+    let expected = StationRecord {
+        name: format!(
+            "{:width$}",
+            "Franconia-Springfield",
+            width = reader.fields()[0].length() as usize
+        ),
+        marker_col: format!(
+            "{:width$}",
+            "#0000ff",
+            width = reader.fields()[0].length() as usize
+        ),
+        marker_sym: format!(
+            "{:width$}",
+            "rail-metro",
+            width = reader.fields()[0].length() as usize
+        ),
+        line: format!(
+            "{:width$}",
+            "blue",
+            width = reader.fields()[0].length() as usize
+        ),
+    };
+    assert_eq!(records[1], expected);
+
+    Ok(())
+}
 
 #[test]
 fn test_record_marked_as_deleted_are_skipped_by_reader() -> Result<(), Box<dyn std::error::Error>> {
