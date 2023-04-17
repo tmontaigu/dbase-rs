@@ -391,51 +391,72 @@ impl<'a, W: Write> FieldWriter<'a, W> {
         field_value: &T,
     ) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
-            self.field_buffer.set_position(0);
+            let pad_before = matches!(
+                field_info.field_type(),
+                FieldType::Numeric | FieldType::Float | FieldType::Memo
+            );
 
+            self.field_buffer.set_position(0);
             field_value
                 .write_as(field_info, self.encoding, &mut self.field_buffer)
                 .map_err(|kind| FieldIOError::new(kind, Some(field_info.clone())))?;
+            let value_len = self.field_buffer.position() as usize;
+            let bytes_to_pad = usize::from(field_info.field_length).saturating_sub(value_len);
 
-            let bytes_written = self.field_buffer.position();
-            let bytes_to_pad = i64::from(field_info.field_length) - bytes_written as i64;
-            if bytes_to_pad > 0 {
-                for _ in 0..bytes_to_pad {
-                    write!(self.field_buffer, " ").map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
-                }
+            if bytes_to_pad > 0 && pad_before {
+                self.write_pad(bytes_to_pad, field_info)?;
             }
+
             // If the current field value size exceeds the one one set
             // when creating the writer, it will be cropped
+            let write_len = value_len.min(field_info.field_length as usize);
             let field_bytes = self.field_buffer.get_ref();
-            debug_assert_eq!(self.field_buffer.position(), field_info.field_length as u64);
             self.dst
-                .write_all(&field_bytes[..field_info.field_length as usize])
+                .write_all(&field_bytes[..write_len])
                 .map_err(|error| {
                     FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                 })?;
+
+            if bytes_to_pad > 0 && !pad_before {
+                self.write_pad(bytes_to_pad, field_info)?;
+            }
+
             Ok(())
         } else {
             Err(FieldIOError::new(ErrorKind::TooManyFields, None))
         }
     }
 
+    fn write_pad(&mut self, len: usize, field_info: &FieldInfo) -> Result<(), FieldIOError> {
+        for _ in 0..len {
+            write!(self.dst, " ").map_err(|error| {
+                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
+            })?;
+        }
+        Ok(())
+    }
+
     #[cfg(feature = "serde")]
     pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), FieldIOError> {
         if let Some(field_info) = self.fields_info.next() {
+            let pad_before = matches!(
+                field_info.field_type(),
+                FieldType::Numeric | FieldType::Float | FieldType::Memo
+            );
+
             if value.len() == field_info.field_length as usize {
                 self.dst.write_all(value).map_err(|error| {
                     FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                 })?;
             } else if value.len() < field_info.field_length as usize {
+                if pad_before {
+                    self.write_pad(field_info.field_length as usize - value.len(), field_info)?;
+                }
                 self.dst.write_all(value).map_err(|error| {
                     FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
                 })?;
-                for _ in 0..field_info.field_length - value.len() as u8 {
-                    write!(self.dst, " ").map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
+                if !pad_before {
+                    self.write_pad(field_info.field_length as usize - value.len(), field_info)?;
                 }
             } else {
                 self.dst
