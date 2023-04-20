@@ -413,7 +413,7 @@ impl Header {
             None
         } else {
             let offset = self.offset_to_first_record as usize
-                + (index * self.size_of_record as usize)
+                + (index * (self.size_of_record as usize + DELETION_FLAG_SIZE))
                 + DELETION_FLAG_SIZE;
             Some(offset)
         }

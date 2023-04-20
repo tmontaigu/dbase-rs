@@ -169,6 +169,13 @@ where
             .seek(SeekFrom::Start(self.position_in_source()))
             .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
     }
+
+    pub fn seek_before_deletion_flag(&mut self) -> Result<u64, FieldIOError> {
+        self.file
+            .inner
+            .seek(SeekFrom::Start(self.position_in_source() - 1))
+            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
+    }
 }
 
 impl<'a, T> RecordRef<'a, T>
@@ -217,7 +224,7 @@ where
     where
         R: WritableRecord,
     {
-        self.seek_to_beginning()?;
+        self.seek_before_deletion_flag()?;
 
         let mut field_writer = FieldWriter {
             dst: &mut self.file.inner,
@@ -376,7 +383,8 @@ impl<T: Write + Seek> File<T> {
         R: WritableRecord,
     {
         let end_of_last_record = self.header.offset_to_first_record as u64
-            + self.num_records() as u64 * self.header.size_of_record as u64;
+            + self.num_records() as u64
+                * (DELETION_FLAG_SIZE as u64 + self.header.size_of_record as u64);
         self.inner
             .seek(SeekFrom::Start(end_of_last_record))
             .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;
