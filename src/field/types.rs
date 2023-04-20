@@ -159,7 +159,7 @@ impl FieldValue {
             },
             FieldType::Character => {
                 // let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let value = trim_field_data(field_bytes);
+                let value = trim_field_data(field_bytes, TrimOption::End);
                 if value.is_empty() {
                     FieldValue::Character(None)
                 } else {
@@ -168,7 +168,7 @@ impl FieldValue {
             }
             FieldType::Numeric => {
                 // let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let value = trim_field_data(field_bytes);
+                let value = trim_field_data(field_bytes, TrimOption::BeginEnd);
                 if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Numeric(None)
                 } else {
@@ -178,7 +178,7 @@ impl FieldValue {
             }
             FieldType::Float => {
                 // let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let value = trim_field_data(field_bytes);
+                let value = trim_field_data(field_bytes, TrimOption::BeginEnd);
                 if value.is_empty() || value.iter().all(|c| c == &b'*') {
                     FieldValue::Float(None)
                 } else {
@@ -188,7 +188,7 @@ impl FieldValue {
             }
             FieldType::Date => {
                 // let value = read_string_of_len(&mut source, field_info.field_length)?;
-                let value = trim_field_data(field_bytes);
+                let value = trim_field_data(field_bytes, TrimOption::BeginEnd);
                 if value.iter().all(|c| c == &b' ') {
                     FieldValue::Date(None)
                 } else {
@@ -218,7 +218,7 @@ impl FieldValue {
             FieldType::Memo => {
                 let index_in_memo = if field_info.field_length > 4 {
                     // let string = read_string_of_len(&mut source, field_info.field_length)?;
-                    let trimmed_value = trim_field_data(field_bytes);
+                    let trimmed_value = trim_field_data(field_bytes, TrimOption::End);
                     if trimmed_value.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
                     } else {
@@ -895,7 +895,15 @@ mod ser {
     }
 }
 
-fn trim_field_data(bytes: &[u8]) -> &[u8] {
+#[derive(Copy, Clone, Debug)]
+enum TrimOption {
+    #[allow(unused)]
+    Begin,
+    End,
+    BeginEnd,
+}
+
+fn trim_field_data(bytes: &[u8], option: TrimOption) -> &[u8] {
     // Value in the dbf file is surrounded by space characters (32u8). We discard them before
     // parsing the bytes into string. Doing so doubles the performance in comparison to
     // using String::trim() afterwards.
@@ -929,7 +937,11 @@ fn trim_field_data(bytes: &[u8]) -> &[u8] {
     // Discarding spaces in front and at the end. The space character (32u8) is 00110000 in binary
     // format, which makes it safe to drop without checking, as it cannot be part of the multi-byte
     // UTF-8 symbol (all such bytes must start with 10).
-    &bytes[first..(last + 1)]
+    match option {
+        TrimOption::Begin => &bytes[first..],
+        TrimOption::End => &bytes[..last + 1],
+        TrimOption::BeginEnd => &bytes[first..last + 1],
+    }
 }
 
 #[cfg(test)]
