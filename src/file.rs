@@ -274,7 +274,7 @@ impl<T> File<T> {
     pub fn field_index(&self, name: &str) -> Option<FieldIndex> {
         self.fields_info
             .iter()
-            .position(|info| info.name == name)
+            .position(|info| info.name.eq_ignore_ascii_case(name))
             .map(FieldIndex)
     }
 
