@@ -477,41 +477,43 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
     type Item = Result<R, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_record >= self.reader.header.num_records {
-            None
-        } else {
-            let deletion_flag = DeletionFlag::read_from(&mut self.reader.source).ok()?;
+        loop {
+            if self.current_record >= self.reader.header.num_records {
+                return None;
+            } else {
+                let deletion_flag = DeletionFlag::read_from(&mut self.reader.source).ok()?;
 
-            if deletion_flag == DeletionFlag::Deleted {
+                if deletion_flag == DeletionFlag::Deleted {
+                    self.reader
+                        .source
+                        .seek(SeekFrom::Current(
+                            self.record_data_buffer.get_ref().len() as i64
+                        ))
+                        .ok()?;
+                    continue;
+                }
+
                 self.reader
                     .source
-                    .seek(SeekFrom::Current(
-                        self.record_data_buffer.get_ref().len() as i64
-                    ))
+                    .read_exact(self.record_data_buffer.get_mut())
                     .ok()?;
-                return self.next();
+                self.record_data_buffer.set_position(0);
+
+                let mut iter = FieldIterator {
+                    source: &mut self.record_data_buffer,
+                    fields_info: self.reader.fields_info.iter().peekable(),
+                    memo_reader: &mut self.reader.memo_reader,
+                    field_data_buffer: &mut self.field_data_buffer,
+                    encoding: &self.reader.encoding,
+                    options: self.reader.options,
+                };
+
+                let record = R::read_using(&mut iter)
+                    .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
+                    .map_err(|error| Error::new(error, self.current_record as usize));
+                self.current_record += 1;
+                return Some(record);
             }
-
-            self.reader
-                .source
-                .read_exact(self.record_data_buffer.get_mut())
-                .ok()?;
-            self.record_data_buffer.set_position(0);
-
-            let mut iter = FieldIterator {
-                source: &mut self.record_data_buffer,
-                fields_info: self.reader.fields_info.iter().peekable(),
-                memo_reader: &mut self.reader.memo_reader,
-                field_data_buffer: &mut self.field_data_buffer,
-                encoding: &self.reader.encoding,
-                options: self.reader.options,
-            };
-
-            let record = R::read_using(&mut iter)
-                .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
-                .map_err(|error| Error::new(error, self.current_record as usize));
-            self.current_record += 1;
-            Some(record)
         }
     }
 }
