@@ -1,3 +1,9 @@
+# Unreleased
+
+    - `Date` is now const-constructible
+    - `dbase_record!` keeps visibility token
+    - Added `File` struct to read/write file in-place.
+
 # 0.3.0
     - Replaced `chrono` with `time` v0.3
     - Added support for reading/writing non-unicode database files via custom encodings.
