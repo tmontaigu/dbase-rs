@@ -30,3 +30,6 @@ datafusion = ["dep:datafusion", "dep:datafusion-expr", "dep:async-trait"]
 [[example]]
 name = "datafusion"
 required-features = ["datafusion"]
+
+[package.metadata.docs.rs]
+features = ["yore", "serde"]

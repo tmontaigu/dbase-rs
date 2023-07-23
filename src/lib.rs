@@ -1,6 +1,6 @@
 //! dbase is rust library meant to read and write dBase / FoxPro files.
 //!
-//! Theses files are nowadays generally only found in association with shapefiles.
+//! Theses files are nowadays generally found in association with shapefiles.
 //!
 //! # Reading
 //!
@@ -252,7 +252,14 @@
 //! # #[cfg(not(feature = "serde"))]
 //! # fn main() {}
 //! ```
-
+//!
+//! # File
+//!
+//! This crate also has a third option to handle dbase files, the [File]
+//! struct.
+//!
+//! This struct allows to read/write an existing or new file
+//! without having to fully read it first.
 #![deny(unstable_features)]
 
 extern crate byteorder;

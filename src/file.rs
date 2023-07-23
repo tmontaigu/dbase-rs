@@ -14,12 +14,18 @@ use std::fmt::{Debug, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+/// Index to a field in a record
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct FieldIndex(pub usize);
 
+/// Index to a record in a dBase file
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct RecordIndex(pub usize);
 
+/// 'reference' to a field in a dBase file.
+///
+/// - Allows to read the field content via [Self::read] or [Self::read_as]
+/// - Allows to overwrite the field content via [Self::write]
 pub struct FieldRef<'a, T> {
     file: &'a mut File<T>,
     record_index: RecordIndex,
@@ -55,7 +61,7 @@ impl<'a, T> FieldRef<'a, T>
 where
     T: Seek,
 {
-    pub fn seek_to_beginning(&mut self) -> Result<u64, FieldIOError> {
+    pub(crate) fn seek_to_beginning(&mut self) -> Result<u64, FieldIOError> {
         let field_info = &self.file.fields_info[self.field_index.0];
 
         self.file
@@ -69,6 +75,7 @@ impl<'a, T> FieldRef<'a, T>
 where
     T: Seek + Read,
 {
+    /// Reads and returns the value
     pub fn read(&mut self) -> Result<FieldValue, FieldIOError> {
         self.seek_to_beginning()?;
 
@@ -90,6 +97,7 @@ where
         .map_err(|e| FieldIOError::new(e, Some(field_info.clone())))
     }
 
+    /// Reads and returns the value converted to the requested type
     pub fn read_as<ValueType>(&mut self) -> Result<ValueType, FieldIOError>
     where
         ValueType: TryFrom<FieldValue, Error = FieldConversionError>,
@@ -106,6 +114,7 @@ impl<'a, T> FieldRef<'a, T>
 where
     T: Seek + Write,
 {
+    /// Writes the value
     pub fn write<ValueType>(&mut self, value: &ValueType) -> Result<(), FieldIOError>
     where
         ValueType: WritableAsDbaseField,
@@ -131,6 +140,13 @@ where
     }
 }
 
+/// 'reference' to a record in a dBase file.
+///
+/// This can be used to read/write the whole record at once,
+/// or select a particular field in the file [Self::field].
+///
+/// - Allows to read the field content via [Self::read] or [Self::read_as]
+/// - Allows to overwrite the field content via [Self::write]
 pub struct RecordRef<'a, T> {
     file: &'a mut File<T>,
     index: RecordIndex,
@@ -184,6 +200,10 @@ impl<'a, T> RecordRef<'a, T>
 where
     T: Read + Seek,
 {
+    /// Returns the value of the special deletion flag
+    ///
+    /// - true -> the record is marked as deleted
+    /// - false -> the record is **not** marked as deleted
     pub fn is_deleted(&mut self) -> Result<bool, FieldIOError> {
         let deletion_flag_pos = self.position_in_source() - DELETION_FLAG_SIZE as u64;
         self.file
@@ -223,6 +243,8 @@ impl<'a, T> RecordRef<'a, T>
 where
     T: Write + Seek,
 {
+    /// Writes the content of `record` ath the position
+    /// pointed by `self`.
     pub fn write<R>(&mut self, record: &R) -> Result<(), FieldIOError>
     where
         R: WritableRecord,
@@ -244,6 +266,7 @@ where
     }
 }
 
+/// Iterator over the records in a File
 pub struct FileRecordIterator<'a, T> {
     file: &'a mut File<T>,
     current_record: RecordIndex,
@@ -266,6 +289,45 @@ impl<'a, T> FileRecordIterator<'a, T> {
     }
 }
 
+/// Handle to a dBase File.
+///
+/// A `File`, allows to both read and write, it also
+/// allows to do modifications on an existing file,
+/// and enables to only read/modify parts of a file without
+/// first having to fully read it.
+///
+/// # Example
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
+///
+/// assert_eq!(file.num_records(), 6);
+///
+/// let name_idx = file.field_index("name").unwrap();
+/// let marker_color_idx = file.field_index("marker-col").unwrap();
+/// let marker_symbol_idx = file.field_index("marker-sym").unwrap();
+///
+/// // Test manually reading fields (not in correct order) to FieldValue
+/// let mut rh = file.record(3).unwrap();
+/// let marker_color = rh.field(marker_color_idx).unwrap().read()?;
+/// assert_eq!(
+///    marker_color,
+///    dbase::FieldValue::Character(Some("#ff0000".to_string()))
+/// );
+/// let name = rh.field(name_idx).unwrap().read()?;
+/// assert_eq!(
+///    name,
+///    dbase::FieldValue::Character(Some("Judiciary Sq".to_string()))
+/// );
+/// let marker_symbol = rh.field(marker_symbol_idx).unwrap().read()?;
+/// assert_eq!(
+///    marker_symbol,
+///    dbase::FieldValue::Character(Some("rail-metro".to_string()))
+/// );
+/// # Ok(())
+/// # }
+/// ```
 pub struct File<T> {
     pub(crate) inner: T,
     pub(crate) header: Header,
@@ -278,10 +340,12 @@ pub struct File<T> {
 }
 
 impl<T> File<T> {
+    /// Returns the information about fields present in the records
     pub fn fields(&self) -> &[FieldInfo] {
         self.fields_info.as_slice()
     }
 
+    /// Returns the field infex that corresponds to the given name
     pub fn field_index(&self, name: &str) -> Option<FieldIndex> {
         self.fields_info
             .iter()
@@ -289,6 +353,7 @@ impl<T> File<T> {
             .map(FieldIndex)
     }
 
+    /// Returns the number of records in the file
     pub fn num_records(&self) -> usize {
         self.header.num_records as usize
     }
@@ -299,6 +364,7 @@ impl<T> File<T> {
 }
 
 impl<T: Read + Seek> File<T> {
+    /// creates of File using source as the storate space.
     pub fn open(mut source: T) -> Result<Self, Error> {
         let header = Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
@@ -348,6 +414,9 @@ impl<T: Read + Seek> File<T> {
         })
     }
 
+    /// Returns a reference to the record at the given index.
+    ///
+    /// Returns None if no record exist for the given index
     pub fn record(&mut self, index: usize) -> Option<RecordRef<'_, T>> {
         if index >= self.header.num_records as usize {
             None
@@ -359,6 +428,9 @@ impl<T: Read + Seek> File<T> {
         }
     }
 
+    /// Returns an iterator over the records in the file.
+    ///
+    /// Always starts at the first record
     pub fn records(&mut self) -> FileRecordIterator<'_, T> {
         FileRecordIterator {
             file: self,

@@ -58,7 +58,7 @@ pub trait Encoding: EncodingClone + AsCodePageMark + Send {
     fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError>;
 }
 
-/// Trait to be able to clone a Box<dyn Encoding>
+/// Trait to be able to clone a `Box<dyn Encoding>`
 pub trait EncodingClone {
     fn clone_box(&self) -> Box<dyn Encoding>;
 }
