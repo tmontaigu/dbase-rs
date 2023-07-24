@@ -76,16 +76,19 @@ where
     T: Seek + Read,
 {
     /// Reads and returns the value
-    pub fn read(&mut self) -> Result<FieldValue, FieldIOError> {
-        self.seek_to_beginning()?;
+    pub fn read(&mut self) -> Result<FieldValue, Error> {
+        self.seek_to_beginning()
+            .map_err(|e| Error::new(e, self.record_index.0))?;
 
         let field_info = &self.file.fields_info[self.field_index.0];
 
         let buffer = &mut self.file.field_data_buffer[..field_info.field_length as usize];
-        self.file
-            .inner
-            .read(buffer)
-            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), Some(field_info.clone())))?;
+        self.file.inner.read(buffer).map_err(|e| {
+            Error::new(
+                FieldIOError::new(ErrorKind::IoError(e), Some(field_info.clone())),
+                self.record_index.0,
+            )
+        })?;
 
         FieldValue::read_from::<Cursor<Vec<u8>>, _>(
             &buffer,
@@ -94,17 +97,28 @@ where
             &self.file.encoding,
             TrimOption::BeginEnd,
         )
-        .map_err(|e| FieldIOError::new(e, Some(field_info.clone())))
+        .map_err(|e| {
+            Error::new(
+                FieldIOError::new(e, Some(field_info.clone())),
+                self.record_index.0,
+            )
+        })
     }
 
     /// Reads and returns the value converted to the requested type
-    pub fn read_as<ValueType>(&mut self) -> Result<ValueType, FieldIOError>
+    pub fn read_as<ValueType>(&mut self) -> Result<ValueType, Error>
     where
         ValueType: TryFrom<FieldValue, Error = FieldConversionError>,
     {
         let value = self.read()?;
 
-        let converted_value = ValueType::try_from(value)?;
+        let converted_value = ValueType::try_from(value).map_err(|e| {
+            let field_info = &self.file.fields_info[self.field_index.0];
+            Error::new(
+                FieldIOError::new(ErrorKind::BadConversion(e), Some(field_info.clone())),
+                self.record_index.0,
+            )
+        })?;
 
         Ok(converted_value)
     }
@@ -115,11 +129,12 @@ where
     T: Seek + Write,
 {
     /// Writes the value
-    pub fn write<ValueType>(&mut self, value: &ValueType) -> Result<(), FieldIOError>
+    pub fn write<ValueType>(&mut self, value: &ValueType) -> Result<(), Error>
     where
         ValueType: WritableAsDbaseField,
     {
-        self.seek_to_beginning()?;
+        self.seek_to_beginning()
+            .map_err(|e| Error::new(e, self.record_index.0))?;
 
         let field_info = &self.file.fields_info[self.field_index.0];
 
@@ -128,13 +143,20 @@ where
         let mut cursor = Cursor::new(buffer);
         value
             .write_as(field_info, &self.file.encoding, &mut cursor)
-            .map_err(|e| FieldIOError::new(e, Some(field_info.clone())))?;
+            .map_err(|e| {
+                Error::new(
+                    FieldIOError::new(e, Some(field_info.clone())),
+                    self.record_index.0,
+                )
+            })?;
 
         let buffer = cursor.into_inner();
-        self.file
-            .inner
-            .write_all(&buffer)
-            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), Some(field_info.clone())))?;
+        self.file.inner.write_all(&buffer).map_err(|e| {
+            Error::new(
+                FieldIOError::new(ErrorKind::IoError(e), Some(field_info.clone())),
+                self.record_index.0,
+            )
+        })?;
 
         Ok(())
     }
@@ -204,28 +226,29 @@ where
     ///
     /// - true -> the record is marked as deleted
     /// - false -> the record is **not** marked as deleted
-    pub fn is_deleted(&mut self) -> Result<bool, FieldIOError> {
+    pub fn is_deleted(&mut self) -> Result<bool, Error> {
         let deletion_flag_pos = self.position_in_source() - DELETION_FLAG_SIZE as u64;
         self.file
             .inner
             .seek(SeekFrom::Start(deletion_flag_pos))
-            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))?;
+            .map_err(|error| Error::io_error(error, self.index.0))?;
 
         let deletion_flag = DeletionFlag::read_from(&mut self.file.inner)
-            .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))?;
+            .map_err(|error| Error::io_error(error, self.index.0))?;
 
         Ok(deletion_flag == DeletionFlag::Deleted)
     }
 
-    pub fn read(&mut self) -> Result<crate::Record, FieldIOError> {
+    pub fn read(&mut self) -> Result<crate::Record, Error> {
         self.read_as()
     }
 
-    pub fn read_as<R>(&mut self) -> Result<R, FieldIOError>
+    pub fn read_as<R>(&mut self) -> Result<R, Error>
     where
         R: ReadableRecord,
     {
-        self.seek_to_beginning()?;
+        self.seek_to_beginning()
+            .map_err(|error| Error::new(error, self.index.0))?;
 
         let mut field_iterator = FieldIterator::<_, Cursor<Vec<u8>>> {
             source: &mut self.file.inner,
@@ -235,7 +258,8 @@ where
             encoding: &self.file.encoding,
             options: self.file.options,
         };
-        R::read_using(&mut field_iterator)
+
+        R::read_using(&mut field_iterator).map_err(|error| Error::new(error, self.index.0))
     }
 }
 
@@ -245,11 +269,12 @@ where
 {
     /// Writes the content of `record` ath the position
     /// pointed by `self`.
-    pub fn write<R>(&mut self, record: &R) -> Result<(), FieldIOError>
+    pub fn write<R>(&mut self, record: &R) -> Result<(), Error>
     where
         R: WritableRecord,
     {
-        self.seek_before_deletion_flag()?;
+        self.seek_before_deletion_flag()
+            .map_err(|error| Error::new(error, self.index.0))?;
 
         let mut field_writer = FieldWriter {
             dst: &mut self.file.inner,
@@ -260,9 +285,11 @@ where
 
         field_writer
             .write_deletion_flag()
-            .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;
+            .map_err(|error| Error::io_error(error, self.index.0))?;
 
-        record.write_using(&mut field_writer)
+        record
+            .write_using(&mut field_writer)
+            .map_err(|error| Error::new(error, self.index.0))
     }
 }
 
@@ -453,25 +480,36 @@ impl<T: Write + Seek> File<T> {
         })
     }
 
-    pub fn append_record<R>(&mut self, record: &R) -> Result<(), FieldIOError>
+    pub fn append_record<R>(&mut self, record: &R) -> Result<(), Error>
     where
         R: WritableRecord,
     {
         self.append_records(std::slice::from_ref(record))
     }
 
-    pub fn append_records<R>(&mut self, records: &[R]) -> Result<(), FieldIOError>
+    pub fn append_records<R>(&mut self, records: &[R]) -> Result<(), Error>
     where
         R: WritableRecord,
     {
+        assert_eq!(
+            self.header
+                .num_records
+                .overflowing_add(records.len() as u32)
+                .1,
+            false,
+            "Too many records (u32 overflow)"
+        );
+
         let end_of_last_record = self.header.offset_to_first_record as u64
             + self.num_records() as u64
                 * (DELETION_FLAG_SIZE as u64 + self.header.size_of_record as u64);
         self.inner
             .seek(SeekFrom::Start(end_of_last_record))
-            .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;
+            .map_err(|error| Error::io_error(error, self.num_records()))?;
 
         for record in records {
+            let current_record_index = self.header.num_records + 1;
+
             let mut field_writer = FieldWriter {
                 dst: &mut self.inner,
                 fields_info: self.fields_info.iter().peekable(),
@@ -481,15 +519,17 @@ impl<T: Write + Seek> File<T> {
 
             field_writer
                 .write_deletion_flag()
-                .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;
+                .map_err(|error| Error::io_error(error, current_record_index as usize))?;
 
-            record.write_using(&mut field_writer)?;
+            record
+                .write_using(&mut field_writer)
+                .map_err(|error| Error::new(error, current_record_index as usize))?;
 
-            self.header.num_records = self.header.num_records.checked_add(1).unwrap();
+            self.header.num_records = current_record_index;
         }
 
         self.sync_all()
-            .map_err(|error| FieldIOError::new(ErrorKind::IoError(error), None))?;
+            .map_err(|error| Error::io_error(error, self.num_records()))?;
 
         Ok(())
     }
