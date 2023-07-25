@@ -1,8 +1,10 @@
-# Unreleased
-
+# O.4.0
     - `Date` is now const-constructible
     - `dbase_record!` keeps visibility token
     - Added `File` struct to read/write file in-place.
+    - Fixed stack overflow error on files with many sub-sequent deleted record.
+    - Added `TrimOption`, to choose how whitespaces in Charater fields should be
+    trimmed.
 
 # 0.3.0
     - Replaced `chrono` with `time` v0.3
