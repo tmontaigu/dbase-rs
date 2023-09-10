@@ -73,6 +73,94 @@ impl ReadingOptions {
     }
 }
 
+/// Convenience builder to create a reader directly from file sources
+///
+/// # Example
+///
+/// ```
+/// use std::fs::File;
+///
+/// # fn main() -> Result<(), dbase::Error> {
+/// let dbf_file = File::open("tests/data/line.dbf").unwrap();
+/// let options = dbase::ReadingOptions::default()
+///     .character_trim(dbase::TrimOption::BeginEnd);
+///
+/// let mut reader = dbase::ReaderBuilder::new(dbf_file)
+///     .with_options(options)
+///     .with_encoding(dbase::encoding::UnicodeLossy)
+///     .build()
+///     .unwrap();
+///
+/// let records = reader.read()?;
+/// assert_eq!(records.len(), 1);
+/// # Ok(())
+/// # }
+/// ```
+pub struct ReaderBuilder<T: Read + Seek, E: Encoding + 'static> {
+    source: T,
+    memo_source: Option<T>,
+    encoding: Option<E>,
+    options: Option<ReadingOptions>,
+}
+
+impl<T: Read + Seek, E: Encoding + 'static> ReaderBuilder<T, E> {
+    pub fn new(source: T) -> Self {
+        Self {
+            source,
+            memo_source: None,
+            encoding: None,
+            options: None,
+        }
+    }
+
+    pub fn with_memo(mut self, memo_source: T) -> Self {
+        self.memo_source = Some(memo_source);
+
+        self
+    }
+
+    pub fn with_encoding(mut self, encoding: E) -> Self {
+        self.encoding = Some(encoding);
+
+        self
+    }
+
+    pub fn with_options(mut self, options: ReadingOptions) -> Self {
+        self.options = Some(options);
+
+        self
+    }
+
+    pub fn build(self) -> Result<Reader<T>, Error> {
+        let file = crate::File::open(self.source)?;
+
+        let memo_reader = if let Some(memo_source) = self.memo_source {
+            let memo_type = file.header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_reader =
+                    MemoReader::new(mt, memo_source).map_err(|error| Error::io_error(error, 0))?;
+
+                Some(memo_reader)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Reader {
+            source: file.inner,
+            memo_reader,
+            header: file.header,
+            fields_info: file.fields_info,
+            encoding: self
+                .encoding
+                .map_or_else(|| file.encoding, DynEncoding::new),
+            options: self.options.unwrap_or_default(),
+        })
+    }
+}
+
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 // TODO Debug impl

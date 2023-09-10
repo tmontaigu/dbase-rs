@@ -298,8 +298,8 @@ pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time, TrimO
 pub use crate::field::{FieldConversionError, FieldInfo, FieldName};
 pub use crate::header::CodePageMark;
 pub use crate::reading::{
-    read, FieldIterator, NamedValue, ReadableRecord, Reader, ReadingOptions, RecordIterator,
-    TableInfo,
+    read, FieldIterator, NamedValue, ReadableRecord, Reader, ReaderBuilder, ReadingOptions,
+    RecordIterator, TableInfo,
 };
 pub use crate::record::Record;
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
