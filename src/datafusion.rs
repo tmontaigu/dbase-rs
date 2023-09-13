@@ -1,21 +1,20 @@
-use crate::{FieldType, FieldValue, Record};
+use crate::{FieldType, FieldValue, Reader, Record};
 use async_trait::async_trait;
-use datafusion::datasource::datasource::TableProviderFactory;
-
-use crate::Reader;
 use datafusion::arrow::array::{
     ArrayBuilder, ArrayRef, BooleanBuilder, Date32Builder, Float32Builder, Float64Builder,
     Int32Builder, Int64Builder, StringBuilder,
 };
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::datasource::provider::TableProviderFactory;
 use datafusion::datasource::{TableProvider, TableType};
 use datafusion::error::Result;
 use datafusion::execution::context::{SessionState, TaskContext};
 use datafusion::physical_plan::expressions::PhysicalSortExpr;
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::{
-    project_schema, ExecutionPlan, SendableRecordBatchStream, Statistics,
+    project_schema, DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream,
+    Statistics,
 };
 use datafusion::prelude::*;
 use datafusion_expr::CreateExternalTable;
@@ -26,21 +25,29 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub struct DbaseTable {
+    path: String,
     reader: Arc<Mutex<Reader<BufReader<std::fs::File>>>>,
 }
 
 impl Clone for DbaseTable {
     fn clone(&self) -> Self {
         return DbaseTable {
+            path: self.path.clone(),
             reader: self.reader.clone(),
         };
     }
 }
 
 impl DbaseTable {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let reader = Reader::from_path(path).unwrap();
+    pub fn new<P: AsRef<Path> + Debug>(path: P) -> Self {
+        let reader = Reader::from_path(&path)
+            .expect(format!("Could not find file {:?} or corresponding memo file", &path).as_str());
         return DbaseTable {
+            path: path
+                .as_ref()
+                .to_str()
+                .expect("Path contains non-unicode characters")
+                .to_string(),
             reader: Arc::new(Mutex::new(reader)),
         };
     }
@@ -81,7 +88,7 @@ impl TableProvider for DbaseTable {
         let reader = self.reader.lock().unwrap();
         let dbase_fields = reader.fields();
 
-        let arrow_fields = dbase_fields
+        let arrow_fields: Vec<_> = dbase_fields
             .into_iter()
             .filter(|x| x.name() != "DeletionFlag")
             .map(|field| {
@@ -157,6 +164,17 @@ impl DbaseExec {
 impl Debug for DbaseExec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("custom_db")
+    }
+}
+
+impl DisplayAs for DbaseExec {
+    fn fmt_as(&self, t: DisplayFormatType, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match t {
+            DisplayFormatType::Default | DisplayFormatType::Verbose => {
+                write!(f, "DbaseExec: {:?}", self.table.path)?;
+            }
+        }
+        Ok(())
     }
 }
 

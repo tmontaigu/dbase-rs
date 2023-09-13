@@ -15,8 +15,8 @@ byteorder = "1.4.3"
 time = { version = "0.3", features = ["std"] }
 serde = { version = "1.0.102", optional = true }
 yore = { version = "1.0.1", optional = true }
-datafusion = { version = "20", optional = true }
-datafusion-expr = { version = "20", optional = true }
+datafusion = { version = "31", optional = true }
+datafusion-expr = { version = "31", optional = true }
 async-trait = { version = "0.1", optional = true }
 
 [dev-dependencies]
