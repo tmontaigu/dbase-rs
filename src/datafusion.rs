@@ -1,4 +1,4 @@
-use crate::{FieldType, FieldValue, Reader, Record};
+use crate::{FieldType, FieldValue, Reader};
 use async_trait::async_trait;
 use datafusion::arrow::array::{
     ArrayBuilder, ArrayRef, BooleanBuilder, Date32Builder, Float32Builder, Float64Builder,
@@ -252,13 +252,15 @@ impl ExecutionPlan for DbaseExec {
             .collect();
 
         let records = reader.iter_records();
-        let mut r: Record;
 
         for (l, record) in records.into_iter().enumerate() {
             if l >= self.limit {
                 break;
             }
-            r = record.ok().unwrap();
+            let Some(r) = record.ok() else {
+                continue;
+            };
+
             for i in 0..self.projections.len() {
                 match r.get(&dbase_field_names[self.projections[i]]).unwrap() {
                     FieldValue::Character(c) => match c {
