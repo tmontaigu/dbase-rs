@@ -8,7 +8,7 @@ use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::datasource::provider::TableProviderFactory;
 use datafusion::datasource::{TableProvider, TableType};
-use datafusion::error::Result;
+use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::{SessionState, TaskContext};
 use datafusion::physical_plan::expressions::PhysicalSortExpr;
 use datafusion::physical_plan::memory::MemoryStream;
@@ -257,9 +257,8 @@ impl ExecutionPlan for DbaseExec {
             if l >= self.limit {
                 break;
             }
-            let Some(r) = record.ok() else {
-                continue;
-            };
+
+            let r = record.map_err(|e| DataFusionError::Execution(e.to_string()))?;
 
             for i in 0..self.projections.len() {
                 match r.get(&dbase_field_names[self.projections[i]]).unwrap() {
