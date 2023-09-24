@@ -219,12 +219,11 @@ impl FieldValue {
             FieldType::Memo => {
                 let index_in_memo = if field_info.field_length > 4 {
                     // let string = read_string_of_len(&mut source, field_info.field_length)?;
-                    let trimmed_value = trim_field_data(field_bytes, TrimOption::End);
+                    let trimmed_value = trim_field_data(field_bytes, TrimOption::BeginEnd);
                     if trimmed_value.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
                     } else {
                         encoding.decode(trimmed_value)?.parse::<u32>()?
-                        // string.parse::<u32>()?
                     }
                 } else {
                     let mut le_bytes = [0u8; std::mem::size_of::<u32>()];
