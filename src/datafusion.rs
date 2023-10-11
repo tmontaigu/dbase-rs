@@ -337,7 +337,7 @@ impl ExecutionPlan for DbaseExec {
                         .as_any_mut()
                         .downcast_mut::<StringBuilder>()
                         .unwrap()
-                        .append_value(m.escape_unicode().to_string()),
+                        .append_value(m.escape_default().to_string()),
                     FieldValue::Numeric(n) => match n {
                         Some(n) => column_builders[i]
                             .as_any_mut()
