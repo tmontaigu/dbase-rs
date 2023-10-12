@@ -11,8 +11,45 @@ use crate::{
 };
 use byteorder::ReadBytesExt;
 use std::fmt::{Debug, Formatter};
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
+
+pub struct BufReadWriteFile {
+    input: BufReader<std::fs::File>,
+    output: BufWriter<std::fs::File>,
+}
+
+impl BufReadWriteFile {
+    fn new(file: std::fs::File) -> std::io::Result<Self> {
+        let input = BufReader::new(file.try_clone()?);
+        let output = BufWriter::new(file);
+
+        Ok(Self { input, output })
+    }
+}
+
+impl Read for BufReadWriteFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.input.read(buf)
+    }
+}
+
+impl Write for BufReadWriteFile {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.output.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.output.flush()
+    }
+}
+
+impl Seek for BufReadWriteFile {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.output.seek(pos)?;
+        self.input.seek(pos)
+    }
+}
 
 /// Index to a field in a record
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -545,7 +582,7 @@ impl<T: Write + Seek> File<T> {
     }
 }
 
-impl File<std::fs::File> {
+impl File<BufReadWriteFile> {
     pub fn open_with_options<P: AsRef<Path>>(
         path: P,
         options: std::fs::OpenOptions,
@@ -553,14 +590,14 @@ impl File<std::fs::File> {
         let file = options
             .open(path)
             .map_err(|error| Error::io_error(error, 0))?;
-        File::open(file)
+        File::open(BufReadWriteFile::new(file).unwrap())
     }
 
     /// Opens an existing dBase file in read only mode
     pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = std::fs::File::open(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::open(file)
+        File::open(BufReadWriteFile::new(file).unwrap())
     }
 
     /// Opens an existing dBase file in write only mode
@@ -587,6 +624,6 @@ impl File<std::fs::File> {
     pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
         let file = std::fs::File::create(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::create_new(file, table_info)
+        File::create_new(BufReadWriteFile::new(file).unwrap(), table_info)
     }
 }
