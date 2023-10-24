@@ -53,7 +53,7 @@ impl<'a, T> FieldRef<'a, T> {
             .map(|i| i.field_length as u64)
             .sum::<u64>();
 
-        record_position + position_in_record
+        record_position + position_in_record + DELETION_FLAG_SIZE as u64
     }
 }
 
@@ -206,14 +206,16 @@ where
     pub fn seek_to_beginning(&mut self) -> Result<u64, FieldIOError> {
         self.file
             .inner
-            .seek(SeekFrom::Start(self.position_in_source()))
+            .seek(SeekFrom::Start(
+                self.position_in_source() + DELETION_FLAG_SIZE as u64,
+            ))
             .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
     }
 
     pub fn seek_before_deletion_flag(&mut self) -> Result<u64, FieldIOError> {
         self.file
             .inner
-            .seek(SeekFrom::Start(self.position_in_source() - 1))
+            .seek(SeekFrom::Start(self.position_in_source()))
             .map_err(|e| FieldIOError::new(ErrorKind::IoError(e), None))
     }
 }
@@ -227,7 +229,7 @@ where
     /// - true -> the record is marked as deleted
     /// - false -> the record is **not** marked as deleted
     pub fn is_deleted(&mut self) -> Result<bool, Error> {
-        let deletion_flag_pos = self.position_in_source() - DELETION_FLAG_SIZE as u64;
+        let deletion_flag_pos = self.position_in_source();
         self.file
             .inner
             .seek(SeekFrom::Start(deletion_flag_pos))
@@ -329,7 +331,7 @@ impl<'a, T> FileRecordIterator<'a, T> {
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
 ///
-/// assert_eq!(file.num_records(), 6);
+/// assert_eq!(file.num_records(), 86);
 ///
 /// let name_idx = file.field_index("name").unwrap();
 /// let marker_color_idx = file.field_index("marker-col").unwrap();
@@ -501,8 +503,8 @@ impl<T: Write + Seek> File<T> {
         );
 
         let end_of_last_record = self.header.offset_to_first_record as u64
-            + self.num_records() as u64
-                * (DELETION_FLAG_SIZE as u64 + self.header.size_of_record as u64);
+            + (self.num_records() as u64 * self.header.size_of_record as u64);
+
         self.inner
             .seek(SeekFrom::Start(end_of_last_record))
             .map_err(|error| Error::io_error(error, self.num_records()))?;

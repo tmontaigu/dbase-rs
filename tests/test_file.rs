@@ -30,7 +30,7 @@ fn copy_to_named_tmp_file(origin: &str) -> std::io::Result<tempfile::NamedTempFi
 fn test_file_read_only() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
 
-    assert_eq!(file.num_records(), 6);
+    assert_eq!(file.num_records(), STATIONS_DBG_NUM_RECORDS);
 
     let name_idx = file.field_index("name").unwrap();
     let marker_color_idx = file.field_index("marker-col").unwrap();
@@ -89,12 +89,14 @@ fn test_file_read_only() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+const STATIONS_DBG_NUM_RECORDS: usize = 86;
+
 #[test]
 fn test_file_read_write() -> Result<(), Box<dyn std::error::Error>> {
     let tmp_file = copy_to_tmp_file("tests/data/stations.dbf")?;
     let mut file = dbase::File::open(tmp_file)?;
 
-    assert_eq!(file.num_records(), 6);
+    assert_eq!(file.num_records(), STATIONS_DBG_NUM_RECORDS);
 
     let name_idx = file.field_index("name").unwrap();
     let marker_color_idx = file.field_index("marker-col").unwrap();
@@ -222,11 +224,11 @@ fn test_file_append_record() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut file = dbase::File::open_read_write(tmp_file.path())?;
-        assert_eq!(file.num_records(), 6);
+        assert_eq!(file.num_records(), STATIONS_DBG_NUM_RECORDS);
         file.append_record(&new_record)?;
 
-        assert_eq!(file.num_records(), 7);
-        let record = file.record(6).unwrap().read()?;
+        assert_eq!(file.num_records(), STATIONS_DBG_NUM_RECORDS + 1);
+        let record = file.record(STATIONS_DBG_NUM_RECORDS).unwrap().read()?;
         assert_eq!(record, new_record);
     }
 
@@ -234,8 +236,8 @@ fn test_file_append_record() -> Result<(), Box<dyn std::error::Error>> {
         // Check that after closing the file, if we re-open it,
         // our appended record is still here
         let mut file = dbase::File::open_read_write(tmp_file.path())?;
-        assert_eq!(file.num_records(), 7);
-        let record = file.record(6).unwrap().read()?;
+        assert_eq!(file.num_records(), STATIONS_DBG_NUM_RECORDS + 1);
+        let record = file.record(STATIONS_DBG_NUM_RECORDS).unwrap().read()?;
         assert_eq!(record, new_record);
     }
 
@@ -300,10 +302,24 @@ fn test_file_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
+    let reading = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::End);
+    file.set_options(reading);
+
+    let expected_trim_end = StationRecord {
+        name: format!("{}", "Franconia-Springfield",),
+        marker_col: format!("{}", "#0000ff",),
+        marker_sym: format!("{}", "rail-metro",),
+        line: format!("{}", "blue",),
+    };
+
+    let record = file.record(1).unwrap().read_as::<StationRecord>()?;
+    assert_eq!(record, expected_trim_end);
+
+    let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
     let reading = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::Begin);
     file.set_options(reading);
 
-    let expected = StationRecord {
+    let expected_trim_begin = StationRecord {
         name: format!(
             "{:width$}",
             "Franconia-Springfield",
@@ -325,11 +341,8 @@ fn test_file_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
             width = file.fields()[0].length() as usize
         ),
     };
-
     let record = file.record(1).unwrap().read_as::<StationRecord>()?;
-
-    assert_eq!(record, expected);
-
+    assert_eq!(record, expected_trim_begin);
     Ok(())
 }
 

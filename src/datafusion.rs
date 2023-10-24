@@ -436,6 +436,9 @@ mod test {
         // +-----------------------+
         // | Franconia-Springfield |
         // | Federal Center SW     |
+        // | "Foggy Bottom GWU"    |
+        // | "Farragut West"       |
+        // | "Federal Triangle"    |
         // +-----------------------+
 
         // extract first (and only) RecordBatch from dataframe
@@ -448,7 +451,13 @@ mod test {
         // ensure values match
         assert_eq!(
             result[0].column(0).as_ref(),
-            &StringArray::from(vec!["Franconia-Springfield", "Federal Center SW"])
+            &StringArray::from(vec![
+                "Franconia-Springfield",
+                "Federal Center SW",
+                "Foggy Bottom GWU",
+                "Farragut West",
+                "Federal Triangle"
+            ])
         );
         Ok(())
     }

@@ -4,7 +4,6 @@ use crate::encoding::DynEncoding;
 use std::io::{Read, Write};
 
 use crate::field::types::Date;
-use crate::field::DELETION_FLAG_SIZE;
 use crate::memo::MemoFileType;
 
 // Used this as source: https://blog.codetitans.pl/post/dbf-and-language-code-page/
@@ -412,9 +411,8 @@ impl Header {
         if index >= self.num_records as usize {
             None
         } else {
-            let offset = self.offset_to_first_record as usize
-                + (index * (self.size_of_record as usize + DELETION_FLAG_SIZE))
-                + DELETION_FLAG_SIZE;
+            let offset =
+                self.offset_to_first_record as usize + (index * self.size_of_record as usize);
             Some(offset)
         }
     }
