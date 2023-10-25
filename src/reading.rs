@@ -152,6 +152,7 @@ impl<T: Read + Seek, E: Encoding + 'static> ReaderBuilder<T, E> {
             source: file.inner,
             memo_reader,
             header: file.header,
+            record_length: file.record_length,
             fields_info: file.fields_info,
             encoding: self
                 .encoding
@@ -171,6 +172,7 @@ pub struct Reader<T: Read + Seek> {
     memo_reader: Option<MemoReader<T>>,
     header: Header,
     fields_info: Vec<FieldInfo>,
+    record_length: u16,
     encoding: DynEncoding,
     options: ReadingOptions,
 }
@@ -208,6 +210,7 @@ impl<T: Read + Seek> Reader<T> {
             source: file.inner,
             memo_reader: None,
             header: file.header,
+            record_length: file.record_length,
             fields_info: file.fields_info,
             encoding: file.encoding,
             options: ReadingOptions::default(),
@@ -243,16 +246,12 @@ impl<T: Read + Seek> Reader<T> {
 
     /// Creates an iterator of records of the type you want
     pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
-        let record_size: usize = self
-            .fields_info
-            .iter()
-            .map(|i| i.field_length as usize)
-            .sum();
+        let record_length = self.record_length as usize;
         RecordIterator {
             reader: self,
             record_type: std::marker::PhantomData,
             current_record: 0,
-            record_data_buffer: std::io::Cursor::new(vec![0u8; record_size]),
+            record_data_buffer: std::io::Cursor::new(vec![0u8; record_length]),
             field_data_buffer: [0u8; 255],
         }
     }
@@ -289,8 +288,8 @@ impl<T: Read + Seek> Reader<T> {
 
     /// Seek to the start of the record at `index`
     pub fn seek(&mut self, index: usize) -> Result<(), Error> {
-        let offset = self.header.offset_to_first_record as usize
-            + (index * self.header.size_of_record as usize);
+        let offset =
+            self.header.offset_to_first_record as usize + (index * self.record_length as usize);
         self.source
             .seek(SeekFrom::Start(offset as u64))
             .map_err(|err| Error::io_error(err, 0))?;

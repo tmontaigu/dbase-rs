@@ -43,11 +43,7 @@ impl<'a, T> Debug for FieldRef<'a, T> {
 
 impl<'a, T> FieldRef<'a, T> {
     fn position_in_source(&self) -> u64 {
-        let record_position = self
-            .file
-            .header
-            .record_position(self.record_index.0)
-            .unwrap() as u64;
+        let record_position = self.file.record_position(self.record_index.0).unwrap() as u64;
         let position_in_record = self.file.fields_info[..self.field_index.0]
             .iter()
             .map(|i| i.field_length as u64)
@@ -195,7 +191,7 @@ impl<'a, T> RecordRef<'a, T> {
     }
 
     fn position_in_source(&self) -> u64 {
-        self.file.header.record_position(self.index.0).unwrap() as u64
+        self.file.record_position(self.index.0).unwrap() as u64
     }
 }
 
@@ -358,6 +354,7 @@ impl<'a, T> FileRecordIterator<'a, T> {
 pub struct File<T> {
     pub(crate) inner: T,
     pub(crate) header: Header,
+    pub(crate) record_length: u16,
     pub(crate) fields_info: Vec<FieldInfo>,
     pub(crate) encoding: DynEncoding,
     /// Non-Memo field length is stored on a u8,
@@ -387,6 +384,17 @@ impl<T> File<T> {
 
     pub fn set_options(&mut self, options: ReadingOptions) {
         self.options = options;
+    }
+
+    pub(crate) fn record_position(&self, index: usize) -> Option<usize> {
+        if index >= self.header.num_records as usize {
+            None
+        } else {
+            let offset = self.header.offset_to_first_record as usize
+                + (index * (self.record_length as usize + DELETION_FLAG_SIZE))
+                + DELETION_FLAG_SIZE;
+            Some(offset)
+        }
     }
 }
 
@@ -430,10 +438,14 @@ impl<T: Read + Seek> File<T> {
             let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
             Error::new(field_error, 0)
         })?;
+
+        let record_length = fields_info.iter().map(|x| x.length() as u16).sum();
+
         Ok(Self {
             inner: source,
             // memo_reader: None,
             header,
+            record_length,
             fields_info,
             encoding,
             field_data_buffer: [0u8; 255],
@@ -470,9 +482,16 @@ impl<T: Write + Seek> File<T> {
     pub fn create_new(mut dst: T, table_info: TableInfo) -> Result<Self, Error> {
         write_header_parts(&mut dst, &table_info.header, &table_info.fields_info)?;
 
+        let record_length = table_info
+            .fields_info
+            .iter()
+            .map(|x| x.field_length as u16)
+            .sum();
+
         Ok(Self {
             inner: dst,
             header: table_info.header,
+            record_length: record_length,
             fields_info: table_info.fields_info,
             encoding: table_info.encoding,
             field_data_buffer: [0u8; 255],
@@ -501,8 +520,7 @@ impl<T: Write + Seek> File<T> {
         );
 
         let end_of_last_record = self.header.offset_to_first_record as u64
-            + self.num_records() as u64
-                * (DELETION_FLAG_SIZE as u64 + self.header.size_of_record as u64);
+            + self.num_records() as u64 * (DELETION_FLAG_SIZE as u64 + self.record_length as u64);
         self.inner
             .seek(SeekFrom::Start(end_of_last_record))
             .map_err(|error| Error::io_error(error, self.num_records()))?;
