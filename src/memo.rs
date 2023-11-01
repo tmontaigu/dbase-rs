@@ -9,6 +9,15 @@ pub(crate) enum MemoFileType {
     FoxBaseMemo,
 }
 
+impl MemoFileType {
+    pub(crate) const fn extension(self) -> &'static str {
+        match self {
+            MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => "dbt",
+            MemoFileType::FoxBaseMemo => "fpt",
+        }
+    }
+}
+
 /// Although there are different memo file type with each a different
 /// header organisation, we use the same struct internally
 #[derive(Debug, Copy, Clone)]
@@ -45,7 +54,7 @@ impl MemoHeader {
 
 /// Struct that reads knows how to read data from a memo source
 #[derive(Debug, Clone)]
-pub(crate) struct MemoReader<T: Read + Seek> {
+pub(crate) struct MemoReader<T> {
     memo_file_type: MemoFileType,
     header: MemoHeader,
     source: T,

@@ -52,7 +52,7 @@ pub struct TableInfo {
 /// Options related to reading
 #[derive(Copy, Clone, Debug)]
 pub struct ReadingOptions {
-    character_trim: TrimOption,
+    pub(crate) character_trim: TrimOption,
 }
 
 impl Default for ReadingOptions {
@@ -152,7 +152,7 @@ impl<T: Read + Seek, E: Encoding + 'static> ReaderBuilder<T, E> {
             source: file.inner,
             memo_reader,
             header: file.header,
-            fields_info: file.fields_info,
+            fields_info: file.fields_info.inner,
             encoding: self
                 .encoding
                 .map_or_else(|| file.encoding, DynEncoding::new),
@@ -208,7 +208,7 @@ impl<T: Read + Seek> Reader<T> {
             source: file.inner,
             memo_reader: None,
             header: file.header,
-            fields_info: file.fields_info,
+            fields_info: file.fields_info.inner,
             encoding: file.encoding,
             options: ReadingOptions::default(),
         })
@@ -622,7 +622,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
 #[cfg(test)]
 mod test {
     use std::fs::File;
-    use std::io::{Seek, SeekFrom};
+    use std::io::Seek;
 
     use super::*;
 
@@ -630,7 +630,7 @@ mod test {
     fn pos_after_reading() {
         let file = File::open("tests/data/line.dbf").unwrap();
         let mut reader = Reader::new(file).unwrap();
-        let pos_after_reading = reader.source.seek(SeekFrom::Current(0)).unwrap();
+        let pos_after_reading = reader.source.stream_position().unwrap();
 
         let mut expected_pos = Header::SIZE + ((reader.fields_info.len()) * FieldInfo::SIZE);
         // Don't forget terminator

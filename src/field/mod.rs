@@ -1,5 +1,7 @@
 use std::convert::TryFrom;
 use std::io::{Read, Write};
+use std::ops::Index;
+use std::slice::SliceIndex;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
@@ -155,6 +157,67 @@ impl FieldInfo {
     }
 }
 
+pub struct FieldsInfo {
+    pub(crate) inner: Vec<FieldInfo>,
+}
+
+impl FieldsInfo {
+    pub(crate) fn read_from<R: Read>(source: &mut R, num_fields: usize) -> Result<Self, ErrorKind> {
+        let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields);
+        for _ in 0..num_fields {
+            let info = FieldInfo::read_from(source)?;
+            fields_info.push(info);
+        }
+
+        Ok(Self { inner: fields_info })
+    }
+
+    pub(crate) fn field_position_in_record(&self, index: usize) -> Option<usize> {
+        self.inner
+            .get(..index)
+            .map(|slc| slc.iter().map(|i| i.field_length as usize).sum::<usize>())
+            .map(|s| s + DELETION_FLAG_SIZE)
+    }
+
+    pub(crate) fn size_of_all_fields(&self) -> usize {
+        self.inner
+            .iter()
+            .map(|i| i.field_length as usize)
+            .sum::<usize>()
+    }
+
+    pub(crate) fn at_least_one_field_is_memo(&self) -> bool {
+        self.inner
+            .iter()
+            .any(|f_info| f_info.field_type == FieldType::Memo)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, FieldInfo> {
+        self.inner.iter()
+    }
+}
+
+impl AsRef<[FieldInfo]> for FieldsInfo {
+    fn as_ref(&self) -> &[FieldInfo] {
+        &self.inner
+    }
+}
+
+impl<I> Index<I> for FieldsInfo
+where
+    I: SliceIndex<[FieldInfo]>,
+{
+    type Output = I::Output;
+
+    fn index(&self, index: I) -> &Self::Output {
+        &self.inner.as_slice()[index]
+    }
+}
+
 impl std::fmt::Display for FieldInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -172,21 +235,28 @@ pub(crate) enum DeletionFlag {
 }
 
 impl DeletionFlag {
-    pub(crate) fn read_from<T: Read>(source: &mut T) -> std::io::Result<Self> {
-        let byte = source.read_u8()?;
-        match byte {
-            0x20 => Ok(Self::NotDeleted),
-            0x2A => Ok(Self::Deleted),
-            // Silently consider other values as not deleted
-            _ => Ok(Self::NotDeleted),
+    pub(crate) const fn to_byte(self) -> u8 {
+        match self {
+            Self::NotDeleted => 0x20,
+            Self::Deleted => 0x2A,
         }
     }
 
-    pub(crate) fn write_to<T: Write>(self, dst: &mut T) -> std::io::Result<()> {
-        match self {
-            Self::NotDeleted => dst.write_u8(0x20),
-            Self::Deleted => dst.write_u8(0x2A),
+    pub(crate) const fn from_byte(byte: u8) -> Self {
+        match byte {
+            0x20 => Self::NotDeleted,
+            0x2A => Self::Deleted,
+            // Silently consider other values as not deleted
+            _ => Self::NotDeleted,
         }
+    }
+
+    pub(crate) fn read_from<T: Read>(source: &mut T) -> std::io::Result<Self> {
+        source.read_u8().map(Self::from_byte)
+    }
+
+    pub(crate) fn write_to<T: Write>(self, dst: &mut T) -> std::io::Result<()> {
+        dst.write_u8(self.to_byte())
     }
 }
 /// Flags describing a field

@@ -288,7 +288,7 @@ mod reading;
 mod record;
 mod writing;
 
-pub use file::{FieldRef, File, RecordRef};
+pub use file::{FieldIndex, FieldRef, File, RecordIndex, RecordRef};
 
 #[cfg(feature = "datafusion")]
 pub use crate::datafusion::{DbaseTable, DbaseTableFactory};
