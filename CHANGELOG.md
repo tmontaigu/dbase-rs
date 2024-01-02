@@ -1,3 +1,9 @@
+# 0.5.0
+    - Added `ReaderBuilder`
+    - Fix off by one error in dbase::File
+    - Improve performance of dbase::File
+    - Datafusion now accounts for empty records
+    - Datafusion properly escape special chars in memo files
 # O.4.0
     - `Date` is now const-constructible
     - `dbase_record!` keeps visibility token
