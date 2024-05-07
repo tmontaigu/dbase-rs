@@ -14,16 +14,26 @@ use std::fmt::{Debug, Formatter};
 use std::io::{BufReader, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+// Workaround the absence of File::try_clone with WASM/WASI without penalizing the other platforms
+#[cfg(target_family = "wasm")]
+type SharedFile = std::sync::Arc<std::fs::File>;
+#[cfg(not(target_family = "wasm"))]
+type SharedFile = std::fs::File;
+
 pub struct BufReadWriteFile {
-    input: BufReader<std::fs::File>,
-    output: BufWriter<std::fs::File>,
+    input: BufReader<SharedFile>,
+    output: BufWriter<SharedFile>,
 }
 
 impl BufReadWriteFile {
-    fn new(file: std::fs::File) -> std::io::Result<Self> {
-        let input = BufReader::new(file.try_clone()?);
-        let output = BufWriter::new(file);
+    fn new(file: SharedFile) -> std::io::Result<Self> {
+        #[cfg(target_family = "wasm")]
+        let file_ = file.clone();
+        #[cfg(not(target_family = "wasm"))]
+        let file_ = file.try_clone()?;
 
+        let input = BufReader::new(file_);
+        let output = BufWriter::new(file);
         Ok(Self { input, output })
     }
 }
@@ -706,14 +716,15 @@ impl File<BufReadWriteFile> {
         let file = options
             .open(path)
             .map_err(|error| Error::io_error(error, 0))?;
-        File::open(BufReadWriteFile::new(file).unwrap())
+        let source = BufReadWriteFile::new(file.into()).unwrap();
+        File::open(source)
     }
 
     /// Opens an existing dBase file in read only mode
     pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = std::fs::File::open(path.as_ref()).map_err(|error| Error::io_error(error, 0))?;
 
-        let mut file = File::open(BufReadWriteFile::new(file).unwrap())?;
+        let mut file = File::open(BufReadWriteFile::new(file.into()).unwrap())?;
         if file.fields_info.at_least_one_field_is_memo() {
             let p = path.as_ref();
             let memo_type = file.header.file_type.supported_memo_type();
@@ -726,7 +737,7 @@ impl File<BufReadWriteFile> {
                     kind: ErrorKind::ErrorOpeningMemoFile(error),
                 })?;
 
-                let memo_reader = BufReadWriteFile::new(memo_file)
+                let memo_reader = BufReadWriteFile::new(memo_file.into())
                     .and_then(|memo_file| MemoReader::new(mt, memo_file))
                     .map_err(|error| Error::io_error(error, 0))?;
 
@@ -760,7 +771,7 @@ impl File<BufReadWriteFile> {
     pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
         let file = std::fs::File::create(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::create_new(BufReadWriteFile::new(file).unwrap(), table_info)
+        File::create_new(BufReadWriteFile::new(file.into()).unwrap(), table_info)
     }
 }
 
