@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::encoding::DynEncoding;
+use crate::encoding::{DynEncoding, EncodingRs};
 use std::io::{Read, Write};
 
 use crate::field::types::Date;
@@ -94,7 +94,36 @@ impl CodePageMark {
         }
         #[cfg(not(feature = "yore"))]
         {
-            Some(DynEncoding::new(crate::encoding::UnicodeLossy))
+            //Some(DynEncoding::new(crate::encoding::UnicodeLossy))
+           let code_page = match self {
+                //CodePageMark::CP437 => 437,
+                //CodePageMark::CP850 => 850,
+                CodePageMark::CP1252 => 1252,
+                //CodePageMark::CP852 => 852 ,
+                CodePageMark::CP866 => 866 ,
+                //CodePageMark::CP865 => 865 ,
+                //CodePageMark::CP861 => 861,
+                CodePageMark::CP874 => 874,
+                CodePageMark::CP1255 => 1255,
+                CodePageMark::CP1256 => 1256,
+                CodePageMark::CP1250 => 1250,
+                CodePageMark::CP1251 => 1251,
+                CodePageMark::CP1254 => 1254,
+                CodePageMark::CP1253 => 1253,
+                CodePageMark::Utf8 => 65001,
+                //CodePageMark::CP895 => 895,
+                //CodePageMark::CP620 => 620,
+                //CodePageMark::CP737 => 737,
+                //CodePageMark::CP857 => 857,
+                CodePageMark::CP950 => 950,
+                CodePageMark::CP949 => 949,
+                CodePageMark::CP936 => 936,
+                CodePageMark::CP932 => 932,
+                _ => 65001
+            };
+            let gbk :EncodingRs = (codepage::to_encoding(code_page).unwrap()).into();
+            Some(DynEncoding::new(gbk))
+            
         }
     }
 }
@@ -106,6 +135,7 @@ impl From<u8> for CodePageMark {
             0x01 => Self::CP437,
             0x02 => Self::CP850,
             0x03 => Self::CP1252,
+            0x4D => Self::CP936,
             // 0x04 => Self::StandardMacIntosh,
             0x64 => Self::CP852,
             0x65 => Self::CP866,
