@@ -45,6 +45,42 @@
 //! # }
 //! ```
 //!
+//! # Other Codepages / Encodings
+//!
+//! As baseline, dbase-rs only suppors Utf8 and Utf8-lossy encodings, meaning
+//! only files using strings in ASCII encoding will properly be deccoded.
+//! However, two optional features exist to work with non-ASCII encodings:
+//!
+//! * yore: uses the yore crate supports most code pages
+//! * encoding_rs: uses the encoding_rs crate, supports notably the GBK encoding
+//!
+//! If both feature are activated, "yore" takes the priority.
+//!
+//! To force the use of a particular encoding:
+//! ```
+//! # #[cfg(feature = "yore")]
+//! use yore::code_pages::CP850;
+//!
+//! # #[cfg(feature = "yore")]
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", CP850)?;
+//! let records = reader.read()?;
+//!
+//! assert_eq!(records[0].get("TEXT"), Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string()))));
+//!
+//! # Ok(())
+//! # }
+//!
+//! # #[cfg(not(feature = "yore"))]
+//! # fn main() {
+//! # }
+//! ```
+//!
+//! The functions that do not take an encoding as parameter, use [`UnicodeLossy`] by default,
+//! they try to read all data as Unicode and replace unrepresentable characters with the unicode
+//! replacement character. Alternatively [`Unicode`] is available, to return an [`Err`] when data
+//! can't be represented as Unicode.
+//!
 //! ## Deserialisation
 //!
 //! If you know what kind of data to expect from a particular file you can use implement
@@ -124,35 +160,6 @@
 //! # }
 //! ```
 //!
-//! ## Other Codepages / Encodings
-//!
-//! Support for encodings other than Unicode is provided via the crate [`yore`].
-//! This crate only supports some basic single-byte codepages, but many of those
-//! were used by older systems, which dBase databases you may want to open might use.
-//!
-//! ```
-//! # #[cfg(feature = "yore")]
-//! use yore::code_pages::CP850;
-//!
-//! # #[cfg(feature = "yore")]
-//! # fn main() -> Result<(), dbase::Error> {
-//! let mut reader = dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", CP850)?;
-//! let records = reader.read()?;
-//!
-//! assert_eq!(records[0].get("TEXT"), Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string()))));
-//!
-//! # Ok(())
-//! # }
-//!
-//! # #[cfg(not(feature = "yore"))]
-//! # fn main() {
-//! # }
-//! ```
-//!
-//! The functions that do not take an encoding as parameter, use [`UnicodeLossy`] by default,
-//! they try to read all data as Unicode and replace unrepresentable characters with the unicode
-//! replacement character. Alternatively [`Unicode`] is available, to return an [`Err`] when data
-//! can't be represented as Unicode.
 //!
 //! # Writing
 //!
