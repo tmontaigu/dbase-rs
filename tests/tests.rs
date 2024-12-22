@@ -18,7 +18,7 @@ const STATIONS_WITH_DELETED: &str = "./tests/data/stations_with_deleted.dbf";
 #[cfg(feature = "yore")]
 const CP850_DBF: &str = "tests/data/cp850.dbf";
 
-
+#[cfg(feature = "encoding_rs")]
 const CP936_DBF: &str = "tests/data/cp936.dbf";
 
 fn write_read_compare<R>(records: &Vec<R>, writer_builder: TableWriterBuilder)
@@ -365,15 +365,14 @@ fn test_record_marked_as_deleted_are_skipped_by_reader() -> Result<(), Box<dyn s
     Ok(())
 }
 
-
+#[cfg(feature = "encoding_rs")]
 #[test]
 fn test_codepages_cp936() {
-    let mut reader =
-        dbase::Reader::from_path(CP936_DBF).unwrap();
+    let mut reader = dbase::Reader::from_path(CP936_DBF).unwrap();
     let records = reader.read().unwrap();
 
     assert_eq!(
         records[0].get("TEST"),
         Some(&dbase::FieldValue::Character(Some("测试中文".to_string())))
-    ); 
+    );
 }

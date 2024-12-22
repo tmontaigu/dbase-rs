@@ -18,8 +18,8 @@ yore = { version = "1.0.1", optional = true }
 datafusion = { version = "31", optional = true }
 datafusion-expr = { version = "31", optional = true }
 async-trait = { version = "0.1", optional = true }
-codepage= "0.1.2"
-encoding_rs = "0.8.35"
+codepage = { version = "0.1.2", optional = true }
+encoding_rs = { version = "0.8.35", optional = true }
 
 [dev-dependencies]
 serde_derive = "1.0.102"
@@ -28,6 +28,8 @@ tokio = "1.26"
 
 [features]
 datafusion = ["dep:datafusion", "dep:datafusion-expr", "dep:async-trait"]
+yore = ["dep:yore"]
+encoding_rs = ["dep:encoding_rs", "dep:codepage"]
 
 [[example]]
 name = "datafusion"

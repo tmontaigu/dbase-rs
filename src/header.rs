@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::encoding::{DynEncoding, EncodingRs};
+use crate::encoding::DynEncoding;
 use std::io::{Read, Write};
 
 use crate::field::types::Date;
@@ -8,7 +8,7 @@ use crate::memo::MemoFileType;
 
 // Used this as source: https://blog.codetitans.pl/post/dbf-and-language-code-page/
 // also https://github.com/ethanfurman/dbf/blob/4f8ff35bec18ca167981ba741bfe353f5f362f99/dbf/__init__.py#L8299
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CodePageMark {
     Undefined,
     // OEM United States
@@ -57,28 +57,34 @@ pub enum CodePageMark {
 
 impl CodePageMark {
     pub(crate) fn to_encoding(self) -> Option<DynEncoding> {
+        #[allow(
+            unused_assignments,
+            reason = "The writes happening to this variable are feature bound"
+        )]
+        let mut encoding = None;
+
         #[cfg(feature = "yore")]
         {
             use crate::encoding::{LossyCodePage, Unicode};
             use yore::code_pages;
-            Some(match self {
-                CodePageMark::CP437 => DynEncoding::new(code_pages::CP437),
-                CodePageMark::CP850 => DynEncoding::new(code_pages::CP850),
-                CodePageMark::CP1252 => DynEncoding::new(code_pages::CP1252),
-                CodePageMark::CP852 => DynEncoding::new(code_pages::CP852),
-                CodePageMark::CP866 => DynEncoding::new(code_pages::CP866),
-                CodePageMark::CP865 => DynEncoding::new(code_pages::CP865),
-                CodePageMark::CP861 => DynEncoding::new(code_pages::CP861),
-                CodePageMark::CP874 => DynEncoding::new(code_pages::CP874),
-                CodePageMark::CP1255 => DynEncoding::new(code_pages::CP1255),
-                CodePageMark::CP1256 => DynEncoding::new(code_pages::CP1256),
-                CodePageMark::CP1250 => DynEncoding::new(code_pages::CP1250),
-                CodePageMark::CP1251 => DynEncoding::new(code_pages::CP1251),
-                CodePageMark::CP1254 => DynEncoding::new(code_pages::CP1254),
-                CodePageMark::CP1253 => DynEncoding::new(code_pages::CP1253),
-                CodePageMark::Utf8 => DynEncoding::new(Unicode),
+            encoding = match self {
+                CodePageMark::CP437 => Some(DynEncoding::new(code_pages::CP437)),
+                CodePageMark::CP850 => Some(DynEncoding::new(code_pages::CP850)),
+                CodePageMark::CP1252 => Some(DynEncoding::new(code_pages::CP1252)),
+                CodePageMark::CP852 => Some(DynEncoding::new(code_pages::CP852)),
+                CodePageMark::CP866 => Some(DynEncoding::new(code_pages::CP866)),
+                CodePageMark::CP865 => Some(DynEncoding::new(code_pages::CP865)),
+                CodePageMark::CP861 => Some(DynEncoding::new(code_pages::CP861)),
+                CodePageMark::CP874 => Some(DynEncoding::new(code_pages::CP874)),
+                CodePageMark::CP1255 => Some(DynEncoding::new(code_pages::CP1255)),
+                CodePageMark::CP1256 => Some(DynEncoding::new(code_pages::CP1256)),
+                CodePageMark::CP1250 => Some(DynEncoding::new(code_pages::CP1250)),
+                CodePageMark::CP1251 => Some(DynEncoding::new(code_pages::CP1251)),
+                CodePageMark::CP1254 => Some(DynEncoding::new(code_pages::CP1254)),
+                CodePageMark::CP1253 => Some(DynEncoding::new(code_pages::CP1253)),
+                CodePageMark::Utf8 => Some(DynEncoding::new(Unicode)),
                 CodePageMark::Undefined | CodePageMark::Invalid => {
-                    DynEncoding::new(LossyCodePage(code_pages::CP1252))
+                    Some(DynEncoding::new(LossyCodePage(code_pages::CP1252)))
                 }
                 CodePageMark::CP895
                 | CodePageMark::CP620
@@ -87,22 +93,25 @@ impl CodePageMark {
                 | CodePageMark::CP950
                 | CodePageMark::CP949
                 | CodePageMark::CP936
-                | CodePageMark::CP932 => {
-                    return None;
-                }
-            })
+                | CodePageMark::CP932 => None,
+            };
         }
-        #[cfg(not(feature = "yore"))]
+        #[cfg(feature = "encoding_rs")]
         {
-            //Some(DynEncoding::new(crate::encoding::UnicodeLossy))
-           let code_page = match self {
-                //CodePageMark::CP437 => 437,
-                //CodePageMark::CP850 => 850,
+            use crate::encoding::EncodingRs;
+
+            if encoding.is_some() {
+                return encoding;
+            }
+
+            let code_page = match self {
+                CodePageMark::CP437 => 437,
+                CodePageMark::CP850 => 850,
                 CodePageMark::CP1252 => 1252,
-                //CodePageMark::CP852 => 852 ,
-                CodePageMark::CP866 => 866 ,
-                //CodePageMark::CP865 => 865 ,
-                //CodePageMark::CP861 => 861,
+                CodePageMark::CP852 => 852,
+                CodePageMark::CP866 => 866,
+                CodePageMark::CP865 => 865,
+                CodePageMark::CP861 => 861,
                 CodePageMark::CP874 => 874,
                 CodePageMark::CP1255 => 1255,
                 CodePageMark::CP1256 => 1256,
@@ -111,20 +120,33 @@ impl CodePageMark {
                 CodePageMark::CP1254 => 1254,
                 CodePageMark::CP1253 => 1253,
                 CodePageMark::Utf8 => 65001,
-                //CodePageMark::CP895 => 895,
-                //CodePageMark::CP620 => 620,
-                //CodePageMark::CP737 => 737,
-                //CodePageMark::CP857 => 857,
+                CodePageMark::CP895 => 895,
+                CodePageMark::CP620 => 620,
+                CodePageMark::CP737 => 737,
+                CodePageMark::CP857 => 857,
                 CodePageMark::CP950 => 950,
                 CodePageMark::CP949 => 949,
                 CodePageMark::CP936 => 936,
                 CodePageMark::CP932 => 932,
-                _ => 65001
+                _ => 65001,
             };
-            let gbk :EncodingRs = (codepage::to_encoding(code_page).unwrap()).into();
-            Some(DynEncoding::new(gbk))
-            
+            encoding = codepage::to_encoding(code_page)
+                .map(|encoding| DynEncoding::new(EncodingRs::from(encoding)));
         }
+
+        if encoding.is_none() {
+            match self {
+                CodePageMark::Utf8 => {
+                    encoding = Some(DynEncoding::new(crate::encoding::Unicode));
+                }
+                CodePageMark::Undefined | CodePageMark::Invalid => {
+                    encoding = Some(DynEncoding::new(crate::encoding::UnicodeLossy));
+                }
+                _ => {}
+            }
+        }
+
+        encoding
     }
 }
 

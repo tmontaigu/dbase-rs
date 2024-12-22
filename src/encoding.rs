@@ -167,20 +167,19 @@ impl Encoding for DynEncoding {
     }
 }
 
+#[cfg(feature = "encoding_rs")]
+#[derive(Copy, Clone)]
+pub struct EncodingRs(&'static encoding_rs::Encoding);
 
-pub struct EncodingRs(&'static  encoding_rs::Encoding);
+#[cfg(feature = "encoding_rs")]
 impl From<&'static encoding_rs::Encoding> for EncodingRs {
     fn from(item: &'static encoding_rs::Encoding) -> Self {
         EncodingRs(item)
     }
 }
-impl Clone for EncodingRs  {
-    fn clone(&self) -> Self {
-        EncodingRs(self.0.clone())
-    }
-}
 
-impl AsCodePageMark for EncodingRs  {
+#[cfg(feature = "encoding_rs")]
+impl AsCodePageMark for EncodingRs {
     fn code_page_mark(&self) -> crate::CodePageMark {
         let code_page = codepage::from_encoding(self.0).unwrap();
         match code_page {
@@ -198,14 +197,13 @@ impl AsCodePageMark for EncodingRs  {
             949 => crate::CodePageMark::CP949,
             936 => crate::CodePageMark::CP936,
             932 => crate::CodePageMark::CP932,
-            _=> crate::CodePageMark::Utf8,
+            _ => crate::CodePageMark::Utf8,
         }
-
     }
 }
 
-impl Encoding for  EncodingRs
-{
+#[cfg(feature = "encoding_rs")]
+impl Encoding for EncodingRs {
     fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
         Ok(self.0.decode(bytes).0)
     }
@@ -214,7 +212,6 @@ impl Encoding for  EncodingRs
         Ok(self.0.encode(s).0)
     }
 }
-
 
 #[cfg(feature = "yore")]
 impl<T> Encoding for T
