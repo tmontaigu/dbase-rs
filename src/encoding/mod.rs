@@ -4,10 +4,6 @@ use crate::error::{DecodeError, EncodeError};
 use std::borrow::Cow;
 use std::fmt::Debug;
 
-pub trait AsCodePageMark {
-    fn code_page_mark(&self) -> crate::CodePageMark;
-}
-
 macro_rules! impl_as_code_page_mark {
     ($($t:ty => $cp:path),* $(,)?) => {
         $(
@@ -20,28 +16,25 @@ macro_rules! impl_as_code_page_mark {
     };
 }
 
+#[cfg(feature = "encoding_rs")]
+mod encoding_rs;
+#[cfg(feature = "yore")]
+mod yore;
+
+#[cfg(feature = "yore")]
+pub use yore::LossyCodePage;
+
+#[cfg(feature = "encoding_rs")]
+pub use encoding_rs::EncodingRs;
+
+pub trait AsCodePageMark {
+    fn code_page_mark(&self) -> crate::CodePageMark;
+}
+
 impl_as_code_page_mark!(
   Ascii => crate::CodePageMark::Utf8,
   UnicodeLossy => crate::CodePageMark::Utf8,
   Unicode => crate::CodePageMark::Utf8,
-);
-
-#[cfg(feature = "yore")]
-impl_as_code_page_mark!(
-    yore::code_pages::CP437 => crate::CodePageMark::CP437,
-    yore::code_pages::CP850 => crate::CodePageMark::CP850,
-    yore::code_pages::CP1252 => crate::CodePageMark::CP1252,
-    yore::code_pages::CP852 => crate::CodePageMark::CP852,
-    yore::code_pages::CP866 => crate::CodePageMark::CP866,
-    yore::code_pages::CP865 => crate::CodePageMark::CP865,
-    yore::code_pages::CP861 => crate::CodePageMark::CP861,
-    yore::code_pages::CP874 => crate::CodePageMark::CP874,
-    yore::code_pages::CP1255 => crate::CodePageMark::CP1255,
-    yore::code_pages::CP1256 => crate::CodePageMark::CP1256,
-    yore::code_pages::CP1250 => crate::CodePageMark::CP1250,
-    yore::code_pages::CP1251 => crate::CodePageMark::CP1251,
-    yore::code_pages::CP1254 => crate::CodePageMark::CP1254,
-    yore::code_pages::CP1253 => crate::CodePageMark::CP1253,
 );
 
 /// Trait for reading strings from the database files.
@@ -164,93 +157,5 @@ impl Encoding for DynEncoding {
 
     fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
         self.inner.encode(s)
-    }
-}
-
-#[cfg(feature = "encoding_rs")]
-#[derive(Copy, Clone)]
-pub struct EncodingRs(&'static encoding_rs::Encoding);
-
-#[cfg(feature = "encoding_rs")]
-impl From<&'static encoding_rs::Encoding> for EncodingRs {
-    fn from(item: &'static encoding_rs::Encoding) -> Self {
-        EncodingRs(item)
-    }
-}
-
-#[cfg(feature = "encoding_rs")]
-impl AsCodePageMark for EncodingRs {
-    fn code_page_mark(&self) -> crate::CodePageMark {
-        let code_page = codepage::from_encoding(self.0).unwrap();
-        match code_page {
-            1252 => crate::CodePageMark::CP1252,
-            866 => crate::CodePageMark::CP866,
-            874 => crate::CodePageMark::CP874,
-            1255 => crate::CodePageMark::CP1255,
-            1256 => crate::CodePageMark::CP1256,
-            1250 => crate::CodePageMark::CP1250,
-            1251 => crate::CodePageMark::CP1251,
-            1254 => crate::CodePageMark::CP1254,
-            1253 => crate::CodePageMark::CP1253,
-            65001 => crate::CodePageMark::Utf8,
-            950 => crate::CodePageMark::CP950,
-            949 => crate::CodePageMark::CP949,
-            936 => crate::CodePageMark::CP936,
-            932 => crate::CodePageMark::CP932,
-            _ => crate::CodePageMark::Utf8,
-        }
-    }
-}
-
-#[cfg(feature = "encoding_rs")]
-impl Encoding for EncodingRs {
-    fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
-        Ok(self.0.decode(bytes).0)
-    }
-
-    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
-        Ok(self.0.encode(s).0)
-    }
-}
-
-#[cfg(feature = "yore")]
-impl<T> Encoding for T
-where
-    T: 'static + yore::CodePage + Clone + AsCodePageMark + Send,
-{
-    fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
-        self.decode(bytes).map_err(Into::into)
-    }
-
-    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
-        self.encode(s).map_err(Into::into)
-    }
-}
-
-#[cfg(feature = "yore")]
-#[derive(Copy, Clone)]
-pub struct LossyCodePage<CP>(pub CP);
-
-#[cfg(feature = "yore")]
-impl<CP> AsCodePageMark for LossyCodePage<CP>
-where
-    CP: AsCodePageMark,
-{
-    fn code_page_mark(&self) -> crate::CodePageMark {
-        self.0.code_page_mark()
-    }
-}
-
-#[cfg(feature = "yore")]
-impl<CP> Encoding for LossyCodePage<CP>
-where
-    CP: 'static + yore::CodePage + Clone + AsCodePageMark + Send,
-{
-    fn decode<'a>(&self, bytes: &'a [u8]) -> Result<Cow<'a, str>, DecodeError> {
-        Ok(self.0.decode_lossy(bytes))
-    }
-
-    fn encode<'a>(&self, s: &'a str) -> Result<Cow<'a, [u8]>, EncodeError> {
-        Ok(self.0.encode_lossy(s, b'?'))
     }
 }

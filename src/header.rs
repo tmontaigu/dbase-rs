@@ -61,6 +61,7 @@ impl CodePageMark {
             unused_assignments,
             reason = "The writes happening to this variable are feature bound"
         )]
+        #[allow(unused_mut)]
         let mut encoding = None;
 
         #[cfg(feature = "yore")]
