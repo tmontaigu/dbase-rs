@@ -311,6 +311,9 @@ pub use crate::reading::{
 pub use crate::record::Record;
 pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableRecord};
 
+#[cfg(feature = "chrono")]
+pub use crate::field::types::ChronoDateConversionError;
+
 /// macro to define a struct that implements the ReadableRecord and WritableRecord
 ///
 /// # Examples

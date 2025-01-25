@@ -3,13 +3,14 @@ use std::fmt;
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
 
-use crate::Encoding;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
 use crate::error::ErrorKind;
 use crate::field::FieldInfo;
 use crate::memo::MemoReader;
 use crate::writing::WritableAsDbaseField;
+use crate::Encoding;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+#[cfg(feature = "chrono")]
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
 /// Enum listing all the field types we know of
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -407,6 +408,47 @@ impl From<time::Date> for Date {
     }
 }
 
+/// An error representing a conversion error from [`chrono::NaiveDate`] to [`Date`] when conversion
+/// fails if year > 9999 or year < 0.
+#[cfg(feature = "chrono")]
+#[derive(Debug, PartialEq)]
+pub struct ChronoDateConversionError;
+
+#[cfg(feature = "chrono")]
+impl<T: std::error::Error> From<T> for ChronoDateConversionError {
+    fn from(_value: T) -> Self {
+        ChronoDateConversionError
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<Date> for chrono::NaiveDate {
+    fn from(value: Date) -> Self {
+        // The year is enforced to be 4 digits by the contructor, smaller than i32::MAX, therefore
+        // the year conversion should never fail
+        // The crate ensures the year, month and day are valid, and because the valid set ofgit ad
+        // characters is smaller than
+        chrono::NaiveDate::from_ymd_opt(value.year.try_into().unwrap(), value.month, value.day)
+            .unwrap()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl TryFrom<chrono::NaiveDate> for Date {
+    type Error = ChronoDateConversionError;
+    fn try_from(value: NaiveDate) -> Result<Self, Self::Error> {
+        if value.year() > 9999 {
+            return Err(ChronoDateConversionError);
+        }
+
+        Ok(Self::new(
+            value.day(),
+            value.month(),
+            value.year().try_into()?,
+        ))
+    }
+}
+
 /// FoxBase representation of a time
 /// # note
 ///
@@ -476,6 +518,21 @@ impl Time {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl From<Time> for chrono::NaiveTime {
+    fn from(value: Time) -> Self {
+        // The dbase crate ensure that the values are within the valid range of chrono
+        chrono::NaiveTime::from_hms_opt(value.hours, value.minutes, value.seconds).unwrap()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<chrono::NaiveTime> for Time {
+    fn from(value: NaiveTime) -> Self {
+        Self::new(value.hour(), value.minute(), value.second())
+    }
+}
+
 /// FoxBase representation of a DateTime
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DateTime {
@@ -518,6 +575,21 @@ impl DateTime {
         dest.write_i32::<LittleEndian>(self.date.to_julian_day_number())?;
         dest.write_i32::<LittleEndian>(self.time.to_time_word())?;
         Ok(())
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<DateTime> for chrono::NaiveDateTime {
+    fn from(value: DateTime) -> Self {
+        chrono::NaiveDateTime::new(value.date.into(), value.time.into())
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl TryFrom<chrono::NaiveDateTime> for DateTime {
+    type Error = ChronoDateConversionError;
+    fn try_from(value: NaiveDateTime) -> Result<Self, Self::Error> {
+        Ok(Self::new(value.date().try_into()?, value.time().into()))
     }
 }
 
@@ -1008,6 +1080,32 @@ mod test {
 
         let record_info = create_temp_field_info(FieldType::Character, 10);
         test_we_can_read_back(&record_info, &field);
+    }
+
+    #[test]
+    #[cfg(feature = "chrono")]
+    fn test_chrono_date_conversion() {
+        let date = Date::new(25, 1, 2025);
+        let chrono_date = date.into();
+
+        assert_eq!(
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 25),
+            Some(chrono_date)
+        );
+        assert_eq!(chrono_date.try_into(), Ok(date));
+    }
+
+    #[test]
+    #[cfg(feature = "chrono")]
+    fn test_chrono_time_conversion() {
+        let time = Time::new(16, 5, 10);
+        let chrono_time = time.into();
+
+        assert_eq!(
+            chrono::NaiveTime::from_hms_opt(16, 5, 10),
+            Some(chrono_time)
+        );
+        assert_eq!(time, chrono_time.into());
     }
 
     #[test]
