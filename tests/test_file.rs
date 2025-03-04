@@ -271,8 +271,8 @@ fn test_file_classical_user_record_example() -> Result<(), Box<dyn std::error::E
 
     let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
     let table_info = dbase::TableWriterBuilder::new()
-        .add_character_field("First Name".try_into().unwrap(), 50)
-        .add_character_field("Last Name".try_into().unwrap(), 50)
+        .add_character_field("First Name".try_into()?, 50)
+        .add_character_field("Last Name".try_into()?, 50)
         .build_table_info();
 
     {
@@ -306,10 +306,10 @@ fn test_file_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
     file.set_options(reading);
 
     let expected_trim_end = StationRecord {
-        name: format!("{}", "Franconia-Springfield",),
-        marker_col: format!("{}", "#0000ff",),
-        marker_sym: format!("{}", "rail-metro",),
-        line: format!("{}", "blue",),
+        name: "Franconia-Springfield".to_string(),
+        marker_col: "#0000ff".to_string(),
+        marker_sym: "rail-metro".to_string(),
+        line: "blue".to_string(),
     };
 
     let record = file.record(1).unwrap().read_as::<StationRecord>()?;

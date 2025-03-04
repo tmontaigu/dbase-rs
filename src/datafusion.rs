@@ -31,10 +31,10 @@ pub struct DbaseTable {
 
 impl Clone for DbaseTable {
     fn clone(&self) -> Self {
-        return DbaseTable {
+        DbaseTable {
             path: self.path.clone(),
             file: self.file.clone(),
-        };
+        }
     }
 }
 
@@ -42,18 +42,18 @@ impl DbaseTable {
     pub fn new<P: AsRef<Path> + Debug>(path: P) -> Self {
         let file = DbaseFile::open_read_only(&path)
             .expect(format!("Could not find file {:?} or corresponding memo file", &path).as_str());
-        return DbaseTable {
+        DbaseTable {
             path: path
                 .as_ref()
                 .to_str()
                 .expect("Path contains non-unicode characters")
                 .to_string(),
             file: Arc::new(Mutex::new(file)),
-        };
+        }
     }
 
     pub fn num_records(&self) -> usize {
-        return self.file.lock().unwrap().num_records();
+        self.file.lock().unwrap().num_records()
     }
 
     pub(crate) async fn create_physical_plan(
@@ -115,9 +115,8 @@ impl TableProvider for DbaseTable {
         _filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        return self
-            .create_physical_plan(projection, limit, self.schema())
-            .await;
+        self.create_physical_plan(projection, limit, self.schema())
+            .await
     }
 }
 
@@ -395,7 +394,7 @@ mod test {
     #[tokio::test]
     async fn test_simple_query() -> Result<()> {
         let cfg = RuntimeConfig::new();
-        let env = RuntimeEnv::new(cfg).unwrap();
+        let env = RuntimeEnv::new(cfg)?;
         let ses = SessionConfig::new();
         let mut state = SessionState::with_config_rt(ses, Arc::new(env));
 

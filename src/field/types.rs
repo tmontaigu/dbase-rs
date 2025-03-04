@@ -1,5 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::fmt::Display;
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
 
@@ -86,10 +87,10 @@ impl FieldType {
         match self {
             FieldType::Logical => Some(1),
             FieldType::Date => Some(8),
-            FieldType::Integer => Some(std::mem::size_of::<i32>() as u8),
-            FieldType::Currency => Some(std::mem::size_of::<f64>() as u8),
-            FieldType::DateTime => Some(2 * std::mem::size_of::<i32>() as u8),
-            FieldType::Double => Some(std::mem::size_of::<f64>() as u8),
+            FieldType::Integer => Some(size_of::<i32>() as u8),
+            FieldType::Currency => Some(size_of::<f64>() as u8),
+            FieldType::DateTime => Some(2 * size_of::<i32>() as u8),
+            FieldType::Double => Some(size_of::<f64>() as u8),
             _ => None,
         }
     }
@@ -106,8 +107,8 @@ impl TryFrom<char> for FieldType {
     }
 }
 
-impl std::fmt::Display for FieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl Display for FieldType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "dbase::{:?}", self)
     }
 }
@@ -199,18 +200,18 @@ impl FieldValue {
                 }
             }
             FieldType::Integer => {
-                let mut le_bytes = [0u8; std::mem::size_of::<i32>()];
-                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<i32>()]);
+                let mut le_bytes = [0u8; size_of::<i32>()];
+                le_bytes.copy_from_slice(&field_bytes[..size_of::<i32>()]);
                 FieldValue::Integer(i32::from_le_bytes(le_bytes))
             }
             FieldType::Double => {
-                let mut le_bytes = [0u8; std::mem::size_of::<f64>()];
-                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<f64>()]);
+                let mut le_bytes = [0u8; size_of::<f64>()];
+                le_bytes.copy_from_slice(&field_bytes[..size_of::<f64>()]);
                 FieldValue::Double(f64::from_le_bytes(le_bytes))
             }
             FieldType::Currency => {
-                let mut le_bytes = [0u8; std::mem::size_of::<f64>()];
-                le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<f64>()]);
+                let mut le_bytes = [0u8; size_of::<f64>()];
+                le_bytes.copy_from_slice(&field_bytes[..size_of::<f64>()]);
                 FieldValue::Currency(f64::from_le_bytes(le_bytes))
             }
             FieldType::DateTime => {
@@ -227,8 +228,8 @@ impl FieldValue {
                         encoding.decode(trimmed_value)?.parse::<u32>()?
                     }
                 } else {
-                    let mut le_bytes = [0u8; std::mem::size_of::<u32>()];
-                    le_bytes.copy_from_slice(&field_bytes[..std::mem::size_of::<u32>()]);
+                    let mut le_bytes = [0u8; size_of::<u32>()];
+                    le_bytes.copy_from_slice(&field_bytes[..size_of::<u32>()]);
                     u32::from_le_bytes(le_bytes)
                 };
 
@@ -260,7 +261,7 @@ impl FieldValue {
     }
 }
 
-impl fmt::Display for FieldValue {
+impl Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
@@ -317,7 +318,7 @@ impl Date {
 
     pub fn to_unix_days(&self) -> i32 {
         let julian_day = self.to_julian_day_number();
-        return julian_day - 2440588;
+        julian_day - 2440588
     }
 
     // https://en.wikipedia.org/wiki/Julian_day
@@ -352,7 +353,7 @@ impl Date {
         }
     }
 
-    fn to_julian_day_number(&self) -> i32 {
+    fn to_julian_day_number(self) -> i32 {
         let (month, year) = if self.month > 2 {
             (self.month - 3, self.year)
         } else {
@@ -382,13 +383,13 @@ impl FromStr for Date {
     }
 }
 
-impl std::string::ToString for Date {
-    fn to_string(&self) -> String {
-        format!("{:04}{:02}{:02}", self.year, self.month, self.day)
+impl Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:04}{:02}{:02}", self.year, self.month, self.day)
     }
 }
 
-impl std::convert::TryFrom<Date> for time::Date {
+impl TryFrom<Date> for time::Date {
     type Error = time::error::ComponentRange;
 
     fn try_from(d: Date) -> Result<Self, Self::Error> {
@@ -408,7 +409,7 @@ impl From<time::Date> for Date {
     }
 }
 
-/// An error representing a conversion error from [`chrono::NaiveDate`] to [`Date`] when conversion
+/// An error representing a conversion error from [`NaiveDate`] to [`Date`] when conversion
 /// fails if year > 9999 or year < 0.
 #[cfg(feature = "chrono")]
 #[derive(Debug, PartialEq)]
@@ -422,19 +423,18 @@ impl<T: std::error::Error> From<T> for ChronoDateConversionError {
 }
 
 #[cfg(feature = "chrono")]
-impl From<Date> for chrono::NaiveDate {
+impl From<Date> for NaiveDate {
     fn from(value: Date) -> Self {
         // The year is enforced to be 4 digits by the contructor, smaller than i32::MAX, therefore
         // the year conversion should never fail
         // The crate ensures the year, month and day are valid, and because the valid set ofgit ad
         // characters is smaller than
-        chrono::NaiveDate::from_ymd_opt(value.year.try_into().unwrap(), value.month, value.day)
-            .unwrap()
+        NaiveDate::from_ymd_opt(value.year.try_into().unwrap(), value.month, value.day).unwrap()
     }
 }
 
 #[cfg(feature = "chrono")]
-impl TryFrom<chrono::NaiveDate> for Date {
+impl TryFrom<NaiveDate> for Date {
     type Error = ChronoDateConversionError;
     fn try_from(value: NaiveDate) -> Result<Self, Self::Error> {
         if value.year() > 9999 {
@@ -510,7 +510,7 @@ impl Time {
         }
     }
 
-    fn to_time_word(&self) -> i32 {
+    fn to_time_word(self) -> i32 {
         let mut time_word = self.hours * Self::HOURS_FACTOR as u32;
         time_word += self.minutes * Self::MINUTES_FACTOR as u32;
         time_word += self.seconds * Self::SECONDS_FACTOR as u32;
@@ -519,15 +519,15 @@ impl Time {
 }
 
 #[cfg(feature = "chrono")]
-impl From<Time> for chrono::NaiveTime {
+impl From<Time> for NaiveTime {
     fn from(value: Time) -> Self {
         // The dbase crate ensure that the values are within the valid range of chrono
-        chrono::NaiveTime::from_hms_opt(value.hours, value.minutes, value.seconds).unwrap()
+        NaiveTime::from_hms_opt(value.hours, value.minutes, value.seconds).unwrap()
     }
 }
 
 #[cfg(feature = "chrono")]
-impl From<chrono::NaiveTime> for Time {
+impl From<NaiveTime> for Time {
     fn from(value: NaiveTime) -> Self {
         Self::new(value.hour(), value.minute(), value.second())
     }
@@ -557,10 +557,10 @@ impl DateTime {
     }
 
     pub fn to_unix_timestamp(&self) -> i64 {
-        return self.date().to_unix_days() as i64 * 86400
+        self.date().to_unix_days() as i64 * 86400
             + self.time().hours() as i64 * 3600
             + self.time().minutes() as i64 * 60
-            + self.time().seconds() as i64;
+            + self.time().seconds() as i64
     }
 
     fn read_from<T: Read>(src: &mut T) -> Result<Self, ErrorKind> {
@@ -579,14 +579,14 @@ impl DateTime {
 }
 
 #[cfg(feature = "chrono")]
-impl From<DateTime> for chrono::NaiveDateTime {
+impl From<DateTime> for NaiveDateTime {
     fn from(value: DateTime) -> Self {
-        chrono::NaiveDateTime::new(value.date.into(), value.time.into())
+        NaiveDateTime::new(value.date.into(), value.time.into())
     }
 }
 
 #[cfg(feature = "chrono")]
-impl TryFrom<chrono::NaiveDateTime> for DateTime {
+impl TryFrom<NaiveDateTime> for DateTime {
     type Error = ChronoDateConversionError;
     fn try_from(value: NaiveDateTime) -> Result<Self, Self::Error> {
         Ok(Self::new(value.date().try_into()?, value.time().into()))
@@ -634,7 +634,7 @@ impl WritableAsDbaseField for f64 {
                     precision = field_info.num_decimal_places as usize
                 );
                 let encoded_string = encoding.encode(&string)?;
-                dst.write_all(&*encoded_string)?;
+                dst.write_all(&encoded_string)?;
                 Ok(())
             }
             FieldType::Currency | FieldType::Double => {
@@ -656,7 +656,7 @@ impl WritableAsDbaseField for Date {
         if field_info.field_type == FieldType::Date {
             let string = format!("{:04}{:02}{:02}", self.year, self.month, self.day);
             let encoded_string = encoding.encode(&string)?;
-            dst.write_all(&*encoded_string)?;
+            dst.write_all(&encoded_string)?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -719,7 +719,7 @@ impl WritableAsDbaseField for f32 {
                 precision = field_info.num_decimal_places as usize
             );
             let encoded_string = encoding.encode(&string)?;
-            dst.write_all(&*encoded_string)?;
+            dst.write_all(&encoded_string)?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -754,7 +754,7 @@ impl WritableAsDbaseField for String {
     ) -> Result<(), ErrorKind> {
         if field_info.field_type == FieldType::Character {
             let encoded_bytes = encoding.encode(self.as_str())?;
-            dst.write_all(&*encoded_bytes)?;
+            dst.write_all(&encoded_bytes)?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -789,7 +789,7 @@ impl WritableAsDbaseField for &str {
     ) -> Result<(), ErrorKind> {
         if field_info.field_type == FieldType::Character {
             let encoded_bytes = encoding.encode(self)?;
-            dst.write_all(&*encoded_bytes)?;
+            dst.write_all(&encoded_bytes)?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -807,10 +807,10 @@ impl WritableAsDbaseField for bool {
         if field_info.field_type == FieldType::Logical {
             if *self {
                 let encoded_bytes = encoding.encode("t")?;
-                dst.write_all(&*encoded_bytes)?;
+                dst.write_all(&encoded_bytes)?;
             } else {
                 let encoded_bytes = encoding.encode("f")?;
-                dst.write_all(&*encoded_bytes)?;
+                dst.write_all(&encoded_bytes)?;
             }
             Ok(())
         } else {
@@ -885,7 +885,7 @@ mod de {
             impl<'de> Visitor<'de> for DateVisitor {
                 type Value = Date;
 
-                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                     formatter.write_str("struct Date")
                 }
 
@@ -906,7 +906,7 @@ mod de {
     impl<'de> Visitor<'de> for DateTimeVisitor {
         type Value = DateTime;
 
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("struct dbase::DateTime")
         }
 
@@ -1030,7 +1030,7 @@ mod test {
             displacement_field: [0u8; 4],
             field_length: len,
             num_decimal_places: 0,
-            flags: FieldFlags { 0: 0u8 },
+            flags: FieldFlags(0),
             autoincrement_next_val: [0u8; 5],
             autoincrement_step: 0u8,
         }
@@ -1043,7 +1043,7 @@ mod test {
         value.write_as(field_info, &encoding, &mut out).unwrap();
         out.set_position(0);
 
-        let read_value = FieldValue::read_from::<std::io::Cursor<Vec<u8>>, _>(
+        let read_value = FieldValue::read_from::<Cursor<Vec<u8>>, _>(
             out.get_mut(),
             &mut None,
             field_info,
@@ -1058,8 +1058,8 @@ mod test {
     fn write_read_date() {
         let date = FieldValue::from(Date {
             year: 2019,
-            month: 01,
-            day: 01,
+            month: 1,
+            day: 1,
         });
 
         let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
@@ -1088,10 +1088,7 @@ mod test {
         let date = Date::new(25, 1, 2025);
         let chrono_date = date.into();
 
-        assert_eq!(
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 25),
-            Some(chrono_date)
-        );
+        assert_eq!(NaiveDate::from_ymd_opt(2025, 1, 25), Some(chrono_date));
         assert_eq!(chrono_date.try_into(), Ok(date));
     }
 
@@ -1101,10 +1098,7 @@ mod test {
         let time = Time::new(16, 5, 10);
         let chrono_time = time.into();
 
-        assert_eq!(
-            chrono::NaiveTime::from_hms_opt(16, 5, 10),
-            Some(chrono_time)
-        );
+        assert_eq!(NaiveTime::from_hms_opt(16, 5, 10), Some(chrono_time));
         assert_eq!(time, chrono_time.into());
     }
 
@@ -1127,7 +1121,7 @@ mod test {
     fn test_from_julian_day_number() {
         let date = Date::julian_day_number_to_gregorian_date(2458685);
         assert_eq!(date.year, 2019);
-        assert_eq!(date.month, 07);
+        assert_eq!(date.month, 7);
         assert_eq!(date.day, 20);
     }
 
@@ -1135,7 +1129,7 @@ mod test {
     fn test_to_julian_day_number() {
         let date = Date {
             year: 2019,
-            month: 07,
+            month: 7,
             day: 20,
         };
         assert_eq!(date.to_julian_day_number(), 2458685);
