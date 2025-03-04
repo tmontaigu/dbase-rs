@@ -492,7 +492,7 @@ pub struct TableWriter<W: Write + Seek> {
     header: Header,
     /// Buffer used by the FieldWriter
     buffer: [u8; 255],
-    closed: bool,
+    finalized: bool,
     encoding: DynEncoding,
 }
 
@@ -508,7 +508,7 @@ impl<W: Write + Seek> TableWriter<W> {
             fields_info,
             header: origin_header,
             buffer: [0u8; 255],
-            closed: false,
+            finalized: false,
             encoding,
         }
     }
@@ -535,7 +535,19 @@ impl<W: Write + Seek> TableWriter<W> {
     /// # }
     /// ```
     pub fn write_record<R: WritableRecord>(&mut self, record: &R) -> Result<(), Error> {
-        if self.header.num_records == 0 {
+        let current_record_num = self.header.num_records as usize;
+
+        if self.finalized {
+            let err =
+                std::io::Error::new(std::io::ErrorKind::Other, "Cannot write to finalized data");
+            return Err(Error {
+                record_num: current_record_num,
+                field: None,
+                kind: ErrorKind::IoError(err),
+            });
+        }
+
+        if current_record_num == 0 {
             // reserve the header
             self.write_header()?;
         }
@@ -546,8 +558,6 @@ impl<W: Write + Seek> TableWriter<W> {
             field_buffer: &mut Cursor::new(&mut self.buffer),
             encoding: &self.encoding,
         };
-
-        let current_record_num = self.header.num_records as usize;
 
         field_writer
             .write_deletion_flag()
@@ -614,14 +624,14 @@ impl<W: Write + Seek> TableWriter<W> {
         Ok(())
     }
 
-    /// Close the writer
+    /// Finalize the writer
     ///
-    /// Automatically closed when the writer is dropped,
+    /// The writer is automatically closed when the writer is dropped,
     /// use it if you want to handle error that can happen when the writer is closing
     ///
-    /// Calling close on an already closed writer is a no-op
-    pub fn close(&mut self) -> Result<(), Error> {
-        if !self.closed {
+    /// Calling finalize on an already finalize writer is a no-op
+    pub fn finalize(&mut self) -> Result<(), Error> {
+        if !self.finalized {
             self.dst
                 .seek(SeekFrom::Start(0))
                 .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
@@ -632,9 +642,14 @@ impl<W: Write + Seek> TableWriter<W> {
             self.dst
                 .write_u8(FILE_TERMINATOR)
                 .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
-            self.closed = true;
+            self.finalized = true;
         }
         Ok(())
+    }
+
+    #[deprecated(note = "Use finalize instead")]
+    pub fn close(&mut self) -> Result<(), Error> {
+        self.finalize()
     }
 
     fn write_header(&mut self) -> Result<(), Error> {
@@ -644,6 +659,6 @@ impl<W: Write + Seek> TableWriter<W> {
 
 impl<T: Write + Seek> Drop for TableWriter<T> {
     fn drop(&mut self) {
-        let _ = self.close();
+        let _ = self.finalize();
     }
 }
