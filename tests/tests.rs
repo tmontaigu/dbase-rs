@@ -45,12 +45,12 @@ fn test_none_float() {
     let mut expected_fields = Record::default();
     expected_fields.insert(
         "name".to_owned(),
-        dbase::FieldValue::Character(Some("tralala".to_owned())),
+        FieldValue::Character(Some("tralala".to_owned())),
     );
-    expected_fields.insert("value_f".to_owned(), dbase::FieldValue::Float(Some(12.345)));
-    expected_fields.insert("value_f_non".to_owned(), dbase::FieldValue::Float(None));
-    expected_fields.insert("value_n".to_owned(), dbase::FieldValue::Numeric(Some(4.0)));
-    expected_fields.insert("value_n_non".to_owned(), dbase::FieldValue::Numeric(None));
+    expected_fields.insert("value_f".to_owned(), FieldValue::Float(Some(12.345)));
+    expected_fields.insert("value_f_non".to_owned(), FieldValue::Float(None));
+    expected_fields.insert("value_n".to_owned(), FieldValue::Numeric(Some(4.0)));
+    expected_fields.insert("value_n_non".to_owned(), FieldValue::Numeric(None));
 
     assert_eq!(records[0], expected_fields);
 }
@@ -62,7 +62,7 @@ fn test_simple_file() {
     let mut expected_fields = Record::default();
     expected_fields.insert(
         "name".to_owned(),
-        dbase::FieldValue::Character(Some("linestring1".to_owned())),
+        FieldValue::Character(Some("linestring1".to_owned())),
     );
 
     assert_eq!(records[0], expected_fields);
@@ -73,7 +73,7 @@ fn test_read_write_simple_file() {
     let mut expected_fields = Record::default();
     expected_fields.insert(
         "name".to_owned(),
-        dbase::FieldValue::Character(Some("linestring1".to_owned())),
+        FieldValue::Character(Some("linestring1".to_owned())),
     );
 
     let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
@@ -97,7 +97,7 @@ fn test_read_numeric_value_null_padded() {
     let records = dbase::read(NULL_PADDED_NUMERIC_DBF).unwrap();
     assert_eq!(records.len(), 1);
     let mut expected_fields = Record::default();
-    expected_fields.insert("number".to_owned(), dbase::FieldValue::Numeric(Some(1234.)));
+    expected_fields.insert("number".to_owned(), FieldValue::Numeric(Some(1234.)));
     assert_eq!(records[0], expected_fields);
 }
 
@@ -105,7 +105,7 @@ fn test_read_numeric_value_null_padded() {
 struct Album {
     artist: String,
     name: String,
-    released: dbase::Date,
+    released: Date,
     playtime: f64, // in seconds,
     available: bool,
 }
@@ -127,9 +127,9 @@ impl ReadableRecord for Album {
 }
 
 impl WritableRecord for Album {
-    fn write_using<'a, W: Write>(
+    fn write_using<W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W>,
+        field_writer: &mut FieldWriter<'_, W>,
     ) -> Result<(), FieldIOError> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;
@@ -153,14 +153,14 @@ fn from_scratch_dbase() {
         Album {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
-            released: dbase::Date::new(22, 6, 2014),
+            released: Date::new(22, 6, 2014),
             playtime: 2481.12f64,
             available: false,
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
-            released: dbase::Date::new(24, 10, 2014),
+            released: Date::new(24, 10, 2014),
             playtime: 24f64,
             available: true,
         },
@@ -183,10 +183,7 @@ fn from_scratch_fox_pro_record() {
     record.insert(String::from("currency"), FieldValue::Currency(4567.134));
     record.insert(
         String::from("datetime"),
-        FieldValue::DateTime(DateTime::new(
-            Date::new(01, 06, 2006),
-            Time::new(12, 50, 20),
-        )),
+        FieldValue::DateTime(DateTime::new(Date::new(1, 6, 2006), Time::new(12, 50, 20))),
     );
 
     let records = vec![record];
@@ -212,7 +209,7 @@ fn from_scratch_fox_pro_struct_record() {
         .add_integer_field(FieldName::try_from("integer").unwrap());
 
     let records = vec![FoxProRecord {
-        datetime: DateTime::new(Date::new(12, 02, 1999), Time::new(21, 20, 35)),
+        datetime: DateTime::new(Date::new(12, 2, 1999), Time::new(21, 20, 35)),
         double: 8649.48851,
         currency: 3489.9612314,
         integer: 42069,
@@ -277,7 +274,7 @@ fn non_unicode_codepages() {
 
     assert_eq!(
         records[0].get("TEXT"),
-        Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+        Some(&FieldValue::Character(Some("Äöü!§$%&/".to_string())))
     );
 
     // Write back with same encoding
@@ -295,7 +292,7 @@ fn non_unicode_codepages() {
 
     assert_eq!(
         records[0].get("TEXT"),
-        Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+        Some(&FieldValue::Character(Some("Äöü!§$%&/".to_string())))
     );
 }
 
@@ -373,6 +370,6 @@ fn test_codepages_cp936() {
 
     assert_eq!(
         records[0].get("TEST"),
-        Some(&dbase::FieldValue::Character(Some("测试中文".to_string())))
+        Some(&FieldValue::Character(Some("测试中文".to_string())))
     );
 }
