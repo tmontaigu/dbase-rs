@@ -20,6 +20,7 @@ type SharedFile = std::sync::Arc<std::fs::File>;
 #[cfg(not(target_family = "wasm"))]
 type SharedFile = std::fs::File;
 
+#[derive(Debug)]
 pub struct BufReadWriteFile {
     input: BufReader<SharedFile>,
     output: BufWriter<SharedFile>,
@@ -457,6 +458,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct File<T> {
     pub(crate) inner: T,
     memo_reader: Option<MemoReader<T>>,

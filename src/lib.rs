@@ -298,7 +298,7 @@ mod writing;
 pub use file::{FieldIndex, FieldRef, File, RecordIndex, RecordRef};
 
 #[cfg(feature = "datafusion")]
-pub use crate::datafusion::{DbaseTable, DbaseTableFactory};
+pub use crate::datafusion::{DbaseDataSource, DbaseTableFactory};
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
 pub use crate::error::{Error, ErrorKind, FieldIOError};
 pub use crate::field::types::{Date, DateTime, FieldType, FieldValue, Time, TrimOption};

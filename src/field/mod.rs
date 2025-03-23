@@ -157,6 +157,7 @@ impl FieldInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct FieldsInfo {
     pub(crate) inner: Vec<FieldInfo>,
 }

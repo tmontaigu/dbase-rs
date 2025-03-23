@@ -143,6 +143,11 @@ impl DynEncoding {
         }
     }
 }
+impl std::fmt::Debug for DynEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DynEncoding(...)")
+    }
+}
 
 impl AsCodePageMark for DynEncoding {
     fn code_page_mark(&self) -> crate::CodePageMark {
