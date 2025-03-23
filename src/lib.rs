@@ -295,7 +295,7 @@ mod reading;
 mod record;
 mod writing;
 
-pub use file::{FieldIndex, FieldRef, File, RecordIndex, RecordRef};
+pub use file::{BufReadWriteFile, FieldIndex, FieldRef, File, RecordIndex, RecordRef};
 
 #[cfg(feature = "datafusion")]
 pub use crate::datafusion::{DbaseDataSource, DbaseTableFactory};
