@@ -80,7 +80,7 @@ pub struct FieldRef<'a, T> {
     field_index: FieldIndex,
 }
 
-impl<'a, T> Debug for FieldRef<'a, T> {
+impl<T> Debug for FieldRef<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FieldRef")
             .field("record_index", &self.record_index)
@@ -89,7 +89,7 @@ impl<'a, T> Debug for FieldRef<'a, T> {
     }
 }
 
-impl<'a, T> FieldRef<'a, T> {
+impl<T> FieldRef<'_, T> {
     fn position_in_source(&self) -> u64 {
         let record_position = self
             .file
@@ -108,7 +108,7 @@ impl<'a, T> FieldRef<'a, T> {
     }
 }
 
-impl<'a, T> FieldRef<'a, T>
+impl<T> FieldRef<'_, T>
 where
     T: Seek,
 {
@@ -122,7 +122,7 @@ where
     }
 }
 
-impl<'a, T> FieldRef<'a, T>
+impl<T> FieldRef<'_, T>
 where
     T: Seek + Read,
 {
@@ -171,7 +171,7 @@ where
     }
 }
 
-impl<'a, T> FieldRef<'a, T>
+impl<T> FieldRef<'_, T>
 where
     T: Seek + Write,
 {
@@ -231,7 +231,7 @@ pub struct RecordRef<'a, T> {
     index: RecordIndex,
 }
 
-impl<'a, T> Debug for RecordRef<'a, T> {
+impl<T> Debug for RecordRef<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RecordRef")
             .field("index", &self.index)
@@ -239,8 +239,8 @@ impl<'a, T> Debug for RecordRef<'a, T> {
     }
 }
 
-impl<'a, T> RecordRef<'a, T> {
-    pub fn field<'b>(&'b mut self, index: FieldIndex) -> Option<FieldRef<'b, T>> {
+impl<T> RecordRef<'_, T> {
+    pub fn field(&mut self, index: FieldIndex) -> Option<FieldRef<T>> {
         if index.0 >= self.file.fields_info.len() {
             return None;
         }
@@ -256,7 +256,7 @@ impl<'a, T> RecordRef<'a, T> {
     }
 }
 
-impl<'a, T> RecordRef<'a, T>
+impl<T> RecordRef<'_, T>
 where
     T: Seek,
 {
@@ -268,7 +268,7 @@ where
     }
 }
 
-impl<'a, T> RecordRef<'a, T>
+impl<T> RecordRef<'_, T>
 where
     T: Read + Seek,
 {
@@ -337,7 +337,7 @@ where
     }
 }
 
-impl<'a, T> RecordRef<'a, T>
+impl<T> RecordRef<'_, T>
 where
     T: Write + Seek,
 {
@@ -404,17 +404,15 @@ pub struct FileRecordIterator<'a, T> {
     current_record: RecordIndex,
 }
 
-impl<'a, T> FileRecordIterator<'a, T>
+impl<T> FileRecordIterator<'_, T>
 where
     T: Seek + Read,
 {
     // To implement iterator we need the Iterator trait to make use of GATs
     // which is not the case, to iteration will have to use the while let Some() pattern
-    pub fn next<'s>(&'s mut self) -> Option<RecordRef<'s, T>> {
+    pub fn next(&mut self) -> Option<RecordRef<T>> {
         let record_ref = self.file.record(self.current_record.0);
-        if let Some(_) = record_ref {
-            self.current_record.0 += 1
-        }
+        self.current_record.0 += usize::from(record_ref.is_some());
         record_ref
     }
 }
@@ -516,8 +514,7 @@ impl<T: Read + Seek> File<T> {
         } else {
             header.offset_to_first_record
         };
-        let num_fields =
-            (offset as usize - Header::SIZE - std::mem::size_of::<u8>()) / FieldInfo::SIZE;
+        let num_fields = (offset as usize - Header::SIZE - size_of::<u8>()) / FieldInfo::SIZE;
 
         let fields_info =
             FieldsInfo::read_from(&mut source, num_fields).map_err(|error| Error {
@@ -658,12 +655,12 @@ impl<T: Write + Seek> File<T> {
     where
         R: WritableRecord,
     {
-        assert_eq!(
-            self.header
+        assert!(
+            !self
+                .header
                 .num_records
                 .overflowing_add(records.len() as u32)
                 .1,
-            false,
             "Too many records (u32 overflow)"
         );
 
@@ -718,7 +715,7 @@ impl File<BufReadWriteFile> {
         let file = options
             .open(path)
             .map_err(|error| Error::io_error(error, 0))?;
-        let source = BufReadWriteFile::new(file.into()).unwrap();
+        let source = BufReadWriteFile::new(file).unwrap();
         File::open(source)
     }
 
@@ -726,7 +723,7 @@ impl File<BufReadWriteFile> {
     pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = std::fs::File::open(path.as_ref()).map_err(|error| Error::io_error(error, 0))?;
 
-        let mut file = File::open(BufReadWriteFile::new(file.into()).unwrap())?;
+        let mut file = File::open(BufReadWriteFile::new(file).unwrap())?;
         if file.fields_info.at_least_one_field_is_memo() {
             let p = path.as_ref();
             let memo_type = file.header.file_type.supported_memo_type();
@@ -739,7 +736,7 @@ impl File<BufReadWriteFile> {
                     kind: ErrorKind::ErrorOpeningMemoFile(error),
                 })?;
 
-                let memo_reader = BufReadWriteFile::new(memo_file.into())
+                let memo_reader = BufReadWriteFile::new(memo_file)
                     .and_then(|memo_file| MemoReader::new(mt, memo_file))
                     .map_err(|error| Error::io_error(error, 0))?;
 
@@ -773,7 +770,7 @@ impl File<BufReadWriteFile> {
     pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
         let file = std::fs::File::create(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::create_new(BufReadWriteFile::new(file.into()).unwrap(), table_info)
+        File::create_new(BufReadWriteFile::new(file).unwrap(), table_info)
     }
 }
 

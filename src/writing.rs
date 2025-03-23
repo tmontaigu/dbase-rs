@@ -243,7 +243,7 @@ impl TableWriterBuilder {
 
     fn sync_header(&mut self) {
         let mut offset_to_first_record =
-            Header::SIZE + (self.v.len() * FieldInfo::SIZE) + std::mem::size_of::<u8>();
+            Header::SIZE + (self.v.len() * FieldInfo::SIZE) + size_of::<u8>();
 
         if self.hdr.file_type.is_visual_fox_pro() {
             offset_to_first_record += BACKLINK_SIZE as usize;
@@ -288,6 +288,12 @@ impl TableWriterBuilder {
     }
 }
 
+impl Default for TableWriterBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod private {
     pub trait Sealed {}
 
@@ -299,8 +305,8 @@ mod private {
 
     impl_sealed_for!(bool);
     impl_sealed_for!(Option<bool>);
-    impl_sealed_for!(std::string::String);
-    impl_sealed_for!(Option<std::string::String>);
+    impl_sealed_for!(String);
+    impl_sealed_for!(Option<String>);
     impl_sealed_for!(&str);
     impl_sealed_for!(f64);
     impl_sealed_for!(f32);
@@ -329,16 +335,16 @@ pub trait WritableAsDbaseField: private::Sealed {
 /// a dBase file
 pub trait WritableRecord {
     /// Use the FieldWriter to write the fields of the record
-    fn write_using<'a, W: Write>(
+    fn write_using<W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W>,
+        field_writer: &mut FieldWriter<'_, W>,
     ) -> Result<(), FieldIOError>;
 }
 
 impl WritableRecord for Record {
-    fn write_using<'a, W: Write>(
+    fn write_using<W: Write>(
         &self,
-        field_writer: &mut FieldWriter<'a, W>,
+        field_writer: &mut FieldWriter<'_, W>,
     ) -> Result<(), FieldIOError> {
         while let Some(name) = field_writer.next_field_name() {
             let value = self.get(name).ok_or_else(|| {

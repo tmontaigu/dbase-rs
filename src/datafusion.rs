@@ -58,7 +58,7 @@ impl DbaseDataSource {
     }
 
     pub fn num_records(&self) -> usize {
-        return self.file.lock().unwrap().num_records();
+        self.file.lock().unwrap().num_records()
     }
 
     pub(crate) async fn create_physical_plan(

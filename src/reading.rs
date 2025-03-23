@@ -517,7 +517,7 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
             field_data_buffer,
             self.memo_reader,
             field_info,
-            &*self.encoding,
+            self.encoding,
             self.options.character_trim,
         ) {
             Ok(value) => Ok(value),
@@ -545,8 +545,8 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> Iterator
     }
 }
 
-impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
-    for FieldIterator<'a, Source, MemoSource>
+impl<Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
+    for FieldIterator<'_, Source, MemoSource>
 {
 }
 
@@ -561,13 +561,13 @@ pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
     field_data_buffer: [u8; 255],
 }
 
-impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R> {
+impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
     type Item = Result<R, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.current_record >= self.reader.header.num_records {
-                return None;
+            return if self.current_record >= self.reader.header.num_records {
+                None
             } else {
                 let deletion_flag = DeletionFlag::read_from(&mut self.reader.source).ok()?;
 
@@ -600,13 +600,13 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
                     .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
                     .map_err(|error| Error::new(error, self.current_record as usize));
                 self.current_record += 1;
-                return Some(record);
-            }
+                Some(record)
+            };
         }
     }
 }
 
-/// One liner to read the content of a .dbf file
+/// One-liner to read the content of a .dbf file
 ///
 /// # Example
 ///
@@ -615,7 +615,7 @@ impl<'a, T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'a, T, R
 /// assert_eq!(records.len(), 1);
 /// ```
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
-    let mut reader = Reader::from_path(path).unwrap();
+    let mut reader = Reader::from_path(path)?;
     reader.read()
 }
 
@@ -634,7 +634,7 @@ mod test {
 
         let mut expected_pos = Header::SIZE + ((reader.fields_info.len()) * FieldInfo::SIZE);
         // Don't forget terminator
-        expected_pos += std::mem::size_of::<u8>();
+        expected_pos += size_of::<u8>();
 
         assert_eq!(pos_after_reading, expected_pos as u64);
     }

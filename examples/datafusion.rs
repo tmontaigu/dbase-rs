@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
 
     // register DBF file as external table
     let sql = "create external table stations stored as dbase location './tests/data/stations.dbf'";
-    ctx.sql(sql).await.unwrap();
+    ctx.sql(sql).await?;
 
     // execute the query
     let df = ctx

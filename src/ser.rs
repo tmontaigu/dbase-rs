@@ -99,7 +99,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
                 FieldType::Date => self.write_next_field_value::<Option<Date>>(&None),
                 FieldType::Logical => self.write_next_field_value::<Option<bool>>(&None),
                 _ => Err(FieldIOError::new(
-                    ErrorKind::Message(format!("This field cannot store None values")),
+                    ErrorKind::Message("This field cannot store None values".to_string()),
                     Some((*field_info).to_owned()),
                 )),
             }

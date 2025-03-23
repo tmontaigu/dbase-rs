@@ -35,7 +35,7 @@ impl TryFrom<&str> for FieldName {
     type Error = &'static str;
 
     fn try_from(name: &str) -> Result<Self, Self::Error> {
-        if name.as_bytes().len() > FIELD_NAME_LENGTH {
+        if name.len() > FIELD_NAME_LENGTH {
             Err("FieldName byte representation cannot exceed 11 bytes")
         } else {
             Ok(Self(name.to_string()))
@@ -137,7 +137,7 @@ impl FieldInfo {
     }
 
     pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> std::io::Result<()> {
-        let num_bytes = self.name.as_bytes().len();
+        let num_bytes = self.name.len();
         let mut name_bytes = [0u8; FIELD_NAME_LENGTH];
         name_bytes[..num_bytes.min(FIELD_NAME_LENGTH)].copy_from_slice(self.name.as_bytes());
         dest.write_all(&name_bytes)?;

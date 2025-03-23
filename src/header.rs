@@ -305,7 +305,7 @@ impl From<u8> for Version {
             },
             // Each version has different feature (varchar / autoincrement)
             // but we don't support that for now
-            0x30 | 0x31 | 0x32 => Version::VisualFoxPro,
+            0x30..=0x32 => Version::VisualFoxPro,
             // Same here these different version num means that some features are different
             0x8b | 0xcb => Version::DBase4 {
                 supports_memo: true,
@@ -378,7 +378,7 @@ impl Header {
 
     fn get_today_date() -> Date {
         let current_date = time::OffsetDateTime::now_utc().date();
-        // The year will be saved a a u8 offset from 1900
+        // The year will be saved as u8 offset from 1900
         if current_date.year() < 1900 || current_date.year() > 2155 {
             panic!("the year current date is out of range");
         } else {
@@ -407,7 +407,7 @@ impl Header {
 
         let _reserved = source.read_u16::<LittleEndian>()?;
 
-        let is_transaction_incomplete = (source.read_u8()? != 0) as bool;
+        let is_transaction_incomplete = source.read_u8()? != 0;
         let encryption_flag = source.read_u8()?;
 
         let mut _reserved = [0u8; 12];
@@ -474,7 +474,7 @@ impl Header {
 #[cfg(test)]
 mod test {
     use std::fs::File;
-    use std::io::{Cursor, Seek, SeekFrom};
+    use std::io::{Cursor, Seek};
 
     use super::*;
 
@@ -482,7 +482,7 @@ mod test {
     fn pos_after_reading_header() {
         let mut file = File::open("tests/data/line.dbf").unwrap();
         let _hdr = Header::read_from(&mut file).unwrap();
-        let pos_after_reading = file.seek(SeekFrom::Current(0)).unwrap();
+        let pos_after_reading = file.stream_position().unwrap();
         assert_eq!(pos_after_reading, Header::SIZE as u64);
     }
 
@@ -493,7 +493,7 @@ mod test {
 
         let mut out = Cursor::new(Vec::<u8>::with_capacity(Header::SIZE));
         hdr.write_to(&mut out).unwrap();
-        let pos_after_writing = out.seek(SeekFrom::Current(0)).unwrap();
+        let pos_after_writing = file.stream_position().unwrap();
         assert_eq!(pos_after_writing, Header::SIZE as u64);
     }
 
