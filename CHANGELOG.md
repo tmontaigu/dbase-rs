@@ -1,3 +1,11 @@
+# 0.6.0
+    - Added support for wasm32-wasmi target
+    - Added support for encoding_rs, to (notably) support GBK encoding
+    - Added conversion of Date, Time, DateTime into chrono structs
+    - Added `finalize` method, deprecate `close`
+    - Added `BufReadWriteFile` to public API
+    - Updated datafusion to version 46
+
 # 0.5.0
     - Added `ReaderBuilder`
     - Fix off by one error in dbase::File
