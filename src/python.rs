@@ -25,7 +25,7 @@ impl DBFFile {
     fn create(&mut self, fields: Vec<(String, String, usize, Option<usize>)>) -> PyResult<()> {
         let mut builder = TableWriterBuilder::new();
 
-        // 添加字段
+        // Add fields
         for (name, type_str, length, decimal) in fields {
             let field_name = FieldName::try_from(name.as_str())
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
@@ -59,12 +59,13 @@ impl DBFFile {
             builder = result;
         }
 
-        // 设置编码
+        // Set encoding
         if let Some(encoding) = &self.encoding {
             match encoding.as_str() {
                 "ascii" => builder = builder.set_encoding(Ascii),
                 "unicode" | "utf8" | "utf-8" => builder = builder.set_encoding(Unicode),
                 "cp936" | "gbk" => builder = builder.set_encoding(GbkEncoding),
+                // TODO: Add more encodings
                 _ => {
                     return Err(PyValueError::new_err(format!(
                         "Unsupported encoding: {}",
@@ -74,7 +75,7 @@ impl DBFFile {
             }
         }
 
-        // 创建文件
+        // Create file
         match builder.build_with_file_dest(&self.path) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
@@ -90,7 +91,7 @@ impl DBFFile {
         let fields = dbf_file.fields();
         let rust_records = self.convert_py_records_to_rust(records, fields)?;
 
-        // 直接追加记录
+        // Append records
         match dbf_file.append_records(&rust_records) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
@@ -108,7 +109,7 @@ impl DBFFile {
         let mut dbf_file =
             File::open_read_write(&self.path).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-        // 直接从 PyDict 构建一个 Record
+        // Build a record from a PyDict
         let mut record = Record::default();
         for (key, value) in values.iter() {
             let field_name = key.extract::<String>()?;
@@ -117,12 +118,12 @@ impl DBFFile {
         }
 
         if index >= dbf_file.num_records() {
-            // 追加新记录
+            // Append new record
             dbf_file
                 .append_record(&record)
                 .map_err(|e| PyValueError::new_err(e.to_string()))
         } else {
-            // 更新已有记录
+            // Update existing record
             // First collect all field indices and values
             let updates: Vec<_> = record
                 .into_iter()
@@ -209,7 +210,7 @@ impl DBFFile {
         }
 
         if let Ok(s) = value.extract::<String>() {
-            // 尝试解析日期
+            // Try to parse date
             if s.len() == 8 && s.chars().all(|c| c.is_ascii_digit()) {
                 if let Ok(year) = s[0..4].parse::<u32>() {
                     if let Ok(month) = s[4..6].parse::<u32>() {
