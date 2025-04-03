@@ -7,32 +7,49 @@ use std::convert::TryFrom;
 
 const NUMERIC_PRECISION: f64 = 1e-8;
 
+/// DBFFile: Main structure for Python bindings to dbase-rs
+/// Provides interface for DBF file operations with Python integration
 #[cfg(feature = "python")]
 #[pyclass]
 pub struct DBFFile {
+    // Path to the DBF file
     path: String,
+    // Optional encoding specification
     encoding: Option<String>,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl DBFFile {
+    /// Creates a new DBFFile instance
+    ///
+    /// # Arguments
+    /// * `path` - Path to the DBF file
+    /// * `encoding` - Optional encoding specification (ascii, utf8, gbk)
     #[new]
     fn new(path: String, encoding: Option<String>) -> PyResult<Self> {
         Ok(Self { path, encoding })
     }
 
+    /// Creates a new DBF file with specified fields
+    ///
+    /// # Arguments
+    /// * `fields` - Vector of field definitions (name, type, length, decimal)
     fn create(&mut self, fields: Vec<(String, String, usize, Option<usize>)>) -> PyResult<()> {
+        // Initialize builder with potential capacity hint
         let mut builder = TableWriterBuilder::new();
 
-        // Add fields
+        // Process each field definition
         for (name, type_str, length, decimal) in fields {
+            // Convert field name - involves allocation
             let field_name = FieldName::try_from(name.as_str())
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
+            // Convert length - no allocation
             let length_u8 = u8::try_from(length)
                 .map_err(|_| PyValueError::new_err("Field length too large"))?;
 
+            // Match field type and build field definition
             let result = match type_str.as_str() {
                 "C" => builder.add_character_field(field_name, length_u8),
                 "N" => {
@@ -59,7 +76,7 @@ impl DBFFile {
             builder = result;
         }
 
-        // Set encoding
+        // Set encoding - could be optimized with static encoding types
         if let Some(encoding) = &self.encoding {
             match encoding.as_str() {
                 "ascii" => builder = builder.set_encoding(Ascii),
@@ -75,13 +92,14 @@ impl DBFFile {
             }
         }
 
-        // Create file
+        // Create file and handle errors
         match builder.build_with_file_dest(&self.path) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
     }
 
+    /// Appends multiple records to the DBF file
     fn append_records(&self, records: &PyList) -> PyResult<()> {
         let mut dbf_file = match File::open_read_write(&self.path) {
             Ok(file) => file,
@@ -89,15 +107,20 @@ impl DBFFile {
         };
 
         let fields = dbf_file.fields();
+        // TODO: Implement streaming records
         let rust_records = self.convert_py_records_to_rust(records, fields)?;
 
-        // Append records
         match dbf_file.append_records(&rust_records) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
     }
 
+    // Read all records from the DBF file
+    // Args:
+    //     py: Python - The Python interpreter
+    // Returns:
+    //     PyObject - A list of records
     fn read_records(&self, py: Python) -> PyResult<PyObject> {
         match crate::read(&self.path) {
             Ok(records) => self.convert_rust_records_to_py(py, records),
@@ -105,6 +128,12 @@ impl DBFFile {
         }
     }
 
+    // Update a record in the DBF file
+    // Args:
+    //     index: usize - The index of the record to update
+    //     values: &PyDict - A dictionary of field values to update
+    // Returns:
+    //     PyResult<()> - A result indicating success or failure
     fn update_record(&self, index: usize, values: &PyDict) -> PyResult<()> {
         let mut dbf_file =
             File::open_read_write(&self.path).map_err(|e| PyValueError::new_err(e.to_string()))?;
