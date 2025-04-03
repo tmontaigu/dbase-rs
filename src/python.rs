@@ -1,8 +1,8 @@
 use crate::encoding::{Ascii, GbkEncoding, Unicode};
-use crate::{Date, FieldName, FieldValue, File, Record, TableWriterBuilder};
+use crate::{Date, FieldInfo, FieldName, FieldValue, File, Record, TableWriterBuilder};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use std::convert::TryFrom;
 
 const NUMERIC_PRECISION: f64 = 1e-8;
@@ -82,13 +82,13 @@ impl DBFFile {
     }
 
     fn append_records(&self, records: &PyList) -> PyResult<()> {
-        let rust_records = self.convert_py_records_to_rust(records)?;
-
-        // 打开文件进行追加
         let mut dbf_file = match File::open_read_write(&self.path) {
             Ok(file) => file,
             Err(e) => return Err(PyValueError::new_err(e.to_string())),
         };
+
+        let fields = dbf_file.fields();
+        let rust_records = self.convert_py_records_to_rust(records, fields)?;
 
         // 直接追加记录
         match dbf_file.append_records(&rust_records) {
@@ -137,20 +137,57 @@ impl DBFFile {
 // Private implementation
 #[cfg(feature = "python")]
 impl DBFFile {
-    fn convert_py_records_to_rust(&self, records: &PyList) -> PyResult<Vec<Record>> {
+    fn convert_py_records_to_rust(
+        &self,
+        records: &PyList,
+        fields: &[FieldInfo],
+    ) -> PyResult<Vec<Record>> {
         let mut rust_records = Vec::with_capacity(records.len());
+        let first_record = records.get_item(0)?;
 
-        for record in records {
-            let py_dict = record.downcast::<PyDict>()?;
-            let mut dbf_record = Record::default();
+        match first_record.is_instance_of::<PyDict>() {
+            true => {
+                for record in records {
+                    let py_dict = record.downcast::<PyDict>()?;
+                    let mut dbf_record = Record::default();
 
-            for (key, value) in py_dict {
-                let field_name = key.extract::<String>()?;
-                let field_value = self.convert_py_value_to_field_value(value)?;
-                dbf_record.insert(field_name, field_value);
+                    for (key, value) in py_dict {
+                        let field_name = key.extract::<String>()?;
+                        let field_value = self.convert_py_value_to_field_value(value)?;
+                        dbf_record.insert(field_name, field_value);
+                    }
+
+                    rust_records.push(dbf_record);
+                }
             }
+            false => {
+                if !first_record.is_instance_of::<PyTuple>() {
+                    return Err(PyValueError::new_err(
+                        "Records must be either list of dicts or list of tuples",
+                    ));
+                }
 
-            rust_records.push(dbf_record);
+                for record in records {
+                    let py_tuple = record.downcast::<PyTuple>()?;
+                    let mut dbf_record = Record::default();
+
+                    if py_tuple.len() != fields.len() {
+                        return Err(PyValueError::new_err(format!(
+                            "Tuple length ({}) does not match number of fields ({})",
+                            py_tuple.len(),
+                            fields.len()
+                        )));
+                    }
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let value = py_tuple.get_item(i)?;
+                        let field_value = self.convert_py_value_to_field_value(value)?;
+                        dbf_record.insert(field.name.to_string(), field_value);
+                    }
+
+                    rust_records.push(dbf_record);
+                }
+            }
         }
 
         Ok(rust_records)
