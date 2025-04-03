@@ -7,12 +7,14 @@ use std::convert::TryFrom;
 
 const NUMERIC_PRECISION: f64 = 1e-8;
 
+#[cfg(feature = "python")]
 #[pyclass]
-struct DBFFile {
+pub struct DBFFile {
     path: String,
     encoding: Option<String>,
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl DBFFile {
     #[new]
@@ -95,15 +97,14 @@ impl DBFFile {
     }
 
     fn read_records(&self, py: Python) -> PyResult<PyObject> {
-        match dbase::read(&self.path) {
+        match crate::read(&self.path) {
             Ok(records) => self.convert_rust_records_to_py(py, records),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
     }
 
     fn update_record(&self, index: usize, field_name: &str, value: &PyAny) -> PyResult<()> {
-        // 读取所有记录
-        let mut records = match dbase::read(&self.path) {
+        let mut records = match crate::read(&self.path) {
             Ok(records) => records,
             Err(e) => return Err(PyValueError::new_err(e.to_string())),
         };
@@ -131,6 +132,8 @@ impl DBFFile {
     }
 }
 
+// Private implementation
+#[cfg(feature = "python")]
 impl DBFFile {
     fn convert_py_records_to_rust(&self, records: &PyList) -> PyResult<Vec<Record>> {
         let mut rust_records = Vec::with_capacity(records.len());
@@ -246,10 +249,4 @@ impl DBFFile {
 
         Ok(py_list.into())
     }
-}
-
-#[pymodule]
-fn dbf_python(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<DBFFile>()?;
-    Ok(())
 }
