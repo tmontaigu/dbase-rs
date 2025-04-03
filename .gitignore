@@ -1,6 +1,5 @@
 /target
 **/*.rs.bk
-Cargo.lock
 
 \.idea/
 support/
@@ -8,3 +7,8 @@ support/
 .DS_Store
 .vscode
 !tests/data/*.dbf
+
+# nix
+.direnv/
+.envrc
+result

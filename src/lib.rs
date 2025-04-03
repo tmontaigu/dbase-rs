@@ -270,6 +270,7 @@
 #![deny(unstable_features)]
 
 extern crate byteorder;
+extern crate encoding_rs;
 #[cfg(feature = "serde")]
 extern crate serde;
 extern crate time;
@@ -313,6 +314,19 @@ pub use crate::writing::{FieldWriter, TableWriter, TableWriterBuilder, WritableR
 
 #[cfg(feature = "chrono")]
 pub use crate::field::types::ChronoDateConversionError;
+
+#[cfg(feature = "python")]
+mod python;
+
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+
+#[cfg(feature = "python")]
+#[pymodule]
+fn dbase(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<python::DBFFile>()?;
+    Ok(())
+}
 
 /// macro to define a struct that implements the ReadableRecord and WritableRecord
 ///
