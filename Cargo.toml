@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 byteorder = "1.4.3"
+encoding_rs = { version = "0.8", optional = true }
 time = { version = "0.3", features = ["std"] }
 serde = { version = "1.0.102", optional = true }
 yore = { version = "1.0.1", optional = true }
@@ -23,7 +24,6 @@ datafusion = { version = "46", optional = true }
 datafusion-expr = { version = "46", optional = true }
 async-trait = { version = "0.1", optional = true }
 codepage = { version = "0.1.2", optional = true }
-encoding_rs = { version = "0.8.35", optional = true }
 chrono = { version = "0.4.39", optional = true }
 pyo3 = { version = "0.20.0", features = ["extension-module", "macros", "multiple-pymethods", "abi3-py37"], optional = true }
 
@@ -33,7 +33,7 @@ tempfile = "3.4.0"
 tokio = "1.26"
 
 [features]
-default = ["core_intrinsics", "python"]
+default = ["core_intrinsics", "python", "yore", "encoding_rs"]
 core_intrinsics = [] 
 datafusion = ["dep:datafusion", "dep:datafusion-expr", "dep:async-trait"]
 yore = ["dep:yore"]
