@@ -1,6 +1,6 @@
 use crate::encoding::{Ascii, GbkEncoding, Unicode};
 use crate::{Date, FieldInfo, FieldName, FieldValue, File, Record, TableWriterBuilder};
-use pyo3::exceptions::{PyIndexError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use std::convert::TryFrom;
@@ -104,32 +104,42 @@ impl DBFFile {
         }
     }
 
-    fn update_record(&self, index: usize, field_name: &str, value: &PyAny) -> PyResult<()> {
-        let mut dbf_file = match File::open_read_write(&self.path) {
-            Ok(file) => file,
-            Err(e) => return Err(PyValueError::new_err(e.to_string())),
-        };
+    fn update_record(&self, index: usize, values: &PyDict) -> PyResult<()> {
+        let mut dbf_file =
+            File::open_read_write(&self.path).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-        if index >= dbf_file.num_records() {
-            return Err(PyIndexError::new_err(format!(
-                "Record index {} not found",
-                index
-            )));
+        // 直接从 PyDict 构建一个 Record
+        let mut record = Record::default();
+        for (key, value) in values.iter() {
+            let field_name = key.extract::<String>()?;
+            let field_value = self.convert_py_value_to_field_value(value)?;
+            record.insert(field_name, field_value);
         }
 
-        let field_value = self.convert_py_value_to_field_value(value)?;
-        let field_index = dbf_file
-            .field_index(field_name)
-            .ok_or_else(|| PyValueError::new_err(format!("Field '{}' not found", field_name)))?;
+        if index >= dbf_file.num_records() {
+            // 追加新记录
+            dbf_file
+                .append_record(&record)
+                .map_err(|e| PyValueError::new_err(e.to_string()))
+        } else {
+            // 更新已有记录
+            // First collect all field indices and values
+            let updates: Vec<_> = record
+                .into_iter()
+                .filter_map(|(name, value)| dbf_file.field_index(&name).map(|idx| (idx, value)))
+                .collect();
 
-        // 获取记录并写入字段
-        let mut record = dbf_file.record(index).ok_or_else(|| {
-            PyValueError::new_err(format!("Could not get record at index {}", index))
-        })?;
+            // Then update the record with collected indices
+            let mut existing = dbf_file.record(index).ok_or_else(|| {
+                PyValueError::new_err(format!("Could not get record at index {}", index))
+            })?;
 
-        match record.write_field(field_index, &field_value) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(PyValueError::new_err(e.to_string())),
+            for (field_index, value) in updates {
+                existing
+                    .write_field(field_index, &value)
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            }
+            Ok(())
         }
     }
 }
