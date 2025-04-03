@@ -10,6 +10,10 @@ homepage = "https://github.com/tmontaigu/dbase-rs"
 repository = "https://github.com/tmontaigu/dbase-rs"
 edition = "2021"
 
+[lib]
+name = "dbase"
+crate-type = ["cdylib"]
+
 [dependencies]
 byteorder = "1.4.3"
 time = { version = "0.3", features = ["std"] }
@@ -21,6 +25,7 @@ async-trait = { version = "0.1", optional = true }
 codepage = { version = "0.1.2", optional = true }
 encoding_rs = { version = "0.8.35", optional = true }
 chrono = { version = "0.4.39", optional = true }
+pyo3 = { version = "0.20.0", features = ["extension-module"] }
 
 [dev-dependencies]
 serde_derive = "1.0.102"
@@ -28,6 +33,8 @@ tempfile = "3.4.0"
 tokio = "1.26"
 
 [features]
+default = ["core_intrinsics"]
+core_intrinsics = [] 
 datafusion = ["dep:datafusion", "dep:datafusion-expr", "dep:async-trait"]
 yore = ["dep:yore"]
 encoding_rs = ["dep:encoding_rs", "dep:codepage"]
