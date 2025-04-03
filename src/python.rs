@@ -1,4 +1,4 @@
-use crate::encoding::{Ascii, Unicode};
+use crate::encoding::{Ascii, GbkEncoding, Unicode};
 use crate::{Date, FieldName, FieldValue, File, Record, TableWriterBuilder};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
@@ -64,6 +64,7 @@ impl DBFFile {
             match encoding.as_str() {
                 "ascii" => builder = builder.set_encoding(Ascii),
                 "unicode" => builder = builder.set_encoding(Unicode),
+                "cp936" | "gbk" => builder = builder.set_encoding(GbkEncoding),
                 _ => {
                     return Err(PyValueError::new_err(format!(
                         "Unsupported encoding: {}",

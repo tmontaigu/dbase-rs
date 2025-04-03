@@ -270,6 +270,7 @@
 #![deny(unstable_features)]
 
 extern crate byteorder;
+extern crate encoding_rs;
 #[cfg(feature = "serde")]
 extern crate serde;
 extern crate time;

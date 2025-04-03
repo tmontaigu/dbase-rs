@@ -18,6 +18,7 @@ macro_rules! impl_as_code_page_mark {
 
 #[cfg(feature = "encoding_rs")]
 mod encoding_rs;
+mod gbk;
 #[cfg(feature = "yore")]
 mod yore;
 
@@ -26,6 +27,8 @@ pub use yore::LossyCodePage;
 
 #[cfg(feature = "encoding_rs")]
 pub use encoding_rs::EncodingRs;
+
+pub use self::gbk::GbkEncoding;
 
 pub trait AsCodePageMark {
     fn code_page_mark(&self) -> crate::CodePageMark;
