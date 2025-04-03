@@ -32,6 +32,8 @@
 
           pythonEnv = pkgs.python3.withPackages (ps: with ps; [
             numpy
+            dbfread
+            dbf
           ]);
 
           python = pkgs.python3;
