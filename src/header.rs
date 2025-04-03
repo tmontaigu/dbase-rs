@@ -57,10 +57,7 @@ pub enum CodePageMark {
 
 impl CodePageMark {
     pub(crate) fn to_encoding(self) -> Option<DynEncoding> {
-        #[allow(
-            unused_assignments,
-            reason = "The writes happening to this variable are feature bound"
-        )]
+        #[allow(unused_assignments)]
         #[allow(unused_mut)]
         let mut encoding = None;
 
