@@ -11,6 +11,7 @@ impl_as_code_page_mark!(
     yore::code_pages::CP865 => crate::CodePageMark::CP865,
     yore::code_pages::CP861 => crate::CodePageMark::CP861,
     yore::code_pages::CP874 => crate::CodePageMark::CP874,
+    yore::code_pages::CP936 => crate::CodePageMark::CP936,
     yore::code_pages::CP1255 => crate::CodePageMark::CP1255,
     yore::code_pages::CP1256 => crate::CodePageMark::CP1256,
     yore::code_pages::CP1250 => crate::CodePageMark::CP1250,
