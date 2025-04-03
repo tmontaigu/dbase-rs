@@ -63,7 +63,7 @@ impl DBFFile {
         if let Some(encoding) = &self.encoding {
             match encoding.as_str() {
                 "ascii" => builder = builder.set_encoding(Ascii),
-                "unicode" => builder = builder.set_encoding(Unicode),
+                "unicode" | "utf8" | "utf-8" => builder = builder.set_encoding(Unicode),
                 "cp936" | "gbk" => builder = builder.set_encoding(GbkEncoding),
                 _ => {
                     return Err(PyValueError::new_err(format!(
