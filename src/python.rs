@@ -105,29 +105,30 @@ impl DBFFile {
     }
 
     fn update_record(&self, index: usize, field_name: &str, value: &PyAny) -> PyResult<()> {
-        let mut records = match crate::read(&self.path) {
-            Ok(records) => records,
+        let mut dbf_file = match File::open_read_write(&self.path) {
+            Ok(file) => file,
             Err(e) => return Err(PyValueError::new_err(e.to_string())),
         };
 
-        // 检查索引是否有效
-        if index >= records.len() {
+        if index >= dbf_file.num_records() {
             return Err(PyIndexError::new_err(format!(
                 "Record index {} not found",
                 index
             )));
         }
 
-        // 更新指定记录
         let field_value = self.convert_py_value_to_field_value(value)?;
-        records[index].insert(field_name.to_string(), field_value);
+        let field_index = dbf_file
+            .field_index(field_name)
+            .ok_or_else(|| PyValueError::new_err(format!("Field '{}' not found", field_name)))?;
 
-        // 重写文件
-        match TableWriterBuilder::new().build_with_file_dest(&self.path) {
-            Ok(writer) => match writer.write_records(&records) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(PyValueError::new_err(e.to_string())),
-            },
+        // 获取记录并写入字段
+        let mut record = dbf_file.record(index).ok_or_else(|| {
+            PyValueError::new_err(format!("Could not get record at index {}", index))
+        })?;
+
+        match record.write_field(field_index, &field_value) {
+            Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
     }
