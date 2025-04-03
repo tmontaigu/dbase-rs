@@ -1,6 +1,5 @@
 /target
 **/*.rs.bk
-Cargo.lock
 
 \.idea/
 support/
@@ -12,3 +11,4 @@ support/
 # nix
 .direnv/
 .envrc
+result
