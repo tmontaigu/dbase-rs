@@ -1,8 +1,9 @@
 use crate::encoding::{Ascii, GbkEncoding, Unicode};
-use crate::{Date, FieldInfo, FieldName, FieldValue, File, Record, TableWriterBuilder};
+use crate::{Date, FieldInfo, FieldName, FieldType, FieldValue, File, Record, TableWriterBuilder};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
 const NUMERIC_PRECISION: f64 = 1e-8;
@@ -140,9 +141,23 @@ impl DBFFile {
 
         // Build a record from a PyDict
         let mut record = Record::default();
+        let fields = dbf_file.fields();
+
+        // Create a map of field names to their types
+        let field_types: HashMap<String, FieldType> = fields
+            .iter()
+            .map(|f| (f.name.to_string(), f.field_type))
+            .collect();
+
         for (key, value) in values.iter() {
             let field_name = key.extract::<String>()?;
-            let field_value = self.convert_py_value_to_field_value(value)?;
+            let field_type = field_types.get(&field_name).copied().ok_or_else(|| {
+                PyValueError::new_err(format!(
+                    "Field '{}' does not exist in the DBF file",
+                    field_name
+                ))
+            })?;
+            let field_value = self.convert_py_value_to_field_value(value, Some(field_type))?;
             record.insert(field_name, field_value);
         }
 
@@ -185,6 +200,12 @@ impl DBFFile {
         let mut rust_records = Vec::with_capacity(records.len());
         let first_record = records.get_item(0)?;
 
+        // Create a map of field names to their types
+        let field_types: HashMap<String, FieldType> = fields
+            .iter()
+            .map(|f| (f.name.to_string(), f.field_type))
+            .collect();
+
         match first_record.is_instance_of::<PyDict>() {
             true => {
                 for record in records {
@@ -193,7 +214,9 @@ impl DBFFile {
 
                     for (key, value) in py_dict {
                         let field_name = key.extract::<String>()?;
-                        let field_value = self.convert_py_value_to_field_value(value)?;
+                        let field_type = field_types.get(&field_name).copied();
+                        let field_value =
+                            self.convert_py_value_to_field_value(value, field_type)?;
                         dbf_record.insert(field_name, field_value);
                     }
 
@@ -221,7 +244,8 @@ impl DBFFile {
 
                     for (i, field) in fields.iter().enumerate() {
                         let value = py_tuple.get_item(i)?;
-                        let field_value = self.convert_py_value_to_field_value(value)?;
+                        let field_value =
+                            self.convert_py_value_to_field_value(value, Some(field.field_type))?;
                         dbf_record.insert(field.name.to_string(), field_value);
                     }
 
@@ -233,44 +257,112 @@ impl DBFFile {
         Ok(rust_records)
     }
 
-    fn convert_py_value_to_field_value(&self, value: &PyAny) -> PyResult<FieldValue> {
+    fn convert_py_value_to_field_value(
+        &self,
+        value: &PyAny,
+        field_type: Option<FieldType>,
+    ) -> PyResult<FieldValue> {
         if value.is_none() {
-            return Ok(FieldValue::Character(None));
+            return match field_type {
+                Some(FieldType::Logical) => Ok(FieldValue::Logical(None)),
+                Some(FieldType::Numeric) => Ok(FieldValue::Numeric(None)),
+                Some(FieldType::Float) => Ok(FieldValue::Float(None)),
+                Some(FieldType::Date) => Ok(FieldValue::Date(None)),
+                _ => Ok(FieldValue::Character(None)),
+            };
         }
 
-        if let Ok(s) = value.extract::<String>() {
-            // Try to parse date
-            if s.len() == 8 && s.chars().all(|c| c.is_ascii_digit()) {
-                if let Ok(year) = s[0..4].parse::<u32>() {
-                    if let Ok(month) = s[4..6].parse::<u32>() {
-                        if let Ok(day) = s[6..8].parse::<u32>() {
-                            if month > 0 && month <= 12 && day > 0 && day <= 31 {
-                                return Ok(FieldValue::Date(Some(Date::new(day, month, year))));
+        // Convert based on field type
+        match field_type {
+            Some(FieldType::Logical) => {
+                if let Ok(b) = value.extract::<bool>() {
+                    return Ok(FieldValue::Logical(Some(b)));
+                }
+                // Convert from string
+                if let Ok(s) = value.extract::<String>() {
+                    let s = s.to_uppercase();
+                    if s == "T" || s == "Y" || s == "TRUE" || s == "YES" {
+                        return Ok(FieldValue::Logical(Some(true)));
+                    } else if s == "F" || s == "N" || s == "FALSE" || s == "NO" {
+                        return Ok(FieldValue::Logical(Some(false)));
+                    }
+                }
+                Err(PyValueError::new_err(
+                    "Cannot convert value to logical type",
+                ))
+            }
+            Some(FieldType::Numeric) => {
+                if let Ok(n) = value.extract::<f64>() {
+                    let rounded = (n / NUMERIC_PRECISION).round() * NUMERIC_PRECISION;
+                    return Ok(FieldValue::Numeric(Some(rounded)));
+                }
+                if let Ok(s) = value.extract::<String>() {
+                    if let Ok(n) = s.parse::<f64>() {
+                        let rounded = (n / NUMERIC_PRECISION).round() * NUMERIC_PRECISION;
+                        return Ok(FieldValue::Numeric(Some(rounded)));
+                    }
+                }
+                Err(PyValueError::new_err(
+                    "Cannot convert value to numeric type",
+                ))
+            }
+            Some(FieldType::Date) => {
+                if let Ok(s) = value.extract::<String>() {
+                    if s.len() == 8 && s.chars().all(|c| c.is_ascii_digit()) {
+                        if let Ok(year) = s[0..4].parse::<u32>() {
+                            if let Ok(month) = s[4..6].parse::<u32>() {
+                                if let Ok(day) = s[6..8].parse::<u32>() {
+                                    if month > 0 && month <= 12 && day > 0 && day <= 31 {
+                                        return Ok(FieldValue::Date(Some(Date::new(
+                                            day, month, year,
+                                        ))));
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                Err(PyValueError::new_err("Cannot convert value to date type"))
             }
-            return Ok(FieldValue::Character(Some(s)));
+            Some(FieldType::Float) => {
+                if let Ok(f) = value.extract::<f32>() {
+                    return Ok(FieldValue::Float(Some(f)));
+                }
+                if let Ok(s) = value.extract::<String>() {
+                    if let Ok(f) = s.parse::<f32>() {
+                        return Ok(FieldValue::Float(Some(f)));
+                    }
+                }
+                Err(PyValueError::new_err("Cannot convert value to float type"))
+            }
+            Some(FieldType::Integer) => {
+                if let Ok(i) = value.extract::<i32>() {
+                    return Ok(FieldValue::Integer(i));
+                }
+                if let Ok(s) = value.extract::<String>() {
+                    if let Ok(i) = s.parse::<i32>() {
+                        return Ok(FieldValue::Integer(i));
+                    }
+                }
+                Err(PyValueError::new_err(
+                    "Cannot convert value to integer type",
+                ))
+            }
+            _ => {
+                // Convert other types to string
+                if let Ok(s) = value.extract::<String>() {
+                    return Ok(FieldValue::Character(Some(s)));
+                }
+                // Convert other types to string
+                if let Ok(s) = value.str() {
+                    return Ok(FieldValue::Character(Some(s.to_str()?.to_string())));
+                }
+                Err(PyValueError::new_err(format!(
+                    "Unsupported value type: {:?}",
+                    value
+                )))
+            }
         }
-
-        if let Ok(n) = value.extract::<f64>() {
-            let rounded = (n / NUMERIC_PRECISION).round() * NUMERIC_PRECISION;
-            return Ok(FieldValue::Numeric(Some(rounded)));
-        }
-
-        if let Ok(i) = value.extract::<i32>() {
-            return Ok(FieldValue::Integer(i));
-        }
-
-        if let Ok(b) = value.extract::<bool>() {
-            return Ok(FieldValue::Logical(Some(b)));
-        }
-
-        Err(PyValueError::new_err(format!(
-            "Unsupported value type: {:?}",
-            value
-        )))
     }
 
     fn convert_rust_records_to_py(&self, py: Python, records: Vec<Record>) -> PyResult<PyObject> {
