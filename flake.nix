@@ -1,7 +1,8 @@
 # This is based on viper's article https://ayats.org/blog/nix-rustup
 
 {
-  description = "Minimal starting project for nix-based maturin package development";
+  description =
+    "Minimal starting project for nix-based maturin package development";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
@@ -10,74 +11,71 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = { self, nixpkgs, utils, devshell, rust-overlay, ... }@inputs: {
-    overlays.default = final: prev: {
-      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-        (py-final: py-prev: {
-          # maturin-basics = py-final.callPackage ./nix/pkgs/self {};
+  outputs = { self, nixpkgs, utils, devshell, rust-overlay, ... }@inputs:
+    {
+      overlays.default = nixpkgs.lib.composeManyExtensions [
+        (final: prev: {
+          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+            (python-final: python-prev: {
+              dbase = python-final.callPackage ./nix/pkgs/self { };
+            })
+          ];
         })
       ];
-    };
-  } // utils.lib.eachDefaultSystem (system: {
-    # The main development environment
-    devShells.default =
-      let pkgs = import nixpkgs {
-            inherit system;
+    } // utils.lib.eachSystem [ "x86_64-linux" ] (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            self.overlays.default
+            rust-overlay.overlays.default
+            devshell.overlays.default
+          ];
+        };
+      in {
+        devShells.default = pkgs.devshell.mkShell {
+          name = "maturin-basics";
 
-            overlays = [
-              devshell.overlays.default
-              rust-overlay.overlays.default
-            ];
-          };
+          commands = with pkgs; [
+            {
+              name = "maturin";
+              package = maturin;
+            }
+            {
+              name = "python";
+              package =
+                pkgs.python3.withPackages (ps: with ps; [ numpy dbfread dbf dbase]);
+            }
+          ];
 
-          pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-            numpy
-            dbfread
-            dbf
-          ]);
+          packages = [
+            (pkgs.rust-bin.beta.latest.default.override {
+              extensions = [ "rust-src" "rust-analyzer" ];
+            })
+          ];
 
-          python = pkgs.python3;
-          rust = pkgs.rust-bin.stable.latest.default.override {
-            extensions = [ "rust-src" ];
-            targets = [ "x86_64-unknown-linux-gnu" ];
-          };
-
-      in pkgs.devshell.mkShell {
-        name = "maturin-basics";
-
-        commands = with pkgs; [
-          { name = "maturin"; package = maturin; }
-          { name = "python"; package = pythonEnv; }
-        ];
-
-        packages = [
-          (pkgs.rust-bin.beta.latest.default.override {
-          extensions = [ "rust-src" "rust-analyzer" ];
-        })
-        ];
-
-        env = [
-          {
+          env = [{
             name = "RUST_BACKTRACE";
             value = "full";
-          }
-        ];
-      };
+          }];
+        };
 
-    # The development environment for testing the resulting python package.
-    devShells.test = let pkgs = import nixpkgs {
-      inherit system;
-      overlays = [ devshell.overlays.default self.overlays.default ];
-    }; in pkgs.devshell.mkShell {
-      name = "maturin-basics-test";
+        # The development environment for testing the resulting python package.
+        devShells.test = let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ devshell.overlays.default self.overlays.default ];
+          };
 
-      commands = with pkgs; [
-        {
-          name = "python"; package = pkgs.python3.withPackages (ps: with ps; [
-            # maturin-basics
-          ]);
-        }
-      ];
-    };
-  });
+        in pkgs.devshell.mkShell {
+          name = "maturin-basics-test";
+
+          commands = with pkgs; [{
+            name = "python";
+            package = pkgs.python3.withPackages (ps: with ps; [ ]);
+          }];
+        };
+
+        packages.default = pkgs.python3Packages.dbase;
+      });
 }
