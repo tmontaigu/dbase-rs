@@ -154,6 +154,25 @@ def test_dbf_rust():
         print(f"读取记录失败: {e}")
         return
 
+    # 添加更新测试
+    print("\n5. 测试更新记录...")
+    
+    # 测试单条记录更新
+    print("5.1 测试单条记录更新")
+    update_start = time.time()
+    try:
+        # 更新第一条记录
+        dbf_rust.update_record(0, {"SALARY":99999.99,"CN_TITLE":"经理"})
+        single_update_time = time.time() - update_start
+        print(f"单条更新完成，耗时: {single_update_time:.3f}秒")
+        
+        # 验证更新
+        updated_record = dbf_rust.read_records()[0]
+        print("更新后的记录:", updated_record)
+    except Exception as e:
+        print(f"单条记录更新失败: {e}")
+        return
+
     # 性能统计
     final_size = os.path.getsize(test_file)
     print("\n4. 性能统计:")
@@ -246,6 +265,37 @@ def test_dbf_python():
         print(f"读取记录失败: {e}")
         return
 
+    # 添加更新测试
+    print("\n5. 测试更新记录...")
+    
+    # 测试单条记录更新
+    print("5.1 测试单条记录更新")
+    update_start = time.time()
+    try:
+        with dbf.Table(test_file, codepage="cp936")  as t:
+            with t[0] as record:
+                record["SALARY"] = 99999.99
+        single_update_time = time.time() - update_start
+        print(f"单条更新完成，耗时: {single_update_time:.3f}秒")
+
+    except Exception as e:
+        print(f"单条记录更新失败: {e}")
+        table.close()
+        return
+    
+    try:
+        # 使用 dbfread 读取文件
+        table_read = DBF(test_file)
+        all_records = []
+        for record in table_read:
+            # dbfread 已经将记录转换为字典格式，直接添加即可
+            all_records.append(record)
+        for i, record in enumerate(all_records[:1], 1):
+            print(f"更新后记录 {i}:", record)
+    except Exception as e:
+        print(f"读取记录失败: {e}")
+        return
+    
     # 性能统计
     final_size = os.path.getsize(test_file)
     print("\n4. 性能统计:")
