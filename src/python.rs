@@ -43,7 +43,7 @@ impl DBFFile {
         // Process each field definition
         for (name, type_str, length, decimal) in fields {
             // Convert field name - involves allocation
-            let field_name = FieldName::try_from(name.as_str())
+            let field_name = FieldName::try_from(name.to_uppercase().as_str())
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
             // Convert length - no allocation
@@ -146,11 +146,12 @@ impl DBFFile {
         // Create a map of field names to their types
         let field_types: HashMap<String, FieldType> = fields
             .iter()
-            .map(|f| (f.name.to_string(), f.field_type))
+            .map(|f| (f.name.to_string().to_uppercase(), f.field_type))
             .collect();
 
         for (key, value) in values.iter() {
             let field_name = key.extract::<String>()?;
+            let field_name = field_name.to_uppercase();
             let field_type = field_types.get(&field_name).copied().ok_or_else(|| {
                 PyValueError::new_err(format!(
                     "Field '{}' does not exist in the DBF file",
@@ -203,7 +204,7 @@ impl DBFFile {
         // Create a map of field names to their types
         let field_types: HashMap<String, FieldType> = fields
             .iter()
-            .map(|f| (f.name.to_string(), f.field_type))
+            .map(|f| (f.name.to_string().to_uppercase(), f.field_type))
             .collect();
 
         match first_record.is_instance_of::<PyDict>() {
@@ -214,6 +215,7 @@ impl DBFFile {
 
                     for (key, value) in py_dict {
                         let field_name = key.extract::<String>()?;
+                        let field_name = field_name.to_uppercase();
                         let field_type = field_types.get(&field_name).copied();
                         let field_value =
                             self.convert_py_value_to_field_value(value, field_type)?;
