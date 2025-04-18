@@ -516,8 +516,13 @@ impl<T: Read + Seek> File<T> {
         };
         let num_fields = (offset as usize - Header::SIZE - size_of::<u8>()) / FieldInfo::SIZE;
 
-        let fields_info =
-            FieldsInfo::read_from(&mut source, num_fields).map_err(|error| Error {
+        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
+            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
+            Error::new(field_error, 0)
+        })?;
+
+        let fields_info = FieldsInfo::read_with_encoding(&mut source, num_fields, &encoding)
+            .map_err(|error| Error {
                 record_num: 0,
                 field: None,
                 kind: error,
@@ -533,11 +538,6 @@ impl<T: Read + Seek> File<T> {
             .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
             .map_err(|error| Error::io_error(error, 0))?;
 
-        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
-            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
-            Error::new(field_error, 0)
-        })?;
-
         let record_size: usize = DELETION_FLAG_SIZE + fields_info.size_of_all_fields();
         let record_data_buffer = Cursor::new(vec![0u8; record_size]);
         // Some file seems not to include the DELETION_FLAG_SIZE into the record size,
@@ -550,7 +550,7 @@ impl<T: Read + Seek> File<T> {
             memo_reader: None,
             header,
             fields_info,
-            encoding,
+            encoding: DynEncoding::new(encoding),
             record_data_buffer,
             field_data_buffer: [0u8; 255],
             options: ReadingOptions::default(),
@@ -619,7 +619,12 @@ impl<T: Read + Seek> File<T> {
 
 impl<T: Write + Seek> File<T> {
     pub fn create_new(mut dst: T, table_info: TableInfo) -> Result<Self, Error> {
-        write_header_parts(&mut dst, &table_info.header, &table_info.fields_info)?;
+        write_header_parts(
+            &mut dst,
+            &table_info.header,
+            &table_info.fields_info,
+            &table_info.encoding,
+        )?;
         let record_size: usize = DELETION_FLAG_SIZE
             + table_info
                 .fields_info

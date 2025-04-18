@@ -90,9 +90,6 @@ impl FieldInfo {
         Self::read_with_encoding(source, &crate::encoding::Ascii)
     }
 
-    /// Reads with the given encoding.
-    ///
-    /// The encoding is used only for the name
     fn read_with_encoding<T: Read, E: Encoding>(
         source: &mut T,
         encoding: &E,
@@ -136,10 +133,20 @@ impl FieldInfo {
         })
     }
 
-    pub(crate) fn write_to<T: Write>(&self, dest: &mut T) -> std::io::Result<()> {
-        let num_bytes = self.name.len();
+    pub(crate) fn write_to<T: Write, E: Encoding>(
+        &self,
+        dest: &mut T,
+        encoding: &E,
+    ) -> std::io::Result<()> {
         let mut name_bytes = [0u8; FIELD_NAME_LENGTH];
-        name_bytes[..num_bytes.min(FIELD_NAME_LENGTH)].copy_from_slice(self.name.as_bytes());
+        let encoded = encoding.encode(&self.name).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Failed to encode field name",
+            )
+        })?;
+        let num_bytes = encoded.len().min(FIELD_NAME_LENGTH);
+        name_bytes[..num_bytes].copy_from_slice(&encoded[..num_bytes]);
         dest.write_all(&name_bytes)?;
 
         dest.write_u8(u8::from(self.field_type))?;
@@ -164,9 +171,17 @@ pub struct FieldsInfo {
 
 impl FieldsInfo {
     pub(crate) fn read_from<R: Read>(source: &mut R, num_fields: usize) -> Result<Self, ErrorKind> {
+        Self::read_with_encoding(source, num_fields, &crate::encoding::Ascii)
+    }
+
+    pub(crate) fn read_with_encoding<R: Read, E: Encoding>(
+        source: &mut R,
+        num_fields: usize,
+        encoding: &E,
+    ) -> Result<Self, ErrorKind> {
         let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields);
         for _ in 0..num_fields {
-            let info = FieldInfo::read_from(source)?;
+            let info = FieldInfo::read_with_encoding(source, encoding)?;
             fields_info.push(info);
         }
 
@@ -277,7 +292,9 @@ mod test {
             30,
         );
         let mut cursor = Cursor::new(Vec::<u8>::with_capacity(FieldInfo::SIZE));
-        field_info.write_to(&mut cursor).unwrap();
+        field_info
+            .write_to(&mut cursor, &crate::encoding::Ascii)
+            .unwrap();
 
         cursor.set_position(0);
 

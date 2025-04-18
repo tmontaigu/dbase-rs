@@ -15,10 +15,11 @@ use crate::{Encoding, Error, ErrorKind, FieldIOError, Record, UnicodeLossy};
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
 
-pub(crate) fn write_header_parts<W>(
+pub(crate) fn write_header_parts<W, E: Encoding>(
     dst: &mut W,
     header: &Header,
     fields_info: &[FieldInfo],
+    encoding: &E,
 ) -> Result<(), Error>
 where
     W: Write,
@@ -29,7 +30,7 @@ where
 
     for record_info in fields_info.iter() {
         record_info
-            .write_to(dst)
+            .write_to(dst, encoding)
             .map_err(|error| Error::io_error(error, 0))?;
     }
     dst.write_u8(TERMINATOR_VALUE)
@@ -260,9 +261,20 @@ impl TableWriterBuilder {
     }
 
     /// Builds the writer and set the dst as where the file data will be written
-    pub fn build_with_dest<W: Write + Seek>(mut self, dst: W) -> TableWriter<W> {
+    pub fn build_with_dest<W: Write + Seek>(mut self, mut dst: W) -> TableWriter<W> {
         self.sync_header();
-        TableWriter::new(dst, self.v, self.hdr, self.encoding)
+        let encoding = self.encoding.clone();
+        write_header_parts(&mut dst, &self.hdr, &self.v, &encoding)
+            .expect("Failed to write header parts");
+
+        TableWriter {
+            dst,
+            fields_info: self.v,
+            header: self.hdr,
+            buffer: [0u8; 255],
+            finalized: false,
+            encoding,
+        }
     }
 
     /// Helper function to set create a file at the given path
@@ -659,7 +671,12 @@ impl<W: Write + Seek> TableWriter<W> {
     }
 
     fn write_header(&mut self) -> Result<(), Error> {
-        write_header_parts(&mut self.dst, &self.header, &self.fields_info)
+        write_header_parts(
+            &mut self.dst,
+            &self.header,
+            &self.fields_info,
+            &self.encoding,
+        )
     }
 }
 
