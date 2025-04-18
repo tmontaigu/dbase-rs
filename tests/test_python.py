@@ -350,6 +350,58 @@ class TestDBFFile(unittest.TestCase):
         except Exception as e:
             self.skipTest(f"混合字段名测试失败: {str(e)}")
 
+    def test_empty_string_handling(self):
+        """测试空字符串的处理"""
+        dbf_path = os.path.join(self.temp_dir, "empty_string_test.dbf")
+        dbf = DBFFile(dbf_path)
+
+        # 创建文件结构
+        fields = [
+            ("NAME", "C", 50, None),
+            ("DESC", "C", 100, None),
+            ("CODE", "C", 10, None),
+        ]
+        dbf.create(fields)
+
+        # 测试各种空值情况
+        test_records = [
+            {
+                "NAME": "",  # 空字符串
+                "DESC": None,  # None值
+                "CODE": "123",  # 正常值
+            },
+            {
+                "NAME": "John",  # 正常值
+                "DESC": "",  # 空字符串
+                "CODE": None,  # None值
+            },
+        ]
+        dbf.append_records(test_records)
+
+        # 读取并验证
+        records = dbf.read_records()
+        self.assertEqual(len(records), 2)
+
+        # 验证第一条记录
+        self.assertEqual(records[0]["NAME"], "")  # 空字符串应该保持为空字符串
+        self.assertEqual(records[0]["DESC"], "")  # None应该转换为空字符串
+        self.assertEqual(records[0]["CODE"], "123")  # 正常值应该保持不变
+
+        # 验证第二条记录
+        self.assertEqual(records[1]["NAME"], "John")  # 正常值应该保持不变
+        self.assertEqual(records[1]["DESC"], "")  # 空字符串应该保持为空字符串
+        self.assertEqual(records[1]["CODE"], "")  # None应该转换为空字符串
+
+        # 测试更新为空字符串
+        dbf.update_record(0, {"NAME": None})  # 更新为None
+        records = dbf.read_records()
+        self.assertEqual(records[0]["NAME"], "")  # 应该读取为空字符串
+
+        # 测试更新为空字符串
+        dbf.update_record(1, {"DESC": ""})  # 更新为空字符串
+        records = dbf.read_records()
+        self.assertEqual(records[1]["DESC"], "")  # 应该保持为空字符串
+
 
 if __name__ == "__main__":
     unittest.main()
