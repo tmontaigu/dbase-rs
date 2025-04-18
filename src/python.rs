@@ -376,7 +376,7 @@ impl DBFFile {
                 let py_value = match field_value {
                     FieldValue::Character(opt) => match opt {
                         Some(s) => s.into_py(py),
-                        None => py.None(),
+                        None => "".into_py(py),
                     },
                     FieldValue::Numeric(opt) => match opt {
                         Some(n) => n.into_py(py),
