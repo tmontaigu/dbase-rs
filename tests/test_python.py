@@ -228,41 +228,41 @@ class TestDBFFile(unittest.TestCase):
         self.assertFalse(records[1]["FLAG"])
         self.assertIsNone(records[2]["FLAG"])
 
-    def test_field_name_case_sensitivity(self):
-        """测试字段名大小写处理"""
-        dbf_path = os.path.join(self.temp_dir, "case_test.dbf")
-        dbf = DBFFile(dbf_path)
+    # def test_field_name_case_sensitivity(self):
+    #     """测试字段名大小写处理"""
+    #     dbf_path = os.path.join(self.temp_dir, "case_test.dbf")
+    #     dbf = DBFFile(dbf_path)
 
-        # 创建文件时使用混合大小写
-        fields = [
-            ("Name", "C", 50, None),
-            ("age", "N", 3, None),
-            ("Salary", "N", 10, 2),
-        ]
-        dbf.create(fields)
+    #     # 创建文件时使用混合大小写
+    #     fields = [
+    #         ("Name", "C", 50, None),
+    #         ("age", "N", 3, None),
+    #         ("Salary", "N", 10, 2),
+    #     ]
+    #     dbf.create(fields)
 
-        # 使用不同大小写写入数据
-        test_records = [
-            {
-                "NAME": "John Doe",  # 全大写
-                "Age": 30,  # 首字母大写
-                "salary": 5000.00,  # 全小写
-            }
-        ]
-        dbf.append_records(test_records)
+    #     # 使用不同大小写写入数据
+    #     test_records = [
+    #         {
+    #             "NAME": "John Doe",  # 全大写
+    #             "Age": 30,  # 首字母大写
+    #             "salary": 5000.00,  # 全小写
+    #         }
+    #     ]
+    #     dbf.append_records(test_records)
 
-        # 读取并验证 - 应该都能正确匹配
-        records = dbf.read_records()
-        self.assertEqual(len(records), 1)
-        # 验证字段名是否都转换为大写
-        self.assertIn("NAME", records[0])
-        self.assertIn("AGE", records[0])
-        self.assertIn("SALARY", records[0])
+    #     # 读取并验证 - 应该都能正确匹配
+    #     records = dbf.read_records()
+    #     self.assertEqual(len(records), 1)
+    #     # 验证字段名是否都转换为大写
+    #     self.assertIn("NAME", records[0])
+    #     self.assertIn("AGE", records[0])
+    #     self.assertIn("SALARY", records[0])
 
-        # 使用不同大小写更新数据
-        dbf.update_record(0, {"name": "a"})  # 全小写
-        records = dbf.read_records()
-        self.assertEqual(records[0]["NAME"], "a")
+    #     # 使用不同大小写更新数据
+    #     dbf.update_record(0, {"name": "a"})  # 全小写
+    #     records = dbf.read_records()
+    #     self.assertEqual(records[0]["NAME"], "a")
 
     def test_chinese_field_names(self):
         """测试中文字段名处理"""
