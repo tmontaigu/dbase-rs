@@ -1,4 +1,5 @@
-use crate::encoding::{Ascii, GbkEncoding, Unicode};
+use crate::encoding::{Ascii, DynEncoding, GbkEncoding, Unicode};
+use crate::reading::Reader;
 use crate::{Date, FieldInfo, FieldName, FieldType, FieldValue, File, Record, TableWriterBuilder};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -37,7 +38,6 @@ impl DBFFile {
     /// # Arguments
     /// * `fields` - Vector of field definitions (name, type, length, decimal)
     fn create(&mut self, fields: Vec<(String, String, usize, Option<usize>)>) -> PyResult<()> {
-        // Initialize builder with potential capacity hint
         let mut builder = TableWriterBuilder::new();
 
         // Process each field definition
@@ -77,23 +77,10 @@ impl DBFFile {
             builder = result;
         }
 
-        // Set encoding - could be optimized with static encoding types
-        if let Some(encoding) = &self.encoding {
-            match encoding.as_str() {
-                "ascii" => builder = builder.set_encoding(Ascii),
-                "unicode" | "utf8" | "utf-8" => builder = builder.set_encoding(Unicode),
-                "cp936" | "gbk" => builder = builder.set_encoding(GbkEncoding),
-                // TODO: Add more encodings
-                _ => {
-                    return Err(PyValueError::new_err(format!(
-                        "Unsupported encoding: {}",
-                        encoding
-                    )))
-                }
-            }
+        if let Some(encoding) = self.get_encoding() {
+            builder = builder.set_encoding(encoding);
         }
 
-        // Create file and handle errors
         match builder.build_with_file_dest(&self.path) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
@@ -106,6 +93,10 @@ impl DBFFile {
             Ok(file) => file,
             Err(e) => return Err(PyValueError::new_err(e.to_string())),
         };
+
+        if let Some(encoding) = self.get_encoding() {
+            dbf_file.set_encoding(encoding);
+        }
 
         let fields = dbf_file.fields();
         // TODO: Implement streaming records
@@ -123,7 +114,14 @@ impl DBFFile {
     // Returns:
     //     PyObject - A list of records
     fn read_records(&self, py: Python) -> PyResult<PyObject> {
-        match crate::read(&self.path) {
+        let mut reader =
+            Reader::from_path(&self.path).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+        if let Some(encoding) = self.get_encoding() {
+            reader.set_encoding(encoding);
+        }
+
+        match reader.read() {
             Ok(records) => self.convert_rust_records_to_py(py, records),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
@@ -138,6 +136,10 @@ impl DBFFile {
     fn update_record(&self, index: usize, values: &PyDict) -> PyResult<()> {
         let mut dbf_file =
             File::open_read_write(&self.path).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+        if let Some(encoding) = self.get_encoding() {
+            dbf_file.set_encoding(encoding);
+        }
 
         // Build a record from a PyDict
         let mut record = Record::default();
@@ -421,5 +423,16 @@ impl DBFFile {
         }
 
         Ok(py_list.into())
+    }
+
+    fn get_encoding(&self) -> Option<DynEncoding> {
+        self.encoding
+            .as_ref()
+            .and_then(|encoding| match encoding.as_str() {
+                "ascii" => Some(DynEncoding::new(Ascii)),
+                "unicode" | "utf8" | "utf-8" => Some(DynEncoding::new(Unicode)),
+                "cp936" | "gbk" => Some(DynEncoding::new(GbkEncoding)),
+                _ => None,
+            })
     }
 }

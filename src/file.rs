@@ -498,6 +498,10 @@ impl<T> File<T> {
     pub fn set_options(&mut self, options: ReadingOptions) {
         self.options = options;
     }
+
+    pub(crate) fn set_encoding(&mut self, encoding: DynEncoding) {
+        self.encoding = encoding;
+    }
 }
 
 impl<T: Read + Seek> File<T> {
