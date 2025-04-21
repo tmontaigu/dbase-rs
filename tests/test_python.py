@@ -98,9 +98,9 @@ class TestDBFFile(unittest.TestCase):
         records = dbf.read_records()
         self.assertTrue(len(records) > 0)
 
-        # Test ASCII encoding
+        # Test Default encoding
         dbf_path = os.path.join(self.test_data_dir, "cp850.dbf")
-        dbf = DBFFile(dbf_path, encoding="ascii")
+        dbf = DBFFile(dbf_path)
         records = dbf.read_records()
         self.assertTrue(len(records) > 0)
 
