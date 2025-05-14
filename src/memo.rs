@@ -99,7 +99,10 @@ impl<T: Read + Seek> MemoReader<T> {
             }
             MemoFileType::DbaseMemo4 => {
                 let _ = self.source.read_u32::<LittleEndian>()?;
-                let length = self.source.read_u32::<LittleEndian>()?;
+                let mut length = self.source.read_u32::<LittleEndian>()?;
+                if length as usize > self.internal_buffer.len() {
+                    length = self.internal_buffer.len() as u32;
+                }
                 self.source
                     .read_exact(&mut self.internal_buffer[..length as usize])?;
                 match self.internal_buffer[..length as usize]
