@@ -516,8 +516,13 @@ impl<T: Read + Seek> File<T> {
         };
         let num_fields = (offset as usize - Header::SIZE - size_of::<u8>()) / FieldInfo::SIZE;
 
+        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
+            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
+            Error::new(field_error, 0)
+        })?;
+
         let fields_info =
-            FieldsInfo::read_from(&mut source, num_fields).map_err(|error| Error {
+            FieldsInfo::read_from(&mut source, num_fields, &encoding).map_err(|error| Error {
                 record_num: 0,
                 field: None,
                 kind: error,
@@ -532,11 +537,6 @@ impl<T: Read + Seek> File<T> {
         source
             .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
             .map_err(|error| Error::io_error(error, 0))?;
-
-        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
-            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
-            Error::new(field_error, 0)
-        })?;
 
         let record_size: usize = DELETION_FLAG_SIZE + fields_info.size_of_all_fields();
         let record_data_buffer = Cursor::new(vec![0u8; record_size]);

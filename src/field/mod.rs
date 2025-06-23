@@ -86,17 +86,10 @@ impl FieldInfo {
         }
     }
 
-    pub(crate) fn read_from<T: Read>(source: &mut T) -> Result<Self, ErrorKind> {
-        Self::read_with_encoding(source, &crate::encoding::Ascii)
-    }
-
     /// Reads with the given encoding.
     ///
     /// The encoding is used only for the name
-    fn read_with_encoding<T: Read, E: Encoding>(
-        source: &mut T,
-        encoding: &E,
-    ) -> Result<Self, ErrorKind> {
+    fn read_from<T: Read, E: Encoding>(source: &mut T, encoding: &E) -> Result<Self, ErrorKind> {
         let mut name = [0u8; FIELD_NAME_LENGTH];
         source.read_exact(&mut name)?;
         let field_type = source.read_u8()?;
@@ -163,10 +156,14 @@ pub struct FieldsInfo {
 }
 
 impl FieldsInfo {
-    pub(crate) fn read_from<R: Read>(source: &mut R, num_fields: usize) -> Result<Self, ErrorKind> {
+    pub(crate) fn read_from<R: Read, E: Encoding>(
+        source: &mut R,
+        num_fields: usize,
+        encoding: &E,
+    ) -> Result<Self, ErrorKind> {
         let mut fields_info = Vec::<FieldInfo>::with_capacity(num_fields);
         for _ in 0..num_fields {
-            let info = FieldInfo::read_from(source)?;
+            let info = FieldInfo::read_from(source, encoding)?;
             fields_info.push(info);
         }
 
@@ -281,7 +278,7 @@ mod test {
 
         cursor.set_position(0);
 
-        let read_field_info = FieldInfo::read_from(&mut cursor).unwrap();
+        let read_field_info = FieldInfo::read_from(&mut cursor, &crate::encoding::Ascii).unwrap();
 
         assert_eq!(read_field_info, field_info);
     }
