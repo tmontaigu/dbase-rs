@@ -42,7 +42,7 @@ mod serde_tests {
         let records = vec![DeserializableRecord {
             name: "Holy Fawn".to_string(),
             price: 10.2,
-            date: dbase::Date::new(01, 01, 2012),
+            date: dbase::Date::new(1, 1, 2012),
             available: true,
             score: 9.87,
         }];
@@ -125,14 +125,8 @@ mod serde_tests {
             .add_date_field(FieldName::try_from("date").unwrap());
 
         let records = vec![
-            Record {
-                0: true,
-                1: dbase::Date::new(12, 10, 2012),
-            },
-            Record {
-                0: false,
-                1: dbase::Date::new(12, 11, 2005),
-            },
+            Record(true, dbase::Date::new(12, 10, 2012)),
+            Record(false, dbase::Date::new(12, 11, 2005)),
         ];
         write_read_compare(&records, writer_builder);
     }
@@ -166,10 +160,7 @@ mod serde_tests {
         let error = writer
             .write_records(&records)
             .expect_err("We expected an Error");
-        match error.kind() {
-            ErrorKind::NotEnoughFields => assert!(true),
-            _ => assert!(false),
-        }
+        assert!(matches!(error.kind(), ErrorKind::NotEnoughFields));
     }
 
     #[test]
@@ -187,10 +178,7 @@ mod serde_tests {
             .write_records(&records)
             .expect_err("Expected an error");
 
-        match error.kind() {
-            ErrorKind::TooManyFields => assert!(true),
-            kind => assert!(false, "The kind is not the expected one: {}", kind),
-        }
+        assert!(matches!(error.kind(), ErrorKind::TooManyFields));
     }
 
     #[test]
@@ -211,7 +199,7 @@ mod serde_tests {
 
         let records = vec![Record {
             datetime: dbase::DateTime::new(
-                dbase::Date::new(12, 05, 2130),
+                dbase::Date::new(12, 5, 2130),
                 dbase::Time::new(15, 52, 12),
             ),
             currency: 79841.156846,

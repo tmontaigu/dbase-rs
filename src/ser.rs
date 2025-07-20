@@ -108,9 +108,9 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
         }
     }
 
-    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(self)
     }
@@ -132,18 +132,18 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
         unimplemented!("dBase cannot serialize unit_variant")
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(
+    fn serialize_newtype_struct<T>(
         self,
         _name: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(self)
     }
 
-    fn serialize_newtype_variant<T: ?Sized>(
+    fn serialize_newtype_variant<T>(
         self,
         _name: &'static str,
         _variant_index: u32,
@@ -151,7 +151,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
         _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         unimplemented!()
     }
@@ -204,9 +204,9 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
         unimplemented!()
     }
 
-    fn collect_str<T: ?Sized>(self, _value: &T) -> Result<Self::Ok, Self::Error>
+    fn collect_str<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: std::fmt::Display,
+        T: std::fmt::Display + ?Sized,
     {
         unimplemented!()
     }
@@ -216,13 +216,9 @@ impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         unimplemented!()
     }
@@ -236,13 +232,9 @@ impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(&mut **self)
     }
@@ -256,9 +248,9 @@ impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(&mut **self)
     }
@@ -272,16 +264,16 @@ impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         unimplemented!()
     }
 
-    fn serialize_value<T: ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T>(&mut self, _value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         unimplemented!()
     }
@@ -295,9 +287,9 @@ impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W>
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_field<T: ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         unimplemented!()
     }
@@ -311,9 +303,9 @@ impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> 
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(&mut **self)
     }
@@ -327,9 +319,9 @@ impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
     type Ok = ();
     type Error = FieldIOError;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         value.serialize(&mut **self)
     }

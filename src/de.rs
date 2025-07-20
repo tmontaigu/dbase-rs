@@ -8,7 +8,7 @@ use crate::{
     ErrorKind, FieldConversionError, FieldIOError, FieldIterator, FieldValue, ReadableRecord,
 };
 
-impl<'de, 'a, 'f, R1, R2> SeqAccess<'de> for &mut FieldIterator<'a, R1, R2>
+impl<'de, 'a, R1, R2> SeqAccess<'de> for &mut FieldIterator<'a, R1, R2>
 where
     R1: Read + Seek,
     R2: Read + Seek,
@@ -31,7 +31,7 @@ where
 }
 
 //TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
-impl<'de, 'a, 'f, T, R> Deserializer<'de> for &mut FieldIterator<'a, T, R>
+impl<'de, 'a, T, R> Deserializer<'de> for &mut FieldIterator<'a, T, R>
 where
     T: Read + Seek,
     R: Read + Seek,

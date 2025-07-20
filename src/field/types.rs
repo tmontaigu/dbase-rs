@@ -109,7 +109,7 @@ impl TryFrom<char> for FieldType {
 
 impl Display for FieldType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "dbase::{:?}", self)
+        write!(f, "dbase::{self:?}")
     }
 }
 
@@ -263,7 +263,7 @@ impl FieldValue {
 
 impl Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

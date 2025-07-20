@@ -5,10 +5,10 @@ fn main() {
     let mut reader = dbase::Reader::from_path(dbf_path).unwrap();
 
     for (i, record_result) in reader.iter_records().enumerate() {
-        println!("Record {}", i);
+        println!("Record {i}");
         let record = record_result.unwrap();
         for (name, value) in record {
-            println!("\tname: {}, value: {:?}", name, value);
+            println!("\tname: {name}, value: {value:?}");
         }
     }
 }

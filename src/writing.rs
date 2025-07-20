@@ -350,8 +350,7 @@ impl WritableRecord for Record {
             let value = self.get(name).ok_or_else(|| {
                 FieldIOError::new(
                     ErrorKind::Message(format!(
-                        "Could not find field named '{}' in the record map",
-                        name
+                        "Could not find field named '{name}' in the record map"
                     )),
                     None,
                 )
@@ -544,8 +543,7 @@ impl<W: Write + Seek> TableWriter<W> {
         let current_record_num = self.header.num_records as usize;
 
         if self.finalized {
-            let err =
-                std::io::Error::new(std::io::ErrorKind::Other, "Cannot write to finalized data");
+            let err = std::io::Error::other("Cannot write to finalized data");
             return Err(Error {
                 record_num: current_record_num,
                 field: None,

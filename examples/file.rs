@@ -15,16 +15,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut field = r.field(name_field).unwrap();
 
     let field_value = field.read().unwrap();
-    println!("value: {}", field_value);
+    println!("value: {field_value}");
 
     field.write(&FieldValue::Character(Option::from("Toulouse".to_string())))?;
 
     let rr = file.record(0).unwrap().read().unwrap();
-    println!("record: {:?}", rr);
+    println!("record: {rr:?}");
 
     let mut record_iter = file.records();
     while let Some(mut record_ref) = record_iter.next() {
-        println!("record: {:?}", record_ref);
+        println!("record: {record_ref:?}");
         println!("{:#?}", record_ref.read().unwrap())
     }
 

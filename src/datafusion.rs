@@ -36,25 +36,26 @@ pub struct DbaseDataSource {
 
 impl Clone for DbaseDataSource {
     fn clone(&self) -> Self {
-        return DbaseDataSource {
+        DbaseDataSource {
             path: self.path.clone(),
             file: self.file.clone(),
-        };
+        }
     }
 }
 
 impl DbaseDataSource {
     pub fn new<P: AsRef<Path> + Debug>(path: P) -> Self {
-        let file = DbaseFile::open_read_only(&path)
-            .expect(format!("Could not find file {:?} or corresponding memo file", &path).as_str());
-        return DbaseDataSource {
+        let file = DbaseFile::open_read_only(&path).unwrap_or_else(|_| {
+            panic!("Could not find file {:?} or corresponding memo file", &path)
+        });
+        DbaseDataSource {
             path: path
                 .as_ref()
                 .to_str()
                 .expect("Path contains non-unicode characters")
                 .to_string(),
             file: Arc::new(Mutex::new(file)),
-        };
+        }
     }
 
     pub fn num_records(&self) -> usize {
@@ -217,7 +218,7 @@ impl ExecutionPlan for DbaseExec {
                             .as_any_mut()
                             .downcast_mut::<StringBuilder>()
                             .unwrap()
-                            .append_value(c.to_string()),
+                            .append_value(c),
                         None => column_builders[j]
                             .as_any_mut()
                             .downcast_mut::<StringBuilder>()
@@ -242,13 +243,11 @@ impl ExecutionPlan for DbaseExec {
                             .unwrap()
                             .append_null(),
                     },
-                    FieldValue::DateTime(d) => match d {
-                        d => column_builders[j]
-                            .as_any_mut()
-                            .downcast_mut::<Int64Builder>()
-                            .unwrap()
-                            .append_value(d.to_unix_timestamp()),
-                    },
+                    FieldValue::DateTime(d) => column_builders[j]
+                        .as_any_mut()
+                        .downcast_mut::<Int64Builder>()
+                        .unwrap()
+                        .append_value(d.to_unix_timestamp()),
                     FieldValue::Double(d) => column_builders[j]
                         .as_any_mut()
                         .downcast_mut::<Float64Builder>()
@@ -331,7 +330,7 @@ impl TableProvider for DbaseDataSource {
         let dbase_fields = dbase_file.fields();
 
         let arrow_fields: Vec<_> = dbase_fields
-            .into_iter()
+            .iter()
             .map(|field| {
                 let ftype = match field.field_type {
                     FieldType::Character => DataType::Utf8,

@@ -175,25 +175,24 @@ impl std::error::Error for Error {}
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErrorKind::IoError(err) => write!(f, "An I/O error happened: {}", err),
+            ErrorKind::IoError(err) => write!(f, "An I/O error happened: {err}"),
             ErrorKind::ParseFloatError(err) => {
-                write!(f, "Float value could not be obtained: {}", err)
+                write!(f, "Float value could not be obtained: {err}")
             }
             ErrorKind::ParseIntError(err) => {
-                write!(f, "Integer value could not be obtained: {}", err)
+                write!(f, "Integer value could not be obtained: {err}")
             }
             ErrorKind::InvalidFieldType(c) => {
-                write!(f, "The FieldType code '{}' is note a valid one", c)
+                write!(f, "The FieldType code '{c}' is note a valid one")
             }
             ErrorKind::MissingMemoFile => write!(f, "The memo file could not be found"),
             ErrorKind::ErrorOpeningMemoFile(err) => {
                 write!(
                     f,
-                    "An error occurred when trying to open the memo file: {}",
-                    err
+                    "An error occurred when trying to open the memo file: {err}"
                 )
             }
-            ErrorKind::BadConversion(err) => write!(f, "The convertion cannot be made: {}", err),
+            ErrorKind::BadConversion(err) => write!(f, "The convertion cannot be made: {err}"),
             ErrorKind::EndOfRecord => write!(f, "End of record reached, no more fields left"),
             ErrorKind::NotEnoughFields => {
                 write!(
@@ -205,20 +204,16 @@ impl std::fmt::Display for ErrorKind {
                 write!(f, "The writer expected to write more fields for the record")
             }
             ErrorKind::IncompatibleType => write!(f, "The types are not compatible"),
-            ErrorKind::StringDecodeError(err) => write!(
-                f,
-                "A string from the database could not be decoded: {}",
-                err
-            ),
-            ErrorKind::StringEncodeError(err) => write!(
-                f,
-                "A string from the database could not be encoded: {}",
-                err
-            ),
-            ErrorKind::UnsupportedCodePage(code) => {
-                write!(f, "The code page '{:?}' is not supported", code)
+            ErrorKind::StringDecodeError(err) => {
+                write!(f, "A string from the database could not be decoded: {err}")
             }
-            ErrorKind::Message(ref msg) => write!(f, "{}", msg),
+            ErrorKind::StringEncodeError(err) => {
+                write!(f, "A string from the database could not be encoded: {err}")
+            }
+            ErrorKind::UnsupportedCodePage(code) => {
+                write!(f, "The code page '{code:?}' is not supported")
+            }
+            ErrorKind::Message(ref msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -260,7 +255,7 @@ impl From<yore::DecodeError> for DecodeError {
 
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -289,7 +284,7 @@ impl From<yore::EncodeError> for EncodeError {
 
 impl std::fmt::Display for EncodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
