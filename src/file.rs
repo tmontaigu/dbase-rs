@@ -27,7 +27,9 @@ pub struct BufReadWriteFile {
 }
 
 impl BufReadWriteFile {
-    fn new(file: SharedFile) -> std::io::Result<Self> {
+    fn new(file: impl Into<SharedFile>) -> std::io::Result<Self> {
+        let file = file.into();
+
         #[cfg(target_family = "wasm")]
         let file_ = file.clone();
         #[cfg(not(target_family = "wasm"))]

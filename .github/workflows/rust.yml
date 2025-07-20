@@ -19,6 +19,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --all-features
 
+      - name: Clippy Wasm32
+        run: cargo clippy  --all-targets --features=serde,yore,encoding_rs,chrono --target=wasm32-unknown-unknown
+
       - name: Run tests
         run: cargo test --verbose
 
