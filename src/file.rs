@@ -242,7 +242,7 @@ impl<T> Debug for RecordRef<'_, T> {
 }
 
 impl<T> RecordRef<'_, T> {
-    pub fn field(&mut self, index: FieldIndex) -> Option<FieldRef<T>> {
+    pub fn field(&mut self, index: FieldIndex) -> Option<FieldRef<'_, T>> {
         if index.0 >= self.file.fields_info.len() {
             return None;
         }
@@ -412,7 +412,7 @@ where
 {
     // To implement iterator we need the Iterator trait to make use of GATs
     // which is not the case, to iteration will have to use the while let Some() pattern
-    pub fn next(&mut self) -> Option<RecordRef<T>> {
+    pub fn next(&mut self) -> Option<RecordRef<'_, T>> {
         let record_ref = self.file.record(self.current_record.0);
         self.current_record.0 += usize::from(record_ref.is_some());
         record_ref

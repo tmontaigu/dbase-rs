@@ -242,7 +242,7 @@ impl<T: Read + Seek> Reader<T> {
     }
 
     /// Creates an iterator of records of the type you want
-    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<T, R> {
+    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<'_, T, R> {
         let record_size: usize = self
             .fields_info
             .iter()
@@ -258,7 +258,7 @@ impl<T: Read + Seek> Reader<T> {
     }
 
     /// Shortcut function to get an iterator over the [Records](struct.Record.html) in the file
-    pub fn iter_records(&mut self) -> RecordIterator<T, Record> {
+    pub fn iter_records(&mut self) -> RecordIterator<'_, T, Record> {
         self.iter_records_as::<Record>()
     }
 
