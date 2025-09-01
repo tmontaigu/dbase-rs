@@ -54,12 +54,15 @@
 //! * yore: uses the yore crate supports most code pages
 //! * encoding_rs: uses the encoding_rs crate, supports notably the GBK encoding
 //!
-//! If both feature are activated, "yore" takes the priority.
+//! If both features are activated, "yore" takes the priority.
 //!
-//! To force the use of a particular encoding:
+//! # Examples to force a specific encoding
+//!
+//! Using yore
 //! ```
 //! # #[cfg(feature = "yore")]
-//! use yore::code_pages::CP850;
+//! // yore is re-exported
+//! use dbase::yore::code_pages::CP850;
 //!
 //! # #[cfg(feature = "yore")]
 //! # fn main() -> Result<(), dbase::Error> {
@@ -72,6 +75,33 @@
 //! # }
 //!
 //! # #[cfg(not(feature = "yore"))]
+//! # fn main() {
+//! # }
+//! ```
+//!
+//! Using encoding_rs
+//!
+//! ```
+//! # #[cfg(feature = "encoding_rs")]
+//! // encoding_rs is re-exported
+//! use dbase::encoding_rs::GBK;
+//!
+//! # #[cfg(feature = "encoding_rs")]
+//! # fn main() -> Result<(), dbase::Error> {
+//! let mut reader = dbase::Reader::from_path_with_encoding(
+//!     "tests/data/cp936.dbf",
+//!     dbase::encoding::EncodingRs::from(GBK)
+//! )?;
+//! let records = reader.read()?;
+//!
+//! assert_eq!(
+//!     records[0].get("TEST"),
+//!     Some(&dbase::FieldValue::Character(Some("测试中文".to_string())))
+//! );
+//! # Ok(())
+//! # }
+//!
+//! # #[cfg(not(feature = "encoding_rs"))]
 //! # fn main() {
 //! # }
 //! ```
@@ -281,6 +311,9 @@ mod ser;
 
 #[cfg(feature = "yore")]
 pub use yore;
+
+#[cfg(feature = "encoding_rs")]
+pub use encoding_rs;
 
 #[cfg(feature = "datafusion")]
 mod datafusion;
