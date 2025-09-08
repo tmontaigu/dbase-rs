@@ -1,3 +1,10 @@
+# 0.6.1
+    - Re-export encoding_rs to allow its usage without adding it as a direct dependency
+    - Fixed compilation on WASM target
+    - Fixed bug in Memo file where dbase could try to read out of the internal buffer
+    - Field names are now read using the encoding specified in the file
+
+
 # 0.6.0
     - Added support for wasm32-wasmi target
     - Added support for encoding_rs, to (notably) support GBK encoding
