@@ -21,6 +21,7 @@ async-trait = { version = "0.1", optional = true }
 codepage = { version = "0.1.2", optional = true }
 encoding_rs = { version = "0.8.35", optional = true }
 chrono = { version = "0.4.39", optional = true }
+bufrw = "0.2.0"
 
 [dev-dependencies]
 serde_derive = "1.0.102"

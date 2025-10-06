@@ -11,58 +11,10 @@ use crate::{
 };
 use byteorder::ReadBytesExt;
 use std::fmt::{Debug, Formatter};
-use std::io::{BufReader, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-// Workaround the absence of File::try_clone with WASM/WASI without penalizing the other platforms
-#[cfg(target_family = "wasm")]
-type SharedFile = std::sync::Arc<std::fs::File>;
-#[cfg(not(target_family = "wasm"))]
-type SharedFile = std::fs::File;
-
-#[derive(Debug)]
-pub struct BufReadWriteFile {
-    input: BufReader<SharedFile>,
-    output: BufWriter<SharedFile>,
-}
-
-impl BufReadWriteFile {
-    fn new(file: impl Into<SharedFile>) -> std::io::Result<Self> {
-        let file = file.into();
-
-        #[cfg(target_family = "wasm")]
-        let file_ = file.clone();
-        #[cfg(not(target_family = "wasm"))]
-        let file_ = file.try_clone()?;
-
-        let input = BufReader::new(file_);
-        let output = BufWriter::new(file);
-        Ok(Self { input, output })
-    }
-}
-
-impl Read for BufReadWriteFile {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.input.read(buf)
-    }
-}
-
-impl Write for BufReadWriteFile {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.output.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.output.flush()
-    }
-}
-
-impl Seek for BufReadWriteFile {
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        self.output.seek(pos)?;
-        self.input.seek(pos)
-    }
-}
+pub type BufReadWriteFile = bufrw::BufReaderWriter<std::fs::File>;
 
 /// Index to a field in a record
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -709,7 +661,7 @@ impl<T: Write + Seek> File<T> {
     }
 }
 
-impl File<BufReadWriteFile> {
+impl File<bufrw::BufReaderWriter<std::fs::File>> {
     pub fn open_with_options<P: AsRef<Path>>(
         path: P,
         options: std::fs::OpenOptions,
@@ -717,7 +669,7 @@ impl File<BufReadWriteFile> {
         let file = options
             .open(path)
             .map_err(|error| Error::io_error(error, 0))?;
-        let source = BufReadWriteFile::new(file).unwrap();
+        let source = bufrw::BufReaderWriter::new(file);
         File::open(source)
     }
 
@@ -725,7 +677,7 @@ impl File<BufReadWriteFile> {
     pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = std::fs::File::open(path.as_ref()).map_err(|error| Error::io_error(error, 0))?;
 
-        let mut file = File::open(BufReadWriteFile::new(file).unwrap())?;
+        let mut file = File::open(bufrw::BufReaderWriter::new(file))?;
         if file.fields_info.at_least_one_field_is_memo() {
             let p = path.as_ref();
             let memo_type = file.header.file_type.supported_memo_type();
@@ -738,9 +690,8 @@ impl File<BufReadWriteFile> {
                     kind: ErrorKind::ErrorOpeningMemoFile(error),
                 })?;
 
-                let memo_reader = BufReadWriteFile::new(memo_file)
-                    .and_then(|memo_file| MemoReader::new(mt, memo_file))
-                    .map_err(|error| Error::io_error(error, 0))?;
+                let memo_reader =
+                    MemoReader::new(mt, bufrw::BufReaderWriter::new(memo_file)).unwrap();
 
                 file.memo_reader = Some(memo_reader);
             }
@@ -772,7 +723,7 @@ impl File<BufReadWriteFile> {
     pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
         let file = std::fs::File::create(path).map_err(|error| Error::io_error(error, 0))?;
 
-        File::create_new(BufReadWriteFile::new(file).unwrap(), table_info)
+        File::create_new(bufrw::BufReaderWriter::new(file), table_info)
     }
 }
 
