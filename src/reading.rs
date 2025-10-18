@@ -218,9 +218,15 @@ impl<T: Read + Seek> Reader<T> {
     ///
     /// See [`Self::new`] for more information.
     pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
-        let mut reader = Self::new(source)?;
-        reader.set_encoding(encoding);
-        Ok(reader)
+        let file = crate::File::open_with_encoding(source, Some(encoding))?;
+        Ok(Self {
+            source: file.inner,
+            memo_reader: None,
+            header: file.header,
+            fields_info: file.fields_info.inner,
+            encoding: file.encoding,
+            options: ReadingOptions::default(),
+        })
     }
 
     pub fn set_encoding<E: Encoding + 'static>(&mut self, encoding: E) {
