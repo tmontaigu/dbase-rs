@@ -6,8 +6,8 @@ use crate::reading::{ReadingOptions, BACKLINK_SIZE, TERMINATOR_VALUE};
 use crate::writing::{write_header_parts, WritableAsDbaseField};
 use crate::ErrorKind::UnsupportedCodePage;
 use crate::{
-    Error, ErrorKind, FieldConversionError, FieldIOError, FieldInfo, FieldIterator, FieldValue,
-    FieldWriter, ReadableRecord, TableInfo, WritableRecord,
+    Encoding, Error, ErrorKind, FieldConversionError, FieldIOError, FieldInfo, FieldIterator,
+    FieldValue, FieldWriter, ReadableRecord, TableInfo, WritableRecord,
 };
 use byteorder::ReadBytesExt;
 use std::fmt::{Debug, Formatter};
@@ -455,8 +455,23 @@ impl<T> File<T> {
 }
 
 impl<T: Read + Seek> File<T> {
+    /// creates of File using source as the storage space with encoding.
+    pub fn open_with_encoding<E: Encoding + 'static>(
+        source: T,
+        encoding: E,
+    ) -> Result<Self, Error> {
+        Self::open_inner(source, Some(encoding))
+    }
+
     /// creates of File using source as the storage space.
-    pub fn open(mut source: T) -> Result<Self, Error> {
+    pub fn open(source: T) -> Result<Self, Error> {
+        Self::open_inner(source, None::<DynEncoding>)
+    }
+
+    pub(crate) fn open_inner<E: Encoding + 'static>(
+        mut source: T,
+        encoding: Option<E>,
+    ) -> Result<Self, Error> {
         let mut header =
             Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
@@ -470,10 +485,15 @@ impl<T: Read + Seek> File<T> {
         };
         let num_fields = (offset as usize - Header::SIZE - size_of::<u8>()) / FieldInfo::SIZE;
 
-        let encoding = header.code_page_mark.to_encoding().ok_or_else(|| {
-            let field_error = FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
-            Error::new(field_error, 0)
-        })?;
+        // If encoding is specified, use it; otherwise, use the code page mark
+        let encoding = match encoding {
+            Some(encoding) => DynEncoding::new(encoding),
+            None => header.code_page_mark.to_encoding().ok_or_else(|| {
+                let field_error =
+                    FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
+                Error::new(field_error, 0)
+            })?,
+        };
 
         let fields_info =
             FieldsInfo::read_from(&mut source, num_fields, &encoding).map_err(|error| Error {

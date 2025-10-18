@@ -203,7 +203,18 @@ impl<T: Read + Seek> Reader<T> {
     /// # }
     /// ```
     pub fn new(source: T) -> Result<Self, Error> {
-        let file = crate::File::open(source)?;
+        Self::new_inner(source, None::<DynEncoding>)
+    }
+
+    /// Creates a new reader from the source and reads strings using the encoding provided.
+    ///
+    /// See [`Self::new`] for more information.
+    pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
+        Self::new_inner(source, Some(encoding))
+    }
+
+    fn new_inner<E: Encoding + 'static>(source: T, encoding: Option<E>) -> Result<Self, Error> {
+        let file = crate::File::open_inner(source, encoding)?;
         Ok(Self {
             source: file.inner,
             memo_reader: None,
@@ -212,15 +223,6 @@ impl<T: Read + Seek> Reader<T> {
             encoding: file.encoding,
             options: ReadingOptions::default(),
         })
-    }
-
-    /// Creates a new reader from the source and reads strings using the encoding provided.
-    ///
-    /// See [`Self::new`] for more information.
-    pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
-        let mut reader = Self::new(source)?;
-        reader.set_encoding(encoding);
-        Ok(reader)
     }
 
     pub fn set_encoding<E: Encoding + 'static>(&mut self, encoding: E) {
