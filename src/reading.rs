@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::iter::FusedIterator;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::encoding::DynEncoding;
 use crate::error::{Error, ErrorKind, FieldIOError};
@@ -339,20 +339,42 @@ impl Reader<BufReader<File>> {
     /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let p = path.as_ref().to_owned();
-        let bufreader =
-            BufReader::new(File::open(path).map_err(|error| Error::io_error(error, 0))?);
-        let mut reader = Reader::new(bufreader)?;
-        let at_least_one_field_is_memo = reader
+        let bufreader = File::open(path)
+            .map(BufReader::new)
+            .map_err(|error| Error::io_error(error, 0))?;
+        let mut reader = Reader::new_inner(bufreader, None::<DynEncoding>)?;
+        reader.open_memo_file(p)?;
+        Ok(reader)
+    }
+
+    /// Creates a new dbase Reader from a path and reads string using the encoding provided.
+    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
+        path: P,
+        encoding: E,
+    ) -> Result<Self, Error> {
+        let p = path.as_ref().to_owned();
+        let bufreader = File::open(path)
+            .map(BufReader::new)
+            .map_err(|error| Error::io_error(error, 0))?;
+        let mut reader = Reader::new_inner(bufreader, Some(encoding))?;
+        reader.open_memo_file(p)?;
+        Ok(reader)
+    }
+
+    fn open_memo_file(&mut self, dbf_path: PathBuf) -> Result<(), Error> {
+        let at_least_one_field_is_memo = self
             .fields_info
             .iter()
             .any(|f_info| f_info.field_type == FieldType::Memo);
 
         if at_least_one_field_is_memo {
-            let memo_type = reader.header.file_type.supported_memo_type();
+            let memo_type = self.header.file_type.supported_memo_type();
             if let Some(mt) = memo_type {
                 let memo_path = match mt {
-                    MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
-                    MemoFileType::FoxBaseMemo => p.with_extension("fpt"),
+                    MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => {
+                        dbf_path.with_extension("dbt")
+                    }
+                    MemoFileType::FoxBaseMemo => dbf_path.with_extension("fpt"),
                 };
 
                 let memo_file = File::open(memo_path).map_err(|error| Error {
@@ -363,20 +385,10 @@ impl Reader<BufReader<File>> {
 
                 let memo_reader = MemoReader::new(mt, BufReader::new(memo_file))
                     .map_err(|error| Error::io_error(error, 0))?;
-                reader.memo_reader = Some(memo_reader);
+                self.memo_reader = Some(memo_reader);
             }
         }
-        Ok(reader)
-    }
-
-    /// Creates a new dbase Reader from a path and reads string using the encoding provided.
-    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
-        path: P,
-        encoding: E,
-    ) -> Result<Self, Error> {
-        let mut reader = Self::from_path(path)?;
-        reader.encoding = DynEncoding::new(encoding);
-        Ok(reader)
+        Ok(())
     }
 }
 
