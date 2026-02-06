@@ -1,4 +1,4 @@
-use crate::{file::BufReadWriteFile, FieldType, FieldValue, File as DbaseFile};
+use crate::{FieldType, FieldValue, File as DbaseFile, file::BufReadWriteFile};
 use async_trait::async_trait;
 use datafusion::arrow::array::{
     ArrayBuilder, ArrayRef, BooleanBuilder, Date32Builder, Float32Builder, Float64Builder,
@@ -18,8 +18,8 @@ use datafusion::physical_expr::EquivalenceProperties;
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType, Partitioning};
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::{
-    project_schema, DisplayAs, DisplayFormatType, ExecutionPlan, PlanProperties,
-    SendableRecordBatchStream,
+    DisplayAs, DisplayFormatType, ExecutionPlan, PlanProperties, SendableRecordBatchStream,
+    project_schema,
 };
 use datafusion::prelude::*;
 use datafusion_expr::CreateExternalTable;

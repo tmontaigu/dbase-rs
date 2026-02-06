@@ -213,7 +213,7 @@ impl std::fmt::Display for ErrorKind {
             ErrorKind::UnsupportedCodePage(code) => {
                 write!(f, "The code page '{code:?}' is not supported")
             }
-            ErrorKind::Message(ref msg) => write!(f, "{msg}"),
+            ErrorKind::Message(msg) => write!(f, "{msg}"),
         }
     }
 }

@@ -114,12 +114,11 @@ impl<T: Read + Seek> MemoReader<T> {
                 }
             }
             MemoFileType::DbaseMemo => {
-                if let Err(e) = self.source.read_exact(&mut self.internal_buffer) {
-                    if index != self.header.next_available_block_index - 1
-                        && e.kind() != std::io::ErrorKind::UnexpectedEof
-                    {
-                        return Err(e);
-                    }
+                if let Err(e) = self.source.read_exact(&mut self.internal_buffer)
+                    && index != self.header.next_available_block_index - 1
+                    && e.kind() != std::io::ErrorKind::UnexpectedEof
+                {
+                    return Err(e);
                 }
                 match self.internal_buffer.iter().position(|b| *b == 0x1A) {
                     Some(pos) => Ok(&self.internal_buffer[..pos]),

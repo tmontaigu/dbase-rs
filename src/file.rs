@@ -1,10 +1,10 @@
+use crate::ErrorKind::UnsupportedCodePage;
 use crate::encoding::DynEncoding;
-use crate::field::{DeletionFlag, FieldsInfo, DELETION_FLAG_SIZE};
+use crate::field::{DELETION_FLAG_SIZE, DeletionFlag, FieldsInfo};
 use crate::header::Header;
 use crate::memo::MemoReader;
-use crate::reading::{ReadingOptions, BACKLINK_SIZE, TERMINATOR_VALUE};
-use crate::writing::{write_header_parts, WritableAsDbaseField};
-use crate::ErrorKind::UnsupportedCodePage;
+use crate::reading::{BACKLINK_SIZE, ReadingOptions, TERMINATOR_VALUE};
+use crate::writing::{WritableAsDbaseField, write_header_parts};
 use crate::{
     Encoding, Error, ErrorKind, FieldConversionError, FieldIOError, FieldInfo, FieldIterator,
     FieldValue, FieldWriter, ReadableRecord, TableInfo, WritableRecord,
@@ -757,24 +757,30 @@ mod tests {
             let mut record = file.record(0).unwrap();
             let _ = record.read_field(crate::FieldIndex(0)).unwrap();
             // Must return false, meaning it correctly understands the record 0 is in memory
-            assert!(!file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(0))
-                .unwrap());
-            assert!(file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
-                .unwrap());
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(0))
+                    .unwrap()
+            );
+            assert!(
+                file.ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
+                    .unwrap()
+            );
         }
 
         {
             let mut record = file.record(4).unwrap();
             let _ = record.read_field(crate::FieldIndex(3)).unwrap();
             // Must return false, meaning it correctly understands the record 4 is in memory
-            assert!(!file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(4))
-                .unwrap());
-            assert!(file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
-                .unwrap());
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(4))
+                    .unwrap()
+            );
+            assert!(
+                file.ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
+                    .unwrap()
+            );
         }
 
         // Make sure writing a field still work with the ensure mechanism
@@ -782,14 +788,18 @@ mod tests {
             let mut record = file.record(10).unwrap();
             let value = record.read_field(crate::FieldIndex(2)).unwrap();
             // Use record.file to avoid double borrow
-            assert!(!record
-                .file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
-                .unwrap());
+            assert!(
+                !record
+                    .file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
+                    .unwrap()
+            );
             record.write_field(crate::FieldIndex(2), &value).unwrap();
-            assert!(!file
-                .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
-                .unwrap());
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
+                    .unwrap()
+            );
         }
     }
 }

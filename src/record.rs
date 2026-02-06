@@ -1,6 +1,6 @@
 use crate::{FieldIOError, FieldIterator, FieldValue, NamedValue, ReadableRecord};
-use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
+use std::collections::hash_map::RandomState;
 use std::io::{Read, Seek};
 
 /// Type definition of a generic record.

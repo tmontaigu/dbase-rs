@@ -4,11 +4,11 @@ use std::fmt::Display;
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
 
+use crate::Encoding;
 use crate::error::ErrorKind;
 use crate::field::FieldInfo;
 use crate::memo::MemoReader;
 use crate::writing::WritableAsDbaseField;
-use crate::Encoding;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 #[cfg(feature = "chrono")]
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
@@ -872,8 +872,8 @@ impl WritableAsDbaseField for DateTime {
 #[cfg(feature = "serde")]
 mod de {
     use super::*;
-    use serde::de::{Deserialize, Visitor};
     use serde::Deserializer;
+    use serde::de::{Deserialize, Visitor};
     use std::io::Cursor;
 
     impl<'de> Deserialize<'de> for Date {
@@ -936,8 +936,8 @@ mod de {
 mod ser {
     use super::*;
 
-    use serde::ser::Serialize;
     use serde::Serializer;
+    use serde::ser::Serialize;
 
     impl Serialize for Date {
         fn serialize<S>(

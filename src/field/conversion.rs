@@ -1,4 +1,4 @@
-use super::{types, FieldType, FieldValue};
+use super::{FieldType, FieldValue, types};
 
 /// Errors that can happen when trying to convert a FieldValue into
 /// a more concrete type

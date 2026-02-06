@@ -1,8 +1,8 @@
 use std::fmt::Display;
 use std::io::{Read, Seek};
 
-use serde::de::{DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::Deserializer;
+use serde::de::{DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 
 use crate::{
     ErrorKind, FieldConversionError, FieldIOError, FieldIterator, FieldValue, ReadableRecord,

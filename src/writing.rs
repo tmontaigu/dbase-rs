@@ -6,10 +6,10 @@ use std::path::Path;
 use byteorder::WriteBytesExt;
 
 use crate::encoding::{AsCodePageMark, DynEncoding};
-use crate::field::{types::FieldType, DeletionFlag, FieldInfo, FieldName};
+use crate::field::{DeletionFlag, FieldInfo, FieldName, types::FieldType};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
-use crate::reading::{TableInfo, BACKLINK_SIZE};
+use crate::reading::{BACKLINK_SIZE, TableInfo};
 use crate::{Encoding, Error, ErrorKind, FieldIOError, Record, UnicodeLossy};
 
 /// A dbase file ends with this byte
