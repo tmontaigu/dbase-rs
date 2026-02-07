@@ -158,6 +158,7 @@ impl From<u8> for CodePageMark {
             0x01 => Self::CP437,
             0x02 => Self::CP850,
             0x03 => Self::CP1252,
+            0x13 => Self::CP932,
             0x4D => Self::CP936,
             // 0x04 => Self::StandardMacIntosh,
             0x64 => Self::CP852,
@@ -206,7 +207,9 @@ impl From<CodePageMark> for u8 {
             CodePageMark::CP950 => 0x78,
             CodePageMark::CP949 => 0x79,
             CodePageMark::CP936 => 0x7A,
-            CodePageMark::CP932 => 0x7B,
+            // For an unknown reason, CP932 has two LDIDs; 0x13 and 0x7B.
+            // We don't know which is appropriate, but it seems 0x13 is used in actual.
+            CodePageMark::CP932 => 0x13,
             CodePageMark::CP874 => 0x7C,
             CodePageMark::CP1255 => 0x7D,
             CodePageMark::CP1256 => 0x7E,
