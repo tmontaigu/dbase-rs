@@ -209,11 +209,17 @@ impl<T: Read + Seek> Reader<T> {
     /// Creates a new reader from the source and reads strings using the encoding provided.
     ///
     /// See [`Self::new`] for more information.
-    pub fn new_with_encoding<E: Encoding + 'static>(source: T, encoding: E) -> Result<Self, Error> {
+    pub fn new_with_encoding<E>(source: T, encoding: E) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         Self::new_inner(source, Some(encoding))
     }
 
-    fn new_inner<E: Encoding + 'static>(source: T, encoding: Option<E>) -> Result<Self, Error> {
+    fn new_inner<E>(source: T, encoding: Option<E>) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         let file = crate::File::open_inner(source, encoding)?;
         Ok(Self {
             source: file.inner,
@@ -348,10 +354,11 @@ impl Reader<BufReader<File>> {
     }
 
     /// Creates a new dbase Reader from a path and reads string using the encoding provided.
-    pub fn from_path_with_encoding<P: AsRef<Path>, E: Encoding + 'static>(
-        path: P,
-        encoding: E,
-    ) -> Result<Self, Error> {
+    pub fn from_path_with_encoding<P, E>(path: P, encoding: E) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         let p = path.as_ref().to_owned();
         let bufreader = File::open(path)
             .map(BufReader::new)

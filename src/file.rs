@@ -456,10 +456,10 @@ impl<T> File<T> {
 
 impl<T: Read + Seek> File<T> {
     /// creates of File using source as the storage space with encoding.
-    pub fn open_with_encoding<E: Encoding + 'static>(
-        source: T,
-        encoding: E,
-    ) -> Result<Self, Error> {
+    pub fn open_with_encoding<E>(source: T, encoding: E) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         Self::open_inner(source, Some(encoding))
     }
 
@@ -468,10 +468,10 @@ impl<T: Read + Seek> File<T> {
         Self::open_inner(source, None::<DynEncoding>)
     }
 
-    pub(crate) fn open_inner<E: Encoding + 'static>(
-        mut source: T,
-        encoding: Option<E>,
-    ) -> Result<Self, Error> {
+    pub(crate) fn open_inner<E>(mut source: T, encoding: Option<E>) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         let mut header =
             Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
 
@@ -487,7 +487,7 @@ impl<T: Read + Seek> File<T> {
 
         // If encoding is specified, use it; otherwise, use the code page mark
         let encoding = match encoding {
-            Some(encoding) => DynEncoding::new(encoding),
+            Some(encoding) => encoding.into(),
             None => header.code_page_mark.to_encoding().ok_or_else(|| {
                 let field_error =
                     FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
