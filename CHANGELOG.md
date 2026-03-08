@@ -1,3 +1,10 @@
+# 0.7.0
+    - Make DynEncoding pub
+    - Allow creating DynEncoding from a string with the name of the encoding
+    - Allow 0x13 as the code value for CP932
+    - Reader::from_path_with_encoding will decode the field names
+    - Use bufrw for dbase::File, fixing a bug
+
 # 0.6.1
     - Re-export encoding_rs to allow its usage without adding it as a direct dependency
     - Fixed compilation on WASM target
