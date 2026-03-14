@@ -366,7 +366,7 @@ impl WritableRecord for Record {
 /// You give it the values you want to write and it writes them.
 /// The order and type of value must match the one given when creating the
 /// [TableWriter](struct.TableWriter.html), otherwise an error will occur.
-pub struct FieldWriter<'a, W: Write> {
+pub struct FieldWriter<'a, W> {
     pub(crate) dst: &'a mut W,
     pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
     pub(crate) field_buffer: &'a mut Cursor<&'a mut [u8]>,

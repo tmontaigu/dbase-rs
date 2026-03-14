@@ -96,7 +96,7 @@ impl ReadingOptions {
 /// # Ok(())
 /// # }
 /// ```
-pub struct ReaderBuilder<T: Read + Seek, E: Encoding + 'static> {
+pub struct ReaderBuilder<T, E> {
     source: T,
     memo_source: Option<T>,
     encoding: Option<E>,
@@ -164,7 +164,7 @@ impl<T: Read + Seek, E: Encoding + 'static> ReaderBuilder<T, E> {
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
 #[derive(Clone)]
-pub struct Reader<T: Read + Seek> {
+pub struct Reader<T> {
     /// Where the data is read from
     source: T,
     memo_reader: Option<MemoReader<T>>,
@@ -424,7 +424,7 @@ pub struct NamedValue<'a, T> {
 ///
 /// When trying to read more fields than there are, an EndOfRecord error
 /// will be returned.
-pub struct FieldIterator<'a, Source: Read + Seek, MemoSource: Read + Seek> {
+pub struct FieldIterator<'a, Source, MemoSource> {
     /// The source from where we read the data
     pub(crate) source: &'a mut Source,
     /// The fields that make the records
@@ -584,7 +584,7 @@ impl<Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
 }
 
 /// Iterator over records contained in the dBase
-pub struct RecordIterator<'a, T: Read + Seek, R: ReadableRecord> {
+pub struct RecordIterator<'a, T, R> {
     reader: &'a mut Reader<T>,
     record_type: std::marker::PhantomData<R>,
     current_record: u32,
