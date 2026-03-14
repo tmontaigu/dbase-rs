@@ -162,18 +162,23 @@ where
         visitor.visit_f64(value)
     }
 
-    fn deserialize_char<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_char<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize char")
+        let value = self.read_next_field_as::<String>()?.value;
+        let mut chars = value.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => visitor.visit_char(c),
+            _ => Err(FieldConversionError::IncompatibleType.into()),
+        }
     }
 
-    fn deserialize_str<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_str<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize str")
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -184,11 +189,11 @@ where
         visitor.visit_string(value)
     }
 
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize bytes")
+        self.deserialize_byte_buf(visitor)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -240,7 +245,9 @@ where
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize unit")
+        Err(serde::de::Error::custom(
+            "dBase does not support unit types",
+        ))
     }
 
     fn deserialize_unit_struct<V>(
@@ -251,7 +258,9 @@ where
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize unit struct")
+        Err(serde::de::Error::custom(
+            "dBase does not support unit structs",
+        ))
     }
 
     fn deserialize_newtype_struct<V>(
@@ -269,7 +278,7 @@ where
     where
         V: Visitor<'de>,
     {
-        unimplemented!("dBase cannot deserialize sequence")
+        Err(serde::de::Error::custom("dBase does not support sequences"))
     }
 
     fn deserialize_tuple<V>(
@@ -299,7 +308,7 @@ where
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize map")
+        Err(serde::de::Error::custom("dBase does not support maps"))
     }
 
     fn deserialize_struct<V>(
@@ -334,17 +343,20 @@ where
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize identifiers")
+        Err(serde::de::Error::custom(
+            "dBase does not support identifiers",
+        ))
     }
 
     fn deserialize_ignored_any<V>(
         self,
-        _visitor: V,
+        visitor: V,
     ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize ignored any")
+        self.skip_next_field()?;
+        visitor.visit_unit()
     }
 }
 

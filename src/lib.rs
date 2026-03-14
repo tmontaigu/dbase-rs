@@ -155,7 +155,11 @@
 //! ```
 //!
 //! If you use the `serde` optional feature and serde_derive crate you can have the
-//! [ReadableRecord](trait.ReadableRecord.html) implemented for you
+//! [ReadableRecord](trait.ReadableRecord.html) implemented for you.
+//!
+//! **Important:** dBase fields are matched by position, not by name. The order of fields
+//! in your struct must match the order of fields in the dBase table. Reordering struct
+//! fields will silently read incorrect data.
 //!
 //! ```
 //! # #[cfg(feature = "serde")]
@@ -250,6 +254,9 @@
 //!
 //! If you use the serde optional feature and serde_derive crate you can have the
 //! [WritableRecord](trait.WritableRecord.html) implemented for you.
+//!
+//! **Important:** dBase fields are matched by position, not by name. The order of fields
+//! in your struct must match the order of fields declared in the [`TableWriterBuilder`].
 //!
 //! ```
 //! # #[cfg(feature = "serde")]
