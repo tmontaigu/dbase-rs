@@ -477,7 +477,13 @@ impl<T: Read + Seek> File<T> {
 
         let offset = if header.file_type.is_visual_fox_pro() {
             if BACKLINK_SIZE > header.offset_to_first_record {
-                panic!("Invalid file");
+                return Err(Error::new(
+                    FieldIOError::new(
+                        ErrorKind::Message("File is invalid (BACKLINK_SIZE too big)".to_string()),
+                        None,
+                    ),
+                    0,
+                ));
             }
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
@@ -629,14 +635,20 @@ impl<T: Write + Seek> File<T> {
     where
         R: WritableRecord,
     {
-        assert!(
-            !self
-                .header
-                .num_records
-                .overflowing_add(records.len() as u32)
-                .1,
-            "Too many records (u32 overflow)"
-        );
+        if self
+            .header
+            .num_records
+            .overflowing_add(records.len() as u32)
+            .1
+        {
+            return Err(Error {
+                record_num: self.num_records(),
+                field: None,
+                kind: ErrorKind::Message(
+                    "Too many records (u32 overflow)".to_string(),
+                ),
+            });
+        }
 
         let end_of_last_record = self.header.offset_to_first_record as u64
             + (self.num_records() as u64 * self.header.size_of_record as u64);
@@ -710,8 +722,8 @@ impl File<bufrw::BufReaderWriter<std::fs::File>> {
                     kind: ErrorKind::ErrorOpeningMemoFile(error),
                 })?;
 
-                let memo_reader =
-                    MemoReader::new(mt, bufrw::BufReaderWriter::new(memo_file)).unwrap();
+                let memo_reader = MemoReader::new(mt, bufrw::BufReaderWriter::new(memo_file))
+                    .map_err(|error| Error::io_error(error, 0))?;
 
                 file.memo_reader = Some(memo_reader);
             }

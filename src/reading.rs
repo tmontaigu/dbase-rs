@@ -533,7 +533,9 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
     /// read the next field using the given info
     fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<FieldValue, FieldIOError> {
         let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
-        self.source.read_exact(field_data_buffer).unwrap();
+        self.source
+            .read_exact(field_data_buffer)
+            .map_err(|err| FieldIOError::new(err.into(), Some(field_info.clone())))?;
         match FieldValue::read_from(
             field_data_buffer,
             self.memo_reader,

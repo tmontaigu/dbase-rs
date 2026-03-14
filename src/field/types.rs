@@ -613,7 +613,9 @@ impl WritableAsDbaseField for FieldValue {
                 FieldValue::Currency(value) => value.write_as(field_info, encoding, dst),
                 FieldValue::DateTime(value) => value.write_as(field_info, encoding, dst),
                 FieldValue::Double(value) => value.write_as(field_info, encoding, dst),
-                FieldValue::Memo(_) => unimplemented!("Cannot write memo"),
+                FieldValue::Memo(_) => Err(ErrorKind::Message(
+                    "Writing memo fields is not supported".to_string(),
+                )),
             }
         }
     }
