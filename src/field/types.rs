@@ -156,8 +156,8 @@ impl FieldValue {
         let value = match field_info.field_type {
             FieldType::Logical => match field_bytes[0] as char {
                 ' ' | '?' => FieldValue::Logical(None),
-                '1' | '0' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
-                'N' | 'n' | 'F' | 'f' => FieldValue::Logical(Some(false)),
+                '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
+                '0' | 'F' | 'f' | 'N' | 'n' => FieldValue::Logical(Some(false)),
                 _ => FieldValue::Logical(None),
             },
             FieldType::Character => {
