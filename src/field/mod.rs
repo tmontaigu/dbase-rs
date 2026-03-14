@@ -110,10 +110,8 @@ impl FieldInfo {
         let mut _reserved = [0u8; 7];
         source.read_exact(&mut _reserved)?;
 
-        let s = encoding
-            .decode(&name)?
-            .trim_matches(|c| c == '\u{0}')
-            .to_owned();
+        let name = name.split(|&b| b == 0u8).next().unwrap_or(&[]);
+        let s = encoding.decode(name)?.into_owned();
 
         let field_type = FieldType::try_from(field_type as char)?;
 
