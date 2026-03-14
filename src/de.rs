@@ -30,7 +30,6 @@ where
     }
 }
 
-//TODO maybe we can deserialize numbers other than f32 & f64 by converting using TryFrom
 impl<'de, 'a, T, R> Deserializer<'de> for &mut FieldIterator<'a, T, R>
 where
     T: Read + Seek,
@@ -108,25 +107,43 @@ where
         )
     }
 
-    fn deserialize_u16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_u16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize u16")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_u16(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
     }
 
-    fn deserialize_u32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_u32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize u32")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_u32(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
     }
 
-    fn deserialize_u64<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
+    fn deserialize_u64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!("DBase cannot deserialize u64")
+        let value = self.read_next_field_as::<i32>()?.value;
+        visitor.visit_u64(
+            value
+                .try_into()
+                .ok()
+                .ok_or(FieldConversionError::IncompatibleType)?,
+        )
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
