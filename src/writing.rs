@@ -35,8 +35,8 @@ where
     dst.write_u8(TERMINATOR_VALUE)
         .map_err(|error| Error::io_error(error, 0))?;
 
-    // TODO foxpro adds this backlink thing
-    //  Since we don't have a spec for we just write zeros
+    // FoxPro has a backlink structure here, but there is no public spec.
+    // Writing zeros is the standard approach when no .dbc is associated.
     if header.file_type.is_visual_fox_pro() {
         for _ in 0..BACKLINK_SIZE {
             dst.write_u8(0).map_err(|error| Error::io_error(error, 0))?;
