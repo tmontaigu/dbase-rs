@@ -86,22 +86,16 @@ impl<T: Read + Seek> MemoReader<T> {
                 }
                 let buf_slice = &mut self.internal_buffer[..length as usize];
                 self.source.read_exact(buf_slice)?;
-                match buf_slice.iter().rposition(|b| *b != 0) {
-                    Some(pos) => Ok(&buf_slice[..=pos]),
-                    None => {
-                        if buf_slice.iter().all(|b| *b == 0) {
-                            Ok(&buf_slice[..0])
-                        } else {
-                            Ok(buf_slice)
-                        }
-                    }
+                match buf_slice.iter().position(|b| *b == 0) {
+                    Some(pos) => Ok(&buf_slice[..pos]),
+                    None => Ok(buf_slice),
                 }
             }
             MemoFileType::DbaseMemo4 => {
                 let _ = self.source.read_u32::<LittleEndian>()?;
-                let mut length = self.source.read_u32::<LittleEndian>()?;
+                let length = self.source.read_u32::<LittleEndian>()?;
                 if length as usize > self.internal_buffer.len() {
-                    length = self.internal_buffer.len() as u32;
+                    self.internal_buffer.resize(length as usize, 0);
                 }
                 self.source
                     .read_exact(&mut self.internal_buffer[..length as usize])?;
@@ -110,7 +104,7 @@ impl<T: Read + Seek> MemoReader<T> {
                     .position(|b| *b == 0x1F)
                 {
                     Some(pos) => Ok(&self.internal_buffer[..pos]),
-                    None => Ok(&self.internal_buffer),
+                    None => Ok(&self.internal_buffer[..length as usize]),
                 }
             }
             MemoFileType::DbaseMemo => {
