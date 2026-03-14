@@ -651,11 +651,6 @@ impl<W: Write + Seek> TableWriter<W> {
         Ok(())
     }
 
-    #[deprecated(note = "Use finalize instead")]
-    pub fn close(&mut self) -> Result<(), Error> {
-        self.finalize()
-    }
-
     fn write_header(&mut self) -> Result<(), Error> {
         write_header_parts(&mut self.dst, &self.header, &self.fields_info)
     }

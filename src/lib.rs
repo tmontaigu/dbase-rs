@@ -298,7 +298,6 @@
 //!
 //! This struct allows to read/write an existing or new file
 //! without having to fully read it first.
-#![deny(unstable_features)]
 
 #[cfg(feature = "serde")]
 mod de;
