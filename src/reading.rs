@@ -66,7 +66,7 @@ impl Default for ReadingOptions {
 impl ReadingOptions {
     /// Customize how spaces ` ` are trimmed within [FieldValue::Character]
     ///
-    /// By default they are trimmed at the begining and the end
+    /// By default they are trimmed at the beginning and the end
     pub fn character_trim(mut self, trim_option: TrimOption) -> Self {
         self.character_trim = trim_option;
         self

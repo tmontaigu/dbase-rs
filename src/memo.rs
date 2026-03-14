@@ -52,7 +52,7 @@ impl MemoHeader {
     }
 }
 
-/// Struct that reads knows how to read data from a memo source
+/// Struct that knows how to read data from a memo source
 #[derive(Debug, Clone)]
 pub(crate) struct MemoReader<T> {
     memo_file_type: MemoFileType,

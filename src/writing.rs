@@ -176,7 +176,7 @@ impl TableWriterBuilder {
             FieldType::Logical,
             FieldType::Logical
                 .size()
-                .expect("Internal error Logical field date should be known"),
+                .expect("Internal error Logical field size should be known"),
         ));
         self
     }
@@ -188,7 +188,7 @@ impl TableWriterBuilder {
             FieldType::Integer,
             FieldType::Integer
                 .size()
-                .expect("Internal error Integer field date should be known"),
+                .expect("Internal error Integer field size should be known"),
         ));
         self.hdr.file_type = crate::header::Version::FoxPro2 {
             supports_memo: false,
@@ -203,7 +203,7 @@ impl TableWriterBuilder {
             FieldType::DateTime,
             FieldType::DateTime
                 .size()
-                .expect("Internal error datetime field date should be known"),
+                .expect("Internal error datetime field size should be known"),
         ));
         self.hdr.file_type = crate::header::Version::FoxPro2 {
             supports_memo: false,
@@ -218,7 +218,7 @@ impl TableWriterBuilder {
             FieldType::Double,
             FieldType::Double
                 .size()
-                .expect("Internal error Double field date should be known"),
+                .expect("Internal error Double field size should be known"),
         ));
         self.hdr.file_type = crate::header::Version::FoxPro2 {
             supports_memo: false,
@@ -233,7 +233,7 @@ impl TableWriterBuilder {
             FieldType::Currency,
             FieldType::Currency
                 .size()
-                .expect("Internal error Currency field date should be known"),
+                .expect("Internal error Currency field size should be known"),
         ));
         self.hdr.file_type = crate::header::Version::FoxPro2 {
             supports_memo: false,
@@ -383,7 +383,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     ///
     /// # Notes
     ///
-    /// If the corresponding `FieldType` of the the field_value type (`T`) does not
+    /// If the corresponding `FieldType` of the field_value type (`T`) does not
     /// match the expected type an error is returned.
     ///
     /// Values for which the number of bytes written would exceed the specified field_length
@@ -412,7 +412,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
                 self.write_pad(bytes_to_pad, field_info)?;
             }
 
-            // If the current field value size exceeds the one one set
+            // If the current field value size exceeds the one set
             // when creating the writer, it will be cropped
             let write_len = value_len.min(field_info.field_length as usize);
             let field_bytes = self.field_buffer.get_ref();

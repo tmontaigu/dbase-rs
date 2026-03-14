@@ -271,7 +271,7 @@ impl Display for FieldValue {
 ///
 /// # Note
 ///
-/// This is really really naive date, it just holds the day, moth, year value
+/// This is really really naive date, it just holds the day, month, year value
 /// with just a very few checks.
 ///
 /// Also, dBase files do not have concept of timezones.

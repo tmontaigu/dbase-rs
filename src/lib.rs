@@ -1,6 +1,6 @@
 //! dbase is rust library meant to read and write dBase / FoxPro files.
 //!
-//! Theses files are nowadays generally found in association with shapefiles.
+//! These files are nowadays generally found in association with shapefiles.
 //!
 //! # Reading
 //!
@@ -47,8 +47,8 @@
 //!
 //! # Other Codepages / Encodings
 //!
-//! As baseline, dbase-rs only suppors Utf8 and Utf8-lossy encodings, meaning
-//! only files using strings in ASCII encoding will properly be deccoded.
+//! As baseline, dbase-rs only supports Utf8 and Utf8-lossy encodings, meaning
+//! only files using strings in ASCII encoding will properly be decoded.
 //! However, two optional features exist to work with non-ASCII encodings:
 //!
 //! * yore: uses the yore crate supports most code pages
@@ -113,8 +113,8 @@
 //!
 //! ## Deserialisation
 //!
-//! If you know what kind of data to expect from a particular file you can use implement
-//! the [ReadbableRecord](trait.ReadableRecord.html) trait to "deserialize" the record into
+//! If you know what kind of data to expect from a particular file you can implement
+//! the [ReadableRecord](trait.ReadableRecord.html) trait to "deserialize" the record into
 //! your custom struct:
 //!
 //!```
@@ -155,7 +155,7 @@
 //! ```
 //!
 //! If you use the `serde` optional feature and serde_derive crate you can have the
-//! [ReadbableRecord](trait.ReadableRecord.html) impletemented for you
+//! [ReadableRecord](trait.ReadableRecord.html) implemented for you
 //!
 //! ```
 //! # #[cfg(feature = "serde")]

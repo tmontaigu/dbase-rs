@@ -4,8 +4,8 @@ use super::{FieldType, FieldValue, types};
 /// a more concrete type
 #[derive(Debug)]
 pub enum FieldConversionError {
-    /// Happens when the conversion could not be mode because the FieldType
-    /// does not mat the expected one
+    /// Happens when the conversion could not be made because the FieldType
+    /// does not match the expected one
     FieldTypeNotAsExpected {
         /// The expected FieldType of the FieldValue the conversion was tried on
         expected: FieldType,

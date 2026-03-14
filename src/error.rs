@@ -6,14 +6,14 @@ use std::string::FromUtf8Error;
 pub enum ErrorKind {
     /// Wrapper of `std::io::Error` to forward any reading/writing error
     IoError(std::io::Error),
-    /// Wrapper to forward errors whe trying to parse a float from the file
+    /// Wrapper to forward errors when trying to parse a float from the file
     ParseFloatError(std::num::ParseFloatError),
-    /// Wrapper to forward errors whe trying to parse an integer value from the file
+    /// Wrapper to forward errors when trying to parse an integer value from the file
     ParseIntError(std::num::ParseIntError),
-    /// The Field as an invalid FieldType
+    /// The field has an invalid FieldType
     InvalidFieldType(char),
     /// Happens when at least one field is a Memo type
-    /// and the that additional memo file could not be found / was not given
+    /// and the additional memo file could not be found / was not given
     MissingMemoFile,
     /// Something went wrong when we tried to open the associated memo file
     ErrorOpeningMemoFile(std::io::Error),
@@ -183,7 +183,7 @@ impl std::fmt::Display for ErrorKind {
                 write!(f, "Integer value could not be obtained: {err}")
             }
             ErrorKind::InvalidFieldType(c) => {
-                write!(f, "The FieldType code '{c}' is note a valid one")
+                write!(f, "The FieldType code '{c}' is not a valid one")
             }
             ErrorKind::MissingMemoFile => write!(f, "The memo file could not be found"),
             ErrorKind::ErrorOpeningMemoFile(err) => {
@@ -192,7 +192,7 @@ impl std::fmt::Display for ErrorKind {
                     "An error occurred when trying to open the memo file: {err}"
                 )
             }
-            ErrorKind::BadConversion(err) => write!(f, "The convertion cannot be made: {err}"),
+            ErrorKind::BadConversion(err) => write!(f, "The conversion cannot be made: {err}"),
             ErrorKind::EndOfRecord => write!(f, "End of record reached, no more fields left"),
             ErrorKind::NotEnoughFields => {
                 write!(
