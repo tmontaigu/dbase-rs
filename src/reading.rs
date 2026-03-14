@@ -602,22 +602,28 @@ impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
             return if self.current_record >= self.reader.header.num_records {
                 None
             } else {
-                let deletion_flag = DeletionFlag::read_from(&mut self.reader.source).ok()?;
+                let deletion_flag = match DeletionFlag::read_from(&mut self.reader.source) {
+                    Ok(flag) => flag,
+                    Err(e) => return Some(Err(Error::io_error(e, self.current_record as usize))),
+                };
 
                 if deletion_flag == DeletionFlag::Deleted {
-                    self.reader
-                        .source
-                        .seek(SeekFrom::Current(
-                            self.record_data_buffer.get_ref().len() as i64
-                        ))
-                        .ok()?;
+                    if let Err(e) = self.reader.source.seek(SeekFrom::Current(
+                        self.record_data_buffer.get_ref().len() as i64,
+                    )) {
+                        return Some(Err(Error::io_error(e, self.current_record as usize)));
+                    }
+                    self.current_record += 1;
                     continue;
                 }
 
-                self.reader
+                if let Err(e) = self
+                    .reader
                     .source
                     .read_exact(self.record_data_buffer.get_mut())
-                    .ok()?;
+                {
+                    return Some(Err(Error::io_error(e, self.current_record as usize)));
+                }
                 self.record_data_buffer.set_position(0);
 
                 let mut iter = FieldIterator {
