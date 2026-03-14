@@ -1,6 +1,3 @@
-extern crate dbase;
-#[cfg(feature = "serde")]
-extern crate serde_derive;
 
 #[cfg(feature = "serde")]
 mod serde_tests {

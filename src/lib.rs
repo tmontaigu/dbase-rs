@@ -159,9 +159,6 @@
 //!
 //! ```
 //! # #[cfg(feature = "serde")]
-//! extern crate serde_derive;
-//!
-//! # #[cfg(feature = "serde")]
 //! # fn main() -> Result<(), dbase::Error>{
 //!
 //! use std::io::{Read, Seek};
@@ -256,9 +253,6 @@
 //!
 //! ```
 //! # #[cfg(feature = "serde")]
-//! extern crate serde_derive;
-//!
-//! # #[cfg(feature = "serde")]
 //! use serde_derive::Serialize;
 //!
 //! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter};
@@ -299,10 +293,6 @@
 //! without having to fully read it first.
 #![deny(unstable_features)]
 
-extern crate byteorder;
-#[cfg(feature = "serde")]
-extern crate serde;
-extern crate time;
 
 #[cfg(feature = "serde")]
 mod de;
@@ -352,7 +342,7 @@ pub use crate::field::types::ChronoDateConversionError;
 /// # Examples
 ///
 /// ```
-/// # #[macro_use] extern crate dbase;
+/// # use dbase::dbase_record;
 /// # fn main() {
 /// dbase_record!(
 ///     #[derive(Debug)]

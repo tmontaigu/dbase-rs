@@ -1,4 +1,3 @@
-extern crate dbase;
 
 fn main() {
     let dbf_path = std::env::args().nth(1).expect("Path to file as first arg");

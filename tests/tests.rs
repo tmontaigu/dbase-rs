@@ -1,5 +1,4 @@
-#[macro_use]
-extern crate dbase;
+use dbase::dbase_record;
 
 use std::io::{Cursor, Read, Seek, Write};
 
