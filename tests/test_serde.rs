@@ -1,4 +1,3 @@
-
 #[cfg(feature = "serde")]
 mod serde_tests {
     use std::convert::TryFrom;

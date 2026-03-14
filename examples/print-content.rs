@@ -1,4 +1,3 @@
-
 fn main() {
     let dbf_path = std::env::args().nth(1).expect("Path to file as first arg");
     let mut reader = dbase::Reader::from_path(dbf_path).unwrap();

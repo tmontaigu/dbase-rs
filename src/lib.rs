@@ -293,7 +293,6 @@
 //! without having to fully read it first.
 #![deny(unstable_features)]
 
-
 #[cfg(feature = "serde")]
 mod de;
 #[cfg(feature = "serde")]

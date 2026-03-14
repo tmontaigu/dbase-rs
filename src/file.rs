@@ -644,9 +644,7 @@ impl<T: Write + Seek> File<T> {
             return Err(Error {
                 record_num: self.num_records(),
                 field: None,
-                kind: ErrorKind::Message(
-                    "Too many records (u32 overflow)".to_string(),
-                ),
+                kind: ErrorKind::Message("Too many records (u32 overflow)".to_string()),
             });
         }
 
