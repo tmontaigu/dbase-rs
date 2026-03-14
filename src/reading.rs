@@ -163,7 +163,6 @@ impl<T: Read + Seek, E: Encoding + 'static> ReaderBuilder<T, E> {
 
 /// Struct with the handle to the source .dbf file
 /// Responsible for reading the content
-// TODO Debug impl
 #[derive(Clone)]
 pub struct Reader<T: Read + Seek> {
     /// Where the data is read from
@@ -329,6 +328,17 @@ impl<T: Read + Seek> Reader<T> {
             fields_info: self.fields_info,
             encoding: self.encoding,
         }
+    }
+}
+
+impl<T: Read + Seek> std::fmt::Debug for Reader<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reader")
+            .field("header", &self.header)
+            .field("fields_info", &self.fields_info)
+            .field("encoding", &self.encoding)
+            .field("options", &self.options)
+            .finish()
     }
 }
 

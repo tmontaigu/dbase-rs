@@ -256,7 +256,9 @@ where
 
 impl std::fmt::Debug for DynEncoding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DynEncoding(...)")
+        f.debug_tuple("DynEncoding")
+            .field(&self.inner.code_page_mark())
+            .finish()
     }
 }
 
