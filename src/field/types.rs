@@ -190,13 +190,11 @@ impl FieldValue {
                 }
             }
             FieldType::Date => {
-                // let value = read_string_of_len(&mut source, field_info.field_length)?;
                 let value = trim_field_data(field_bytes, TrimOption::BeginEnd);
-                if value.iter().all(|c| c == &b' ') {
+                if value.len() < 8 || value.iter().all(|c| c == &b' ') {
                     FieldValue::Date(None)
                 } else {
-                    let value_str = encoding.decode(value)?;
-                    FieldValue::Date(Some(value_str.parse::<Date>()?))
+                    FieldValue::Date(Some(Date::from_bytes(&value[..8])?))
                 }
             }
             FieldType::Integer => {
@@ -284,21 +282,20 @@ pub struct Date {
 
 impl Date {
     /// Creates a new dbase::Date
-    /// # panic
     ///
-    /// panics if the year has more than 4 digits or if the day is greater than 31 or
-    /// the month greater than 12
-    pub const fn new(day: u32, month: u32, year: u32) -> Self {
+    /// Returns an error if year > 9999, month is not in 1..=12,
+    /// or day is not in 1..=31.
+    pub fn new(day: u32, month: u32, year: u32) -> Result<Self, DateParseError> {
         if year > 9999 {
-            panic!("Year cannot have more than 4 digits")
+            return Err(DateParseError::InvalidYear(year));
         }
-        if day > 31 {
-            panic!("Day cannot be greater than 31")
+        if !(1..=12).contains(&month) {
+            return Err(DateParseError::InvalidMonth(month));
         }
-        if month > 12 {
-            panic!("Month cannot be greater than 12")
+        if !(1..=31).contains(&day) {
+            return Err(DateParseError::InvalidDay(day));
         }
-        Self { year, month, day }
+        Ok(Self { year, month, day })
     }
 
     /// Returns the year
@@ -323,7 +320,7 @@ impl Date {
 
     // https://en.wikipedia.org/wiki/Julian_day
     // at "Julian or Gregorian calendar from Julian day number"
-    fn julian_day_number_to_gregorian_date(jdn: i32) -> Date {
+    fn julian_day_number_to_gregorian_date(jdn: i32) -> Result<Date, DateParseError> {
         const Y: i32 = 4716;
         const J: i32 = 1401;
         const M: i32 = 2;
@@ -346,11 +343,7 @@ impl Date {
         let month = ((h / S + M) % (N)) + 1;
         let year = (e / P) - Y + (N + M - month) / N;
 
-        Date {
-            year: year as u32,
-            month: month as u32,
-            day: day as u32,
-        }
+        Date::new(day as u32, month as u32, year as u32)
     }
 
     fn to_julian_day_number(self) -> i32 {
@@ -369,17 +362,75 @@ impl Date {
             + self.day
             + 1_721_119) as i32
     }
+    /// Parse a date from raw bytes (format: `YYYYMMDD`, ASCII digits)
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, DateParseError> {
+        if bytes.len() != 8 {
+            return Err(DateParseError::InvalidLength(bytes.len()));
+        }
+        if !bytes.iter().all(|b| b.is_ascii_digit()) {
+            return Err(DateParseError::NotAsciiDigit);
+        }
+        let year = parse_ascii_digits(&bytes[0..4]);
+        let month = parse_ascii_digits(&bytes[4..6]);
+        let day = parse_ascii_digits(&bytes[6..8]);
+        Self::new(day, month, year)
+    }
+}
+
+/// Error when parsing a date from a dBase file
+#[derive(Debug)]
+pub enum DateParseError {
+    /// The date field is not exactly 8 bytes
+    InvalidLength(usize),
+    /// A byte in the date field is not an ASCII digit
+    NotAsciiDigit,
+    /// Month is outside 1..=12
+    InvalidMonth(u32),
+    /// Day is outside 1..=31
+    InvalidDay(u32),
+    /// Year is outside 0..=9999
+    InvalidYear(u32),
+}
+
+impl std::fmt::Display for DateParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidLength(len) => {
+                write!(f, "Date field must be 8 bytes, got {len}")
+            }
+            Self::NotAsciiDigit => {
+                write!(f, "Date field contains non-ASCII-digit bytes")
+            }
+            Self::InvalidMonth(m) => {
+                write!(f, "Month must be 1..=12, got {m}")
+            }
+            Self::InvalidDay(d) => {
+                write!(f, "Day must be 1..=31, got {d}")
+            }
+            Self::InvalidYear(y) => {
+                write!(f, "Year must be 0..=9999, got {y}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DateParseError {}
+
+/// Parse a slice of ASCII digit bytes into a u32.
+/// Caller must ensure all bytes are ASCII digits.
+fn parse_ascii_digits(bytes: &[u8]) -> u32 {
+    let mut result = 0u32;
+    for &b in bytes {
+        result = result * 10 + u32::from(b - b'0');
+    }
+    result
 }
 
 impl FromStr for Date {
-    type Err = std::num::ParseIntError;
+    type Err = DateParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let year = s[0..4].parse::<u32>()?;
-        let month = s[4..6].parse::<u32>()?;
-        let day = s[6..8].parse::<u32>()?;
-
-        Ok(Self { year, month, day })
+        Self::from_bytes(s.as_bytes())
     }
 }
 
@@ -441,11 +492,8 @@ impl TryFrom<NaiveDate> for Date {
             return Err(ChronoDateConversionError);
         }
 
-        Ok(Self::new(
-            value.day(),
-            value.month(),
-            value.year().try_into()?,
-        ))
+        Self::new(value.day(), value.month(), value.year().try_into()?)
+            .map_err(ChronoDateConversionError::from)
     }
 }
 
@@ -567,7 +615,7 @@ impl DateTime {
         let julian_day_number = src.read_i32::<LittleEndian>()?;
         let time_word = src.read_i32::<LittleEndian>()?;
         let time = Time::from_word(time_word);
-        let date = Date::julian_day_number_to_gregorian_date(julian_day_number);
+        let date = Date::julian_day_number_to_gregorian_date(julian_day_number)?;
         Ok(Self { date, time })
     }
 
@@ -652,13 +700,11 @@ impl WritableAsDbaseField for Date {
     fn write_as<E: Encoding, W: Write>(
         &self,
         field_info: &FieldInfo,
-        encoding: &E,
+        _encoding: &E,
         dst: &mut W,
     ) -> Result<(), ErrorKind> {
         if field_info.field_type == FieldType::Date {
-            let string = format!("{:04}{:02}{:02}", self.year, self.month, self.day);
-            let encoded_string = encoding.encode(&string)?;
-            dst.write_all(&encoded_string)?;
+            write!(dst, "{:04}{:02}{:02}", self.year, self.month, self.day)?;
             Ok(())
         } else {
             Err(ErrorKind::IncompatibleType)
@@ -895,8 +941,8 @@ mod de {
                 where
                     E: serde::de::Error,
                 {
-                    let string = String::from_utf8(v).unwrap();
-                    Ok(Date::from_str(&string).unwrap())
+                    let string = String::from_utf8(v).map_err(E::custom)?;
+                    Date::from_str(&string).map_err(E::custom)
                 }
             }
             deserializer.deserialize_byte_buf(DateVisitor)
@@ -992,7 +1038,7 @@ fn trim_field_data(bytes: &[u8], option: TrimOption) -> &[u8] {
                 break;
             }
 
-            if *ptr.add(i) != 32 {
+            if *ptr.add(i) != b' ' {
                 if first == usize::MAX {
                     first = i;
                 }
@@ -1058,11 +1104,7 @@ mod test {
 
     #[test]
     fn write_read_date() {
-        let date = FieldValue::from(Date {
-            year: 2019,
-            month: 1,
-            day: 1,
-        });
+        let date = FieldValue::from(Date::new(1, 1, 2019).unwrap());
 
         let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
         test_we_can_read_back(&field_info, &date);
@@ -1087,7 +1129,7 @@ mod test {
     #[test]
     #[cfg(feature = "chrono")]
     fn test_chrono_date_conversion() {
-        let date = Date::new(25, 1, 2025);
+        let date = Date::new(25, 1, 2025).unwrap();
         let chrono_date = date.into();
 
         assert_eq!(NaiveDate::from_ymd_opt(2025, 1, 25), Some(chrono_date));
@@ -1121,7 +1163,7 @@ mod test {
 
     #[test]
     fn test_from_julian_day_number() {
-        let date = Date::julian_day_number_to_gregorian_date(2458685);
+        let date = Date::julian_day_number_to_gregorian_date(2458685).unwrap();
         assert_eq!(date.year, 2019);
         assert_eq!(date.month, 7);
         assert_eq!(date.day, 20);
@@ -1129,27 +1171,19 @@ mod test {
 
     #[test]
     fn test_to_julian_day_number() {
-        let date = Date {
-            year: 2019,
-            month: 7,
-            day: 20,
-        };
+        let date = Date::new(20, 7, 2019).unwrap();
         assert_eq!(date.to_julian_day_number(), 2458685);
     }
 
     #[test]
     fn test_to_unix_days() {
-        let date = Date {
-            year: 1970,
-            month: 1,
-            day: 1,
-        };
+        let date = Date::new(1, 1, 1970).unwrap();
         assert_eq!(date.to_unix_days(), 0);
     }
 
     #[test]
     fn test_to_unix_timestamp() {
-        let datetime = DateTime::new(Date::new(1, 1, 1970), Time::new(1, 1, 1));
+        let datetime = DateTime::new(Date::new(1, 1, 1970).unwrap(), Time::new(1, 1, 1));
         assert_eq!(datetime.to_unix_timestamp(), 3661);
     }
 }

@@ -38,7 +38,7 @@ mod serde_tests {
         let records = vec![DeserializableRecord {
             name: "Holy Fawn".to_string(),
             price: 10.2,
-            date: dbase::Date::new(1, 1, 2012),
+            date: dbase::Date::new(1, 1, 2012).unwrap(),
             available: true,
             score: 9.87,
         }];
@@ -121,8 +121,8 @@ mod serde_tests {
             .add_date_field(FieldName::try_from("date").unwrap());
 
         let records = vec![
-            Record(true, dbase::Date::new(12, 10, 2012)),
-            Record(false, dbase::Date::new(12, 11, 2005)),
+            Record(true, dbase::Date::new(12, 10, 2012).unwrap()),
+            Record(false, dbase::Date::new(12, 11, 2005).unwrap()),
         ];
         write_read_compare(&records, writer_builder);
     }
@@ -195,7 +195,7 @@ mod serde_tests {
 
         let records = vec![Record {
             datetime: dbase::DateTime::new(
-                dbase::Date::new(12, 5, 2130),
+                dbase::Date::new(12, 5, 2130).unwrap(),
                 dbase::Time::new(15, 52, 12),
             ),
             currency: 79841.156846,

@@ -10,6 +10,8 @@ pub enum ErrorKind {
     ParseFloatError(std::num::ParseFloatError),
     /// Wrapper to forward errors when trying to parse an integer value from the file
     ParseIntError(std::num::ParseIntError),
+    /// A date field could not be parsed
+    InvalidDate(crate::field::types::DateParseError),
     /// The field has an invalid FieldType
     InvalidFieldType(char),
     /// Happens when at least one field is a Memo type
@@ -122,6 +124,12 @@ impl From<std::num::ParseIntError> for ErrorKind {
     }
 }
 
+impl From<crate::field::types::DateParseError> for ErrorKind {
+    fn from(e: crate::field::types::DateParseError) -> Self {
+        ErrorKind::InvalidDate(e)
+    }
+}
+
 impl From<FieldConversionError> for ErrorKind {
     fn from(e: FieldConversionError) -> Self {
         ErrorKind::BadConversion(e)
@@ -175,6 +183,9 @@ impl std::fmt::Display for ErrorKind {
             }
             ErrorKind::ParseIntError(err) => {
                 write!(f, "Integer value could not be obtained: {err}")
+            }
+            ErrorKind::InvalidDate(err) => {
+                write!(f, "Invalid date: {err}")
             }
             ErrorKind::InvalidFieldType(c) => {
                 write!(f, "The FieldType code '{c}' is not a valid one")

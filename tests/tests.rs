@@ -152,14 +152,14 @@ fn from_scratch_dbase() {
         Album {
             artist: "Fallujah".to_string(),
             name: "The Flesh Prevails".to_string(),
-            released: Date::new(22, 6, 2014),
+            released: Date::new(22, 6, 2014).unwrap(),
             playtime: 2481.12f64,
             available: false,
         },
         Album {
             artist: "Beyond Creation".to_string(),
             name: "Earthborn Evolution".to_string(),
-            released: Date::new(24, 10, 2014),
+            released: Date::new(24, 10, 2014).unwrap(),
             playtime: 24f64,
             available: true,
         },
@@ -182,7 +182,10 @@ fn from_scratch_fox_pro_record() {
     record.insert(String::from("currency"), FieldValue::Currency(4567.134));
     record.insert(
         String::from("datetime"),
-        FieldValue::DateTime(DateTime::new(Date::new(1, 6, 2006), Time::new(12, 50, 20))),
+        FieldValue::DateTime(DateTime::new(
+            Date::new(1, 6, 2006).unwrap(),
+            Time::new(12, 50, 20),
+        )),
     );
 
     let records = vec![record];
@@ -208,7 +211,7 @@ fn from_scratch_fox_pro_struct_record() {
         .add_integer_field(FieldName::try_from("integer").unwrap());
 
     let records = vec![FoxProRecord {
-        datetime: DateTime::new(Date::new(12, 2, 1999), Time::new(21, 20, 35)),
+        datetime: DateTime::new(Date::new(12, 2, 1999).unwrap(), Time::new(21, 20, 35)),
         double: 8649.48851,
         currency: 3489.9612314,
         integer: 42069,

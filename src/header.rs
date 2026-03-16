@@ -398,11 +398,12 @@ impl Header {
 
         let mut date_bytes = [0u8; 3];
         source.read_exact(&mut date_bytes)?;
-        let last_update = Date {
-            year: 1900u32 + date_bytes[0] as u32,
-            month: date_bytes[1] as u32,
-            day: date_bytes[2] as u32,
-        };
+        let last_update = Date::new(
+            date_bytes[2] as u32,
+            date_bytes[1] as u32,
+            1900u32 + date_bytes[0] as u32,
+        )
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let num_records = source.read_u32::<LittleEndian>()?;
         let offset_to_first_record = source.read_u16::<LittleEndian>()?;
