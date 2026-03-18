@@ -354,13 +354,7 @@ impl Reader<BufReader<File>> {
     /// # }
     /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let p = path.as_ref().to_owned();
-        let bufreader = File::open(path)
-            .map(BufReader::new)
-            .map_err(|error| Error::io_error(error, 0))?;
-        let mut reader = Reader::new_inner(bufreader, None::<DynEncoding>)?;
-        reader.open_memo_file(p)?;
-        Ok(reader)
+        Self::from_path_impl(path, None::<DynEncoding>)
     }
 
     /// Creates a new dbase Reader from a path and reads string using the encoding provided.
@@ -369,11 +363,19 @@ impl Reader<BufReader<File>> {
         P: AsRef<Path>,
         E: Encoding + 'static + Into<DynEncoding>,
     {
+        Self::from_path_impl(path, Some(encoding))
+    }
+
+    fn from_path_impl<P, E>(path: P, encoding: Option<E>) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
         let p = path.as_ref().to_owned();
         let bufreader = File::open(path)
             .map(BufReader::new)
             .map_err(|error| Error::io_error(error, 0))?;
-        let mut reader = Reader::new_inner(bufreader, Some(encoding))?;
+        let mut reader = Reader::new_inner(bufreader, encoding)?;
         reader.open_memo_file(p)?;
         Ok(reader)
     }
