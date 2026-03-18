@@ -375,3 +375,65 @@ fn test_codepages_cp936() {
         Some(&FieldValue::Character(Some("测试中文".to_string())))
     );
 }
+
+#[test]
+fn test_file_with_null_in_field_names() {
+    let reader = dbase::Reader::from_path("./tests/data/KUNDEN-schema-only.DBF").unwrap();
+    let expected_field_names = [
+        "K_N",
+        "K_AC",
+        "K_B",
+        "K_UMS_MO",
+        "K_SKO_MO",
+        "K_UMS_JA",
+        "K_SKO_JA",
+        "K_UMS_VJ",
+        "K_KURZ",
+        "K_VORZ",
+        "K_NAME1",
+        "K_NAME2",
+        "K_STRASSE",
+        "K_PLZ",
+        "K_STADT",
+        "K_LAND",
+        "K_HSTRASSE",
+        "K_HPLZ",
+        "K_HSTADT",
+        "K_LVORZ",
+        "K_LNAME1",
+        "K_LNAME2",
+        "K_LSTRASSE",
+        "K_LPLZ",
+        "K_LSTADT",
+        "K_LLAND",
+        "K_T",
+        "K_S",
+        "K_UIDENT",
+        "K_MST",
+        "K_I",
+        "K_L",
+        "K_KOP",
+        "K_BEARB",
+        "K_TEL_BWS",
+        "K_FAX_BWS",
+        "K_EM_BWS",
+        "K_F3",
+        "K_EM_PART",
+        "K_BEMERKE",
+        "K_UNSLNR",
+        "K_LIEFBED",
+        "K_ZAHLBED",
+        "K_FLAG",
+        "K_FAX",
+        "K_TELEFON",
+        "K_PARTNER",
+        "K_X",
+        "WERGETAN",
+    ];
+
+    assert_eq!(reader.fields().len(), expected_field_names.len());
+
+    for (expected_name, field) in expected_field_names.into_iter().zip(reader.fields().iter()) {
+        assert_eq!(expected_name, field.name());
+    }
+}
