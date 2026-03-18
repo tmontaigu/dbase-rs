@@ -227,6 +227,24 @@ impl DynEncoding {
     }
 }
 
+impl From<Ascii> for DynEncoding {
+    fn from(value: Ascii) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<Unicode> for DynEncoding {
+    fn from(value: Unicode) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<UnicodeLossy> for DynEncoding {
+    fn from(value: UnicodeLossy) -> Self {
+        Self::new(value)
+    }
+}
+
 #[cfg(feature = "encoding_rs")]
 impl From<encoding_rs::EncodingRs> for DynEncoding {
     fn from(value: encoding_rs::EncodingRs) -> Self {
