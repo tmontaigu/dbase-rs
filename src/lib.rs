@@ -66,7 +66,7 @@
 //!
 //! # #[cfg(feature = "yore")]
 //! # fn main() -> Result<(), dbase::Error> {
-//! let mut reader = dbase::Reader::from_path_with_encoding("tests/data/cp850.dbf", CP850)?;
+//! let mut reader = dbase::ReaderBuilder::new().with_encoding(CP850).open("tests/data/cp850.dbf")?;
 //! let records = reader.read()?;
 //!
 //! assert_eq!(records[0].get("TEXT"), Some(&dbase::FieldValue::Character(Some("Äöü!§$%&/".to_string()))));
@@ -88,10 +88,9 @@
 //!
 //! # #[cfg(feature = "encoding_rs")]
 //! # fn main() -> Result<(), dbase::Error> {
-//! let mut reader = dbase::Reader::from_path_with_encoding(
-//!     "tests/data/cp936.dbf",
+//! let mut reader = dbase::ReaderBuilder::new().with_encoding(
 //!     dbase::encoding::EncodingRs::from(GBK)
-//! )?;
+//! ).open("tests/data/cp936.dbf")?;
 //! let records = reader.read()?;
 //!
 //! assert_eq!(
