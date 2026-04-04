@@ -1,4 +1,4 @@
-use crate::{CodePageMark, FieldConversionError, FieldInfo};
+use crate::{CodePageMark, FieldConversionError, FieldInfo, field::types::TimeError};
 use std::string::FromUtf8Error;
 
 #[derive(Debug)]
@@ -12,6 +12,8 @@ pub enum ErrorKind {
     ParseIntError(std::num::ParseIntError),
     /// A date field could not be parsed
     InvalidDate(crate::field::types::DateParseError),
+    /// The time is invalid
+    InvalidTime(TimeError),
     /// The field has an invalid FieldType
     InvalidFieldType(char),
     /// Happens when at least one field is a Memo type
@@ -36,6 +38,8 @@ pub enum ErrorKind {
     StringDecodeError(DecodeError),
     /// A string from the database could not be encoded
     StringEncodeError(EncodeError),
+    /// The file is globally invalid, it may not even be a proper dbase file
+    InvalidFile(&'static str),
     Message(String),
 }
 
@@ -61,6 +65,16 @@ impl Error {
             record_num: current_record,
             field: None,
             kind: ErrorKind::IoError(error),
+        }
+    }
+
+    /// Shortcut for when the error happens before parsing the fields
+    /// e.g. when parsing header
+    pub(crate) fn pre_fields(kind: ErrorKind) -> Self {
+        Self {
+            record_num: 0,
+            field: None,
+            kind,
         }
     }
 
@@ -148,6 +162,12 @@ impl From<EncodeError> for ErrorKind {
     }
 }
 
+impl From<TimeError> for ErrorKind {
+    fn from(e: TimeError) -> Self {
+        Self::InvalidTime(e)
+    }
+}
+
 impl From<FieldConversionError> for FieldIOError {
     fn from(e: FieldConversionError) -> Self {
         FieldIOError::new(ErrorKind::BadConversion(e), None)
@@ -187,6 +207,9 @@ impl std::fmt::Display for ErrorKind {
             ErrorKind::InvalidDate(err) => {
                 write!(f, "Invalid date: {err}")
             }
+            ErrorKind::InvalidTime(time_error) => {
+                write!(f, "Invalid time: {time_error}")
+            }
             ErrorKind::InvalidFieldType(c) => {
                 write!(f, "The FieldType code '{c}' is not a valid one")
             }
@@ -218,6 +241,7 @@ impl std::fmt::Display for ErrorKind {
             ErrorKind::UnsupportedCodePage(code) => {
                 write!(f, "The code page '{code:?}' is not supported")
             }
+            ErrorKind::InvalidFile(details) => write!(f, "The file is invalid: {details}"),
             ErrorKind::Message(msg) => write!(f, "{msg}"),
         }
     }

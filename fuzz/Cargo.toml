@@ -1,0 +1,28 @@
+[package]
+name = "dbase-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.dbase]
+path = ".."
+
+[[bin]]
+name = "reader_new"
+path = "fuzz_targets/reader_new.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "read_all"
+path = "fuzz_targets/read_all.rs"
+test = false
+doc = false
+bench = false

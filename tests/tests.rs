@@ -184,7 +184,7 @@ fn from_scratch_fox_pro_record() {
         String::from("datetime"),
         FieldValue::DateTime(DateTime::new(
             Date::new(1, 6, 2006).unwrap(),
-            Time::new(12, 50, 20),
+            Time::new(12, 50, 20).unwrap(),
         )),
     );
 
@@ -211,7 +211,10 @@ fn from_scratch_fox_pro_struct_record() {
         .add_integer_field(FieldName::try_from("integer").unwrap());
 
     let records = vec![FoxProRecord {
-        datetime: DateTime::new(Date::new(12, 2, 1999).unwrap(), Time::new(21, 20, 35)),
+        datetime: DateTime::new(
+            Date::new(12, 2, 1999).unwrap(),
+            Time::new(21, 20, 35).unwrap(),
+        ),
         double: 8649.48851,
         currency: 3489.9612314,
         integer: 42069,

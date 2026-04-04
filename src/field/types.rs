@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::fmt::Display;
 use std::io::{Read, Seek, Write};
+use std::num::Wrapping;
 use std::str::FromStr;
 
 use crate::Encoding;
@@ -154,12 +155,18 @@ impl FieldValue {
     ) -> Result<Self, ErrorKind> {
         debug_assert_eq!(field_bytes.len(), field_info.length() as usize);
         let value = match field_info.field_type {
-            FieldType::Logical => match field_bytes[0] as char {
-                ' ' | '?' => FieldValue::Logical(None),
-                '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
-                '0' | 'F' | 'f' | 'N' | 'n' => FieldValue::Logical(Some(false)),
-                _ => FieldValue::Logical(None),
-            },
+            FieldType::Logical => {
+                let c = field_bytes
+                    .first()
+                    .copied()
+                    .ok_or(ErrorKind::InvalidFile("Logical field bytes too small"))?;
+                match c as char {
+                    ' ' | '?' => FieldValue::Logical(None),
+                    '1' | 'T' | 't' | 'Y' | 'y' => FieldValue::Logical(Some(true)),
+                    '0' | 'F' | 'f' | 'N' | 'n' => FieldValue::Logical(Some(false)),
+                    _ => FieldValue::Logical(None),
+                }
+            }
             FieldType::Character => {
                 // let value = read_string_of_len(&mut source, field_info.field_length)?;
                 let value = trim_field_data(field_bytes, character_option);
@@ -198,16 +205,25 @@ impl FieldValue {
                 }
             }
             FieldType::Integer => {
+                if field_bytes.len() < size_of::<i32>() {
+                    return Err(ErrorKind::InvalidFile("integer field bytes too small"));
+                }
                 let mut le_bytes = [0u8; size_of::<i32>()];
                 le_bytes.copy_from_slice(&field_bytes[..size_of::<i32>()]);
                 FieldValue::Integer(i32::from_le_bytes(le_bytes))
             }
             FieldType::Double => {
+                if field_bytes.len() < size_of::<f64>() {
+                    return Err(ErrorKind::InvalidFile("double field bytes too small"));
+                }
                 let mut le_bytes = [0u8; size_of::<f64>()];
                 le_bytes.copy_from_slice(&field_bytes[..size_of::<f64>()]);
                 FieldValue::Double(f64::from_le_bytes(le_bytes))
             }
             FieldType::Currency => {
+                if field_bytes.len() < size_of::<f64>() {
+                    return Err(ErrorKind::InvalidFile("currency field bytes too small"));
+                }
                 let mut le_bytes = [0u8; size_of::<f64>()];
                 le_bytes.copy_from_slice(&field_bytes[..size_of::<f64>()]);
                 FieldValue::Currency(f64::from_le_bytes(le_bytes))
@@ -218,7 +234,8 @@ impl FieldValue {
             }
             FieldType::Memo => {
                 let index_in_memo = if field_info.field_length > 4 {
-                    // let string = read_string_of_len(&mut source, field_info.field_length)?;
+                    // dBase III stores as string, and apparently defines the memo field as 10
+                    // bytes long
                     let trimmed_value = trim_field_data(field_bytes, TrimOption::BeginEnd);
                     if trimmed_value.is_empty() {
                         return Ok(FieldValue::Memo(String::from("")));
@@ -226,6 +243,12 @@ impl FieldValue {
                         encoding.decode(trimmed_value)?.parse::<u32>()?
                     }
                 } else {
+                    // dBase IV and FoxPro store as raw integer
+                    // I have however heard that fox pro uses big endian and
+                    // dBase little endian, we could forward the `Version` enum to here.
+                    if field_bytes.len() < size_of::<u32>() {
+                        return Err(ErrorKind::InvalidFile("memo offset field is too small"));
+                    }
                     let mut le_bytes = [0u8; size_of::<u32>()];
                     le_bytes.copy_from_slice(&field_bytes[..size_of::<u32>()]);
                     u32::from_le_bytes(le_bytes)
@@ -321,29 +344,33 @@ impl Date {
     // https://en.wikipedia.org/wiki/Julian_day
     // at "Julian or Gregorian calendar from Julian day number"
     fn julian_day_number_to_gregorian_date(jdn: i32) -> Result<Date, DateParseError> {
-        const Y: i32 = 4716;
-        const J: i32 = 1401;
-        const M: i32 = 2;
-        const N: i32 = 12;
-        const R: i32 = 4;
-        const P: i32 = 1461;
-        const V: i32 = 3;
-        const U: i32 = 5;
-        const S: i32 = 153;
-        const W: i32 = 2;
-        const B: i32 = 274_277;
-        const C: i32 = -38;
+        // Use wrapping to avoid overflows in debug mode
+        // and rely on Date::new to catch wrong dates
+        let jdn = Wrapping(jdn);
+        const Y: Wrapping<i32> = Wrapping(4716);
+        const J: Wrapping<i32> = Wrapping(1401);
+        const M: Wrapping<i32> = Wrapping(2);
+        const N: Wrapping<i32> = Wrapping(12);
+        const R: Wrapping<i32> = Wrapping(4);
+        const P: Wrapping<i32> = Wrapping(1461);
+        const V: Wrapping<i32> = Wrapping(3);
+        const U: Wrapping<i32> = Wrapping(5);
+        const S: Wrapping<i32> = Wrapping(153);
+        const W: Wrapping<i32> = Wrapping(2);
+        const B: Wrapping<i32> = Wrapping(274_277);
+        const C: Wrapping<i32> = Wrapping(-38);
 
-        let f = jdn + J + ((4 * jdn + B) / 146_097 * 3) / 4 + C;
+        let f =
+            jdn + J + ((Wrapping(4) * jdn + B) / Wrapping(146_097) * Wrapping(3)) / Wrapping(4) + C;
         let e = R * f + V;
         let g = (e % P) / R;
         let h = U * g + W;
 
-        let day = (h % S) / U + 1;
-        let month = ((h / S + M) % (N)) + 1;
+        let day = (h % S) / U + Wrapping(1);
+        let month = ((h / S + M) % (N)) + Wrapping(1);
         let year = (e / P) - Y + (N + M - month) / N;
 
-        Date::new(day as u32, month as u32, year as u32)
+        Date::new(day.0 as u32, month.0 as u32, year.0 as u32)
     }
 
     fn to_julian_day_number(self) -> i32 {
@@ -497,6 +524,25 @@ impl TryFrom<NaiveDate> for Date {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TimeError {
+    Hours(u32),
+    Minutes(u32),
+    Seconds(u32),
+}
+
+impl std::error::Error for TimeError {}
+
+impl std::fmt::Display for TimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Hours(h) => write!(f, "'{h}' is not a valid hour"),
+            Self::Minutes(m) => write!(f, "{m} is not a valid minute"),
+            Self::Seconds(s) => write!(f, "{s} is not a valid second"),
+        }
+    }
+}
+
 /// FoxBase representation of a time
 /// # note
 ///
@@ -515,19 +561,21 @@ impl Time {
     const SECONDS_FACTOR: i32 = 1_000;
 
     /// Creates a new Time
-    ///
-    /// # panics
-    /// will panic if the  minutes or seconds are greater than 60 or
-    /// if the hours are greater than 24
-    pub fn new(hours: u32, minutes: u32, seconds: u32) -> Self {
-        if hours > 24 || minutes > 60 || seconds > 60 {
-            panic!("Invalid Time")
+    pub fn new(hours: u32, minutes: u32, seconds: u32) -> Result<Self, TimeError> {
+        if hours > 24 {
+            return Err(TimeError::Hours(hours));
         }
-        Self {
+        if minutes > 60 {
+            return Err(TimeError::Minutes(minutes));
+        }
+        if seconds > 60 {
+            return Err(TimeError::Seconds(seconds));
+        }
+        Ok(Self {
             hours,
             minutes,
             seconds,
-        }
+        })
     }
 
     /// Returns the hours.
@@ -545,17 +593,13 @@ impl Time {
         self.seconds
     }
 
-    fn from_word(mut time_word: i32) -> Self {
+    fn from_word(mut time_word: i32) -> Result<Self, TimeError> {
         let hours: u32 = (time_word / Self::HOURS_FACTOR) as u32;
-        time_word -= (hours * Self::HOURS_FACTOR as u32) as i32;
+        time_word -= hours.wrapping_mul(Self::HOURS_FACTOR as u32) as i32;
         let minutes: u32 = (time_word / Self::MINUTES_FACTOR) as u32;
-        time_word -= (minutes * Self::MINUTES_FACTOR as u32) as i32;
+        time_word -= minutes.wrapping_mul(Self::MINUTES_FACTOR as u32) as i32;
         let seconds: u32 = (time_word / Self::SECONDS_FACTOR) as u32;
-        Self {
-            hours,
-            minutes,
-            seconds,
-        }
+        Self::new(hours, minutes, seconds)
     }
 
     fn to_time_word(self) -> i32 {
@@ -577,7 +621,8 @@ impl From<Time> for NaiveTime {
 #[cfg(feature = "chrono")]
 impl From<NaiveTime> for Time {
     fn from(value: NaiveTime) -> Self {
-        Self::new(value.hour(), value.minute(), value.second())
+        // We can reasobably expect chrono to give valid hour, second, minutes
+        Self::new(value.hour(), value.minute(), value.second()).expect("invalid chorno Naivetime")
     }
 }
 
@@ -614,7 +659,7 @@ impl DateTime {
     fn read_from<T: Read>(src: &mut T) -> Result<Self, ErrorKind> {
         let julian_day_number = src.read_i32::<LittleEndian>()?;
         let time_word = src.read_i32::<LittleEndian>()?;
-        let time = Time::from_word(time_word);
+        let time = Time::from_word(time_word)?;
         let date = Date::julian_day_number_to_gregorian_date(julian_day_number)?;
         Ok(Self { date, time })
     }
@@ -1139,7 +1184,7 @@ mod test {
     #[test]
     #[cfg(feature = "chrono")]
     fn test_chrono_time_conversion() {
-        let time = Time::new(16, 5, 10);
+        let time = Time::new(16, 5, 10).unwrap();
         let chrono_time = time.into();
 
         assert_eq!(NaiveTime::from_hms_opt(16, 5, 10), Some(chrono_time));
@@ -1183,7 +1228,7 @@ mod test {
 
     #[test]
     fn test_to_unix_timestamp() {
-        let datetime = DateTime::new(Date::new(1, 1, 1970).unwrap(), Time::new(1, 1, 1));
+        let datetime = DateTime::new(Date::new(1, 1, 1970).unwrap(), Time::new(1, 1, 1).unwrap());
         assert_eq!(datetime.to_unix_timestamp(), 3661);
     }
 }

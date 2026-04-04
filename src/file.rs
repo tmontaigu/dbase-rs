@@ -3,7 +3,7 @@ use crate::encoding::DynEncoding;
 use crate::field::{DELETION_FLAG_SIZE, DeletionFlag, FieldsInfo};
 use crate::header::Header;
 use crate::memo::MemoReader;
-use crate::reading::{BACKLINK_SIZE, ReadingOptions, TERMINATOR_VALUE};
+use crate::reading::{BACKLINK_SIZE, ReadingOptions};
 use crate::writing::{WritableAsDbaseField, write_header_parts};
 use crate::{
     Encoding, Error, ErrorKind, FieldConversionError, FieldIOError, FieldInfo, FieldIterator,
@@ -477,28 +477,31 @@ impl<T: Read + Seek> File<T> {
 
         let offset = if header.file_type.is_visual_fox_pro() {
             if BACKLINK_SIZE > header.offset_to_first_record {
-                return Err(Error::new(
-                    FieldIOError::new(
-                        ErrorKind::Message("File is invalid (BACKLINK_SIZE too big)".to_string()),
-                        None,
-                    ),
-                    0,
-                ));
+                return Err(Error::pre_fields(ErrorKind::InvalidFile(
+                    "File is invalid (BACKLINK_SIZE too big)",
+                )));
             }
             header.offset_to_first_record - BACKLINK_SIZE
         } else {
             header.offset_to_first_record
         };
-        let num_fields = (offset as usize - Header::SIZE - size_of::<u8>()) / FieldInfo::SIZE;
+
+        let num_fields = usize::from(offset)
+            .checked_sub(Header::SIZE + size_of::<u8>())
+            .map(|v| v / FieldInfo::SIZE)
+            .ok_or_else(|| {
+                Error::pre_fields(ErrorKind::InvalidFile(
+                    "offset to first record is before end of header",
+                ))
+            })?;
 
         // If encoding is specified, use it; otherwise, use the code page mark
         let encoding = match encoding {
             Some(encoding) => encoding.into(),
-            None => header.code_page_mark.to_encoding().ok_or_else(|| {
-                let field_error =
-                    FieldIOError::new(UnsupportedCodePage(header.code_page_mark), None);
-                Error::new(field_error, 0)
-            })?,
+            None => header
+                .code_page_mark
+                .to_encoding()
+                .ok_or_else(|| Error::pre_fields(UnsupportedCodePage(header.code_page_mark)))?,
         };
 
         let fields_info =
@@ -508,11 +511,11 @@ impl<T: Read + Seek> File<T> {
                 kind: error,
             })?;
 
-        let terminator = source
+        // We chose to not check the content of this value, ideally it should be
+        // TERMINATOR_VALUE
+        let _terminator = source
             .read_u8()
             .map_err(|error| Error::io_error(error, 0))?;
-
-        debug_assert_eq!(terminator, TERMINATOR_VALUE);
 
         source
             .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))

@@ -196,7 +196,7 @@ mod serde_tests {
         let records = vec![Record {
             datetime: dbase::DateTime::new(
                 dbase::Date::new(12, 5, 2130).unwrap(),
-                dbase::Time::new(15, 52, 12),
+                dbase::Time::new(15, 52, 12).unwrap(),
             ),
             currency: 79841.156846,
             double: 976114.1846,
