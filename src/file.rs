@@ -454,6 +454,69 @@ impl<T> File<T> {
     }
 }
 
+pub(crate) fn open_dbase<T>(
+    source: &mut T,
+    encoding_override: Option<DynEncoding>,
+) -> Result<(Header, FieldsInfo, DynEncoding), Error>
+where
+    T: Read + Seek,
+{
+    let mut header = Header::read_from(source).map_err(|error| Error::io_error(error, 0))?;
+
+    let offset = if header.file_type.is_visual_fox_pro() {
+        if BACKLINK_SIZE > header.offset_to_first_record {
+            return Err(Error::pre_fields(ErrorKind::InvalidFile(
+                "File is invalid (BACKLINK_SIZE too big)",
+            )));
+        }
+        header.offset_to_first_record - BACKLINK_SIZE
+    } else {
+        header.offset_to_first_record
+    };
+
+    let num_fields = usize::from(offset)
+        .checked_sub(Header::SIZE + size_of::<u8>())
+        .map(|v| v / FieldInfo::SIZE)
+        .ok_or_else(|| {
+            Error::pre_fields(ErrorKind::InvalidFile(
+                "offset to first record is before end of header",
+            ))
+        })?;
+
+    // If encoding is specified, use it; otherwise, use the code page mark
+    let encoding = match encoding_override {
+        Some(encoding) => encoding,
+        None => header
+            .code_page_mark
+            .to_encoding()
+            .ok_or_else(|| Error::pre_fields(UnsupportedCodePage(header.code_page_mark)))?,
+    };
+
+    let fields_info =
+        FieldsInfo::read_from(source, num_fields, &encoding).map_err(|error| Error {
+            record_num: 0,
+            field: None,
+            kind: error,
+        })?;
+
+    // We chose to not check the content of this value, ideally it should be
+    // TERMINATOR_VALUE
+    let _terminator = source
+        .read_u8()
+        .map_err(|error| Error::io_error(error, 0))?;
+
+    source
+        .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
+        .map_err(|error| Error::io_error(error, 0))?;
+
+    let record_size: usize = DELETION_FLAG_SIZE + fields_info.size_of_all_fields();
+    // Some file seems not to include the DELETION_FLAG_SIZE into the record size,
+    // but we rely on it
+    header.size_of_record = record_size as u16;
+
+    Ok((header, fields_info, encoding))
+}
+
 impl<T: Read + Seek> File<T> {
     /// creates of File using source as the storage space with encoding.
     pub fn open_with_encoding<E>(source: T, encoding: E) -> Result<Self, Error>
@@ -472,62 +535,9 @@ impl<T: Read + Seek> File<T> {
     where
         E: Encoding + 'static + Into<DynEncoding>,
     {
-        let mut header =
-            Header::read_from(&mut source).map_err(|error| Error::io_error(error, 0))?;
-
-        let offset = if header.file_type.is_visual_fox_pro() {
-            if BACKLINK_SIZE > header.offset_to_first_record {
-                return Err(Error::pre_fields(ErrorKind::InvalidFile(
-                    "File is invalid (BACKLINK_SIZE too big)",
-                )));
-            }
-            header.offset_to_first_record - BACKLINK_SIZE
-        } else {
-            header.offset_to_first_record
-        };
-
-        let num_fields = usize::from(offset)
-            .checked_sub(Header::SIZE + size_of::<u8>())
-            .map(|v| v / FieldInfo::SIZE)
-            .ok_or_else(|| {
-                Error::pre_fields(ErrorKind::InvalidFile(
-                    "offset to first record is before end of header",
-                ))
-            })?;
-
-        // If encoding is specified, use it; otherwise, use the code page mark
-        let encoding = match encoding {
-            Some(encoding) => encoding.into(),
-            None => header
-                .code_page_mark
-                .to_encoding()
-                .ok_or_else(|| Error::pre_fields(UnsupportedCodePage(header.code_page_mark)))?,
-        };
-
-        let fields_info =
-            FieldsInfo::read_from(&mut source, num_fields, &encoding).map_err(|error| Error {
-                record_num: 0,
-                field: None,
-                kind: error,
-            })?;
-
-        // We chose to not check the content of this value, ideally it should be
-        // TERMINATOR_VALUE
-        let _terminator = source
-            .read_u8()
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        source
-            .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
-            .map_err(|error| Error::io_error(error, 0))?;
-
-        let record_size: usize = DELETION_FLAG_SIZE + fields_info.size_of_all_fields();
-        let record_data_buffer = Cursor::new(vec![0u8; record_size]);
-        // Some file seems not to include the DELETION_FLAG_SIZE into the record size,
-        // but we rely on it
-        header.size_of_record = record_size as u16;
-        // debug_assert_eq!(record_size - DELETION_FLAG_SIZE, header.size_of_record as usize);
-
+        let (header, fields_info, encoding) =
+            open_dbase(&mut source, encoding.map(|encoding| encoding.into()))?;
+        let record_data_buffer = Cursor::new(vec![0u8; header.size_of_record as usize]);
         Ok(Self {
             inner: source,
             memo_reader: None,

@@ -273,8 +273,10 @@ fn the_classical_user_record_example() {
 #[cfg(feature = "yore")]
 #[test]
 fn non_unicode_codepages() {
-    let mut reader =
-        dbase::Reader::from_path_with_encoding(CP850_DBF, yore::code_pages::CP850).unwrap();
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_encoding(yore::code_pages::CP850)
+        .open(CP850_DBF)
+        .unwrap();
     let records = reader.read().unwrap();
 
     assert_eq!(
@@ -292,7 +294,10 @@ fn non_unicode_codepages() {
     cursor.set_position(0);
 
     // Read again
-    let mut reader = Reader::new_with_encoding(cursor, yore::code_pages::CP850).unwrap();
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_encoding(yore::code_pages::CP850)
+        .build(cursor)
+        .unwrap();
     let records = reader.read().unwrap();
 
     assert_eq!(
@@ -313,10 +318,11 @@ dbase::dbase_record!(
 
 #[test]
 fn test_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
-    let mut reader = dbase::Reader::from_path(STATIONS)?;
     let options = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::Begin);
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_options(options)
+        .open(STATIONS)?;
 
-    reader.set_options(options);
     let records = reader.read_as::<StationRecord>()?;
 
     assert_eq!(records.len() as u32, reader.header().num_records);
