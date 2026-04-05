@@ -10,7 +10,9 @@ use crate::field::{DeletionFlag, FieldInfo, FieldName, types::FieldType};
 use crate::header::Header;
 use crate::reading::TERMINATOR_VALUE;
 use crate::reading::{BACKLINK_SIZE, TableInfo};
-use crate::{Encoding, Error, ErrorKind, FieldIOError, Record, UnicodeLossy};
+use crate::{
+    Encoding, Error, ErrorKind, FieldError, FieldIndex, Record, RecordIndex, UnicodeLossy,
+};
 
 /// A dbase file ends with this byte
 const FILE_TERMINATOR: u8 = 0x1A;
@@ -23,23 +25,18 @@ pub(crate) fn write_header_parts<W>(
 where
     W: Write,
 {
-    header
-        .write_to(dst)
-        .map_err(|error| Error::io_error(error, 0))?;
+    header.write_to(dst).map_err(Error::header)?;
 
     for record_info in fields_info.iter() {
-        record_info
-            .write_to(dst)
-            .map_err(|error| Error::io_error(error, 0))?;
+        record_info.write_to(dst).map_err(Error::header)?;
     }
-    dst.write_u8(TERMINATOR_VALUE)
-        .map_err(|error| Error::io_error(error, 0))?;
+    dst.write_u8(TERMINATOR_VALUE).map_err(Error::header)?;
 
     // FoxPro has a backlink structure here, but there is no public spec.
     // Writing zeros is the standard approach when no .dbc is associated.
     if header.file_type.is_visual_fox_pro() {
         for _ in 0..BACKLINK_SIZE {
-            dst.write_u8(0).map_err(|error| Error::io_error(error, 0))?;
+            dst.write_u8(0).map_err(Error::header)?;
         }
     }
 
@@ -273,7 +270,7 @@ impl TableWriterBuilder {
         self,
         path: P,
     ) -> Result<TableWriter<BufWriter<File>>, Error> {
-        let file = File::create(path).map_err(|err| Error::io_error(err, 0))?;
+        let file = File::create(path).map_err(Error::header)?;
         let dst = BufWriter::new(file);
         Ok(self.build_with_dest(dst))
     }
@@ -338,21 +335,22 @@ pub trait WritableRecord {
     fn write_using<W: Write>(
         &self,
         field_writer: &mut FieldWriter<'_, W>,
-    ) -> Result<(), FieldIOError>;
+    ) -> Result<(), FieldError>;
 }
 
 impl WritableRecord for Record {
     fn write_using<W: Write>(
         &self,
         field_writer: &mut FieldWriter<'_, W>,
-    ) -> Result<(), FieldIOError> {
+    ) -> Result<(), FieldError> {
         while let Some(name) = field_writer.next_field_name() {
             let value = self.get(name).ok_or_else(|| {
-                FieldIOError::new(
+                FieldError::from_info(
+                    field_writer.next_index,
+                    &field_writer.fields_info[field_writer.next_index.0],
                     ErrorKind::Message(format!(
                         "Could not find field named '{name}' in the record map"
                     )),
-                    None,
                 )
             })?;
             field_writer.write_next_field_value(value)?;
@@ -368,7 +366,8 @@ impl WritableRecord for Record {
 /// [TableWriter](struct.TableWriter.html), otherwise an error will occur.
 pub struct FieldWriter<'a, W> {
     pub(crate) dst: &'a mut W,
-    pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
+    pub(crate) fields_info: &'a [FieldInfo],
+    pub(crate) next_index: FieldIndex,
     pub(crate) field_buffer: &'a mut Cursor<&'a mut [u8]>,
     pub(crate) encoding: &'a DynEncoding,
 }
@@ -376,7 +375,9 @@ pub struct FieldWriter<'a, W> {
 impl<'a, W: Write> FieldWriter<'a, W> {
     /// Returns the name of the next field that is expected to be written
     pub fn next_field_name(&mut self) -> Option<&'a str> {
-        self.fields_info.peek().map(|info| info.name.as_str())
+        self.fields_info
+            .get(self.next_index.0)
+            .map(|info| info.name.as_str())
     }
 
     /// Writes the given `field_value` to the record.
@@ -394,8 +395,8 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     pub fn write_next_field_value<T: WritableAsDbaseField>(
         &mut self,
         field_value: &T,
-    ) -> Result<(), FieldIOError> {
-        if let Some(field_info) = self.fields_info.next() {
+    ) -> Result<(), FieldError> {
+        if let Some(field_info) = self.fields_info.get(self.next_index.0) {
             let pad_before = matches!(
                 field_info.field_type(),
                 FieldType::Numeric | FieldType::Float | FieldType::Memo
@@ -404,7 +405,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
             self.field_buffer.set_position(0);
             field_value
                 .write_as(field_info, self.encoding, &mut self.field_buffer)
-                .map_err(|kind| FieldIOError::new(kind, Some(field_info.clone())))?;
+                .map_err(|kind| FieldError::from_info(self.next_index, field_info, kind))?;
             let value_len = self.field_buffer.position() as usize;
             let bytes_to_pad = usize::from(field_info.field_length).saturating_sub(value_len);
 
@@ -418,61 +419,59 @@ impl<'a, W: Write> FieldWriter<'a, W> {
             let field_bytes = self.field_buffer.get_ref();
             self.dst
                 .write_all(&field_bytes[..write_len])
-                .map_err(|error| {
-                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                })?;
+                .map_err(|kind| FieldError::from_info(self.next_index, field_info, kind))?;
 
             if bytes_to_pad > 0 && !pad_before {
                 self.write_pad(bytes_to_pad, field_info)?;
             }
 
+            self.next_index.0 += 1;
+
             Ok(())
         } else {
-            Err(FieldIOError::new(ErrorKind::TooManyFields, None))
+            Err(FieldError::without_context(ErrorKind::TooManyFields))
         }
     }
 
-    fn write_pad(&mut self, len: usize, field_info: &FieldInfo) -> Result<(), FieldIOError> {
+    fn write_pad(&mut self, len: usize, field_info: &FieldInfo) -> Result<(), FieldError> {
         for _ in 0..len {
-            write!(self.dst, " ").map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-            })?;
+            write!(self.dst, " ")
+                .map_err(|error| FieldError::from_info(self.next_index, field_info, error))?;
         }
         Ok(())
     }
 
     #[cfg(feature = "serde")]
-    pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), FieldIOError> {
-        if let Some(field_info) = self.fields_info.next() {
+    pub(crate) fn write_next_field_raw(&mut self, value: &[u8]) -> Result<(), FieldError> {
+        if let Some(field_info) = self.fields_info.get(self.next_index.0) {
             let pad_before = matches!(
                 field_info.field_type(),
                 FieldType::Numeric | FieldType::Float | FieldType::Memo
             );
 
             if value.len() == field_info.field_length as usize {
-                self.dst.write_all(value).map_err(|error| {
-                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                })?;
+                self.dst
+                    .write_all(value)
+                    .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
             } else if value.len() < field_info.field_length as usize {
                 if pad_before {
                     self.write_pad(field_info.field_length as usize - value.len(), field_info)?;
                 }
-                self.dst.write_all(value).map_err(|error| {
-                    FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                })?;
+                self.dst
+                    .write_all(value)
+                    .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
                 if !pad_before {
                     self.write_pad(field_info.field_length as usize - value.len(), field_info)?;
                 }
             } else {
                 self.dst
                     .write_all(&value[..field_info.field_length as usize])
-                    .map_err(|error| {
-                        FieldIOError::new(ErrorKind::IoError(error), Some(field_info.clone()))
-                    })?;
+                    .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
             }
+            self.next_index.0 += 1;
             Ok(())
         } else {
-            Err(FieldIOError::new(ErrorKind::EndOfRecord, None))
+            Err(FieldError::end_of_record())
         }
     }
 
@@ -481,7 +480,7 @@ impl<'a, W: Write> FieldWriter<'a, W> {
     }
 
     fn all_fields_were_written(&mut self) -> bool {
-        self.fields_info.peek().is_none()
+        self.fields_info.len() == self.next_index.0
     }
 }
 
@@ -544,11 +543,7 @@ impl<W: Write + Seek> TableWriter<W> {
 
         if self.finalized {
             let err = std::io::Error::other("Cannot write to finalized data");
-            return Err(Error {
-                record_num: current_record_num,
-                field: None,
-                kind: ErrorKind::IoError(err),
-            });
+            return Err(Error::record(RecordIndex(current_record_num), err));
         }
 
         if current_record_num == 0 {
@@ -558,25 +553,25 @@ impl<W: Write + Seek> TableWriter<W> {
 
         let mut field_writer = FieldWriter {
             dst: &mut self.dst,
-            fields_info: self.fields_info.iter().peekable(),
+            fields_info: &self.fields_info,
+            next_index: FieldIndex(0),
             field_buffer: &mut Cursor::new(&mut self.buffer),
             encoding: &self.encoding,
         };
 
         field_writer
             .write_deletion_flag()
-            .map_err(|error| Error::io_error(error, current_record_num))?;
+            .map_err(|error| Error::deletion_flag(RecordIndex(current_record_num), error))?;
 
         record
             .write_using(&mut field_writer)
-            .map_err(|error| Error::new(error, current_record_num))?;
+            .map_err(|error| Error::from_field_error(RecordIndex(current_record_num), error))?;
 
         if !field_writer.all_fields_were_written() {
-            return Err(Error {
-                record_num: current_record_num,
-                field: None,
-                kind: ErrorKind::NotEnoughFields,
-            });
+            return Err(Error::record(
+                RecordIndex(current_record_num),
+                ErrorKind::NotEnoughFields,
+            ));
         }
 
         self.header.num_records += 1;
@@ -590,7 +585,7 @@ impl<W: Write + Seek> TableWriter<W> {
     ///
     /// # Example
     /// ```
-    /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, ErrorKind, FieldIOError, Encoding};
+    /// use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, ErrorKind, FieldError, Encoding};
     /// use std::convert::TryFrom;
     /// use std::io::{Cursor, Write};
     ///
@@ -599,7 +594,7 @@ impl<W: Write + Seek> TableWriter<W> {
     /// }
     ///
     /// impl WritableRecord for User {
-    ///     fn write_using<'a, W>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError>
+    ///     fn write_using<'a, W>(&self,field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldError>
     ///         where W: Write {
     ///         field_writer.write_next_field_value(&self.first_name)
     ///     }
@@ -636,16 +631,17 @@ impl<W: Write + Seek> TableWriter<W> {
     /// Calling finalize on an already finalize writer is a no-op
     pub fn finalize(&mut self) -> Result<(), Error> {
         if !self.finalized {
+            let num_records = self.header.num_records as usize;
             self.dst
                 .seek(SeekFrom::Start(0))
-                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+                .map_err(|e| Error::record(RecordIndex(num_records), e))?;
             self.write_header()?;
             self.dst
                 .seek(SeekFrom::End(0))
-                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+                .map_err(|e| Error::record(RecordIndex(num_records), e))?;
             self.dst
                 .write_u8(FILE_TERMINATOR)
-                .map_err(|error| Error::io_error(error, self.header.num_records as usize))?;
+                .map_err(|e| Error::record(RecordIndex(num_records), e))?;
             self.finalized = true;
         }
         Ok(())

@@ -22,7 +22,7 @@ impl std::fmt::Display for FieldConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FieldConversionError::FieldTypeNotAsExpected { expected, actual } => {
-                write!(f, "Cannot convert from {expected} to {actual}")
+                write!(f, "Cannot convert from {actual} to {expected}")
             }
             FieldConversionError::IncompatibleType => write!(f, "The type is not compatible"),
             FieldConversionError::NoneValue => {
@@ -84,6 +84,67 @@ impl_try_from_field_value_for_!(FieldValue::Logical => Option<bool>);
 impl_try_from_field_value_for_!(FieldValue::Logical(Some(b)) => bool);
 
 impl_try_from_field_value_for_!(FieldValue::Integer => i32);
+
+impl TryFrom<FieldValue> for i8 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for i16 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for u8 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for u16 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for u32 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for u64 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value)?
+            .try_into()
+            .map_err(|_| FieldConversionError::IncompatibleType)
+    }
+}
+
+impl TryFrom<FieldValue> for i64 {
+    type Error = FieldConversionError;
+    fn try_from(value: FieldValue) -> Result<Self, Self::Error> {
+        i32::try_from(value).map(i64::from)
+    }
+}
 
 impl TryFrom<FieldValue> for f64 {
     type Error = FieldConversionError;

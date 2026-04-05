@@ -7,12 +7,12 @@ use std::iter::FusedIterator;
 use std::path::Path;
 
 use crate::encoding::DynEncoding;
-use crate::error::{Error, ErrorKind, FieldIOError};
+use crate::error::{Error, ErrorKind, FieldError};
 use crate::field::types::{FieldType, FieldValue, TrimOption};
 use crate::field::{DeletionFlag, FieldInfo};
 use crate::header::Header;
 use crate::memo::{MemoFileType, MemoReader};
-use crate::{FieldConversionError, Record, file};
+use crate::{FieldConversionError, FieldIndex, Record, RecordIndex, file};
 
 /// Value of the byte between the last RecordFieldInfo and the first record
 pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
@@ -31,7 +31,7 @@ pub trait ReadableRecord: Sized {
     /// using values read from the `FieldIterator'
     fn read_using<Source, MemoSource>(
         field_iterator: &mut FieldIterator<Source, MemoSource>,
-    ) -> Result<Self, FieldIOError>
+    ) -> Result<Self, FieldError>
     where
         Source: Read + Seek,
         MemoSource: Read + Seek;
@@ -132,9 +132,7 @@ impl ReaderBuilder {
         P: AsRef<Path>,
     {
         let p = path.as_ref();
-        let mut bufreader = File::open(p)
-            .map(BufReader::new)
-            .map_err(|error| Error::io_error(error, 0))?;
+        let mut bufreader = File::open(p).map(BufReader::new).map_err(Error::header)?;
 
         let (header, fields_info, encoding) = file::open_dbase(&mut bufreader, self.encoding)?;
 
@@ -151,16 +149,11 @@ impl ReaderBuilder {
                     MemoFileType::FoxBaseMemo => p.with_extension("fpt"),
                 };
 
-                let memo_file = File::open(memo_path).map_err(|error| Error {
-                    record_num: 0,
-                    field: None,
-                    kind: ErrorKind::ErrorOpeningMemoFile(error),
-                })?;
+                let memo_file = File::open(memo_path)
+                    .map_err(|error| Error::header(ErrorKind::ErrorOpeningMemoFile(error)))?;
 
-                memo_reader = Some(
-                    MemoReader::new(mt, BufReader::new(memo_file))
-                        .map_err(|error| Error::io_error(error, 0))?,
-                );
+                memo_reader =
+                    Some(MemoReader::new(mt, BufReader::new(memo_file)).map_err(Error::header)?);
             }
         }
 
@@ -193,13 +186,15 @@ impl ReaderBuilder {
         T: Read + Seek,
     {
         let (header, fields_info, encoding) = file::open_dbase(&mut source, self.encoding)?;
-
         let memo_reader = if let Some(memo_source) = memo_source {
-            let memo_type = header
-                .file_type
-                .supported_memo_type()
-                .unwrap_or(MemoFileType::FoxBaseMemo); // or pick a sensible default
-            Some(MemoReader::new(memo_type, memo_source).map_err(|e| Error::io_error(e, 0))?)
+            let memo_type = header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_reader = MemoReader::new(mt, memo_source).map_err(Error::header)?;
+
+                Some(memo_reader)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -279,7 +274,7 @@ impl<T: Read + Seek> Reader<T> {
         RecordIterator {
             reader: self,
             record_type: std::marker::PhantomData,
-            current_record: 0,
+            current_record: RecordIndex(0),
             record_data_buffer: std::io::Cursor::new(vec![0u8; record_size]),
             field_data_buffer: [0u8; 255],
         }
@@ -321,7 +316,7 @@ impl<T: Read + Seek> Reader<T> {
             + (index * self.header.size_of_record as usize);
         self.source
             .seek(SeekFrom::Start(offset as u64))
-            .map_err(|err| Error::io_error(err, 0))?;
+            .map_err(|err| Error::record(RecordIndex(index), err))?;
         Ok(())
     }
 
@@ -398,7 +393,9 @@ pub struct FieldIterator<'a, Source, MemoSource> {
     /// The source from where we read the data
     pub(crate) source: &'a mut Source,
     /// The fields that make the records
-    pub(crate) fields_info: std::iter::Peekable<std::slice::Iter<'a, FieldInfo>>,
+    pub(crate) fields_info: &'a [FieldInfo],
+    /// The next field index that will be read
+    pub(crate) next_index: FieldIndex,
     /// The source where the Memo field data is read
     pub(crate) memo_reader: &'a mut Option<MemoReader<MemoSource>>,
     /// Buffer where field data is stored
@@ -410,36 +407,26 @@ pub struct FieldIterator<'a, Source, MemoSource> {
 
 impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source, MemoSource> {
     /// Reads the next field and returns its name and value
-    pub fn read_next_field_impl(&mut self) -> Result<(&'a FieldInfo, FieldValue), FieldIOError> {
-        let field_info = self
-            .fields_info
-            .next()
-            .ok_or_else(FieldIOError::end_of_record)?;
-        Ok((field_info, self.read_field(field_info)?))
-    }
-
-    /// Reads the next field and returns its name and value
-    pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
-        self.read_next_field_impl()
-            .map(|(field_info, field_value)| NamedValue {
-                name: field_info.name(),
-                value: field_value,
-            })
+    pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldError> {
+        self.read_next_field_x().map(|(value, _, info)| NamedValue {
+            name: &info.name,
+            value,
+        })
     }
 
     /// Reads the next field and tries to convert into the requested type
     /// using [TryFrom]
-    pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, FieldIOError>
+    pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, FieldError>
     where
         F: TryFrom<FieldValue, Error = FieldConversionError>,
     {
-        self.read_next_field_impl()
-            .and_then(|(field_info, field_value)| match F::try_from(field_value) {
+        self.read_next_field_x()
+            .and_then(|(value, index, info)| match F::try_from(value) {
                 Ok(v) => Ok(NamedValue {
-                    name: field_info.name(),
+                    name: &info.name,
                     value: v,
                 }),
-                Err(e) => Err(FieldIOError::new(e.into(), Some(field_info.to_owned()))),
+                Err(err) => Err(FieldError::from_info(index, info, err)),
             })
     }
 
@@ -447,10 +434,19 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
     /// but the ones after do.
     ///
     /// Does nothing if the last field of the record was already skipped or read.
-    pub fn skip_next_field(&mut self) -> Result<(), FieldIOError> {
-        match self.fields_info.next() {
+    pub fn skip_next_field(&mut self) -> Result<(), FieldError> {
+        match self.fields_info.get(self.next_index.0) {
             None => Ok(()),
-            Some(field_info) => self.skip_field(field_info),
+            Some(field_info) => {
+                self.source
+                    .seek(SeekFrom::Current(i64::from(field_info.field_length)))
+                    .map(|_| ())
+                    .map_err(|error| FieldError::from_info(self.next_index, field_info, error))?;
+
+                self.next_index.0 += 1;
+
+                Ok(())
+            }
         }
     }
 
@@ -460,86 +456,104 @@ impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source,
     /// when we will start reading the next record
     ///
     /// Does nothing if the last field of the record was already skipped or read.
-    fn skip_remaining_fields(&mut self) -> Result<(), FieldIOError> {
-        while let Some(field_info) = self.fields_info.next() {
-            self.skip_field(field_info)?;
+    fn skip_remaining_fields(&mut self) -> Result<(), FieldError> {
+        let Some(size_to_skip) = self
+            .fields_info
+            .get(self.next_index.0..)
+            .map(|fields| fields.iter().map(|f| i64::from(f.field_length)).sum())
+        else {
+            return Ok(());
+        };
+
+        if size_to_skip == 0 {
+            return Ok(());
         }
+
+        self.source
+            .seek(SeekFrom::Current(size_to_skip))
+            .map_err(|error| {
+                FieldError::from_info(self.next_index, &self.fields_info[self.next_index.0], error)
+            })?;
+
+        self.next_index.0 = self.fields_info.len() + 1;
         Ok(())
     }
 
     /// Reads the raw bytes of the next field without doing any filtering or trimming
     #[cfg(feature = "serde")]
-    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, FieldIOError> {
+    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, FieldError> {
         let field_info = self
             .fields_info
-            .next()
-            .ok_or(FieldIOError::end_of_record())?;
+            .get(self.next_index.0)
+            .ok_or_else(FieldError::end_of_record)?;
         let mut buf = vec![0u8; field_info.field_length as usize];
-        self.source.read_exact(&mut buf).map_err(|error| {
-            FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-        })?;
+        self.source
+            .read_exact(&mut buf)
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        self.next_index.0 += 1;
         Ok(buf)
     }
 
     #[cfg(feature = "serde")]
-    pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldIOError> {
-        let field_info = *self.fields_info.peek().ok_or(FieldIOError {
-            field: None,
-            kind: ErrorKind::EndOfRecord,
-        })?;
-        let value = self.read_field(field_info)?;
+    pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldError> {
+        let field_info = self
+            .fields_info
+            .get(self.next_index.0)
+            .ok_or_else(FieldError::end_of_record)?;
+        let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
+        self.source
+            .read_exact(field_data_buffer)
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        let value = FieldValue::read_from(
+            field_data_buffer,
+            self.memo_reader,
+            field_info,
+            self.encoding,
+            self.options.character_trim,
+        )
+        .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
         self.source
             .seek(SeekFrom::Current(-i64::from(field_info.field_length)))
-            .map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-            })?;
-
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
         Ok(NamedValue {
             name: field_info.name(),
             value,
         })
     }
 
-    /// Advance the source to skip the field
-    fn skip_field(&mut self, field_info: &FieldInfo) -> Result<(), FieldIOError> {
-        self.source
-            .seek(SeekFrom::Current(i64::from(field_info.field_length)))
-            .map_err(|error| {
-                FieldIOError::new(ErrorKind::IoError(error), Some(field_info.to_owned()))
-            })?;
-        Ok(())
-    }
+    fn read_next_field_x(&mut self) -> Result<(FieldValue, FieldIndex, &'a FieldInfo), FieldError> {
+        let field_info = self
+            .fields_info
+            .get(self.next_index.0)
+            .ok_or(FieldError::end_of_record())?;
 
-    /// read the next field using the given info
-    fn read_field(&mut self, field_info: &'a FieldInfo) -> Result<FieldValue, FieldIOError> {
         let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
         self.source
             .read_exact(field_data_buffer)
-            .map_err(|err| FieldIOError::new(err.into(), Some(field_info.clone())))?;
-        match FieldValue::read_from(
+            .map_err(|err| FieldError::from_info(self.next_index, field_info, err))?;
+
+        let result = FieldValue::read_from(
             field_data_buffer,
             self.memo_reader,
             field_info,
             self.encoding,
             self.options.character_trim,
-        ) {
-            Ok(value) => Ok(value),
-            Err(kind) => Err(FieldIOError {
-                field: Some(field_info.clone()),
-                kind,
-            }),
-        }
+        )
+        .map(|value| (value, self.next_index, field_info))
+        .map_err(|err| FieldError::from_info(self.next_index, field_info, err));
+        self.next_index.0 += 1;
+        result
     }
 }
 
 impl<'a, Source: Read + Seek, MemoSource: Read + Seek> Iterator
     for FieldIterator<'a, Source, MemoSource>
 {
-    type Item = Result<NamedValue<'a, FieldValue>, FieldIOError>;
+    type Item = Result<NamedValue<'a, FieldValue>, FieldError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.read_next_field() {
-            Err(error) => match error.kind() {
+            Err(error) => match error.kind {
                 ErrorKind::EndOfRecord => None,
                 _ => Some(Err(error)),
             },
@@ -557,7 +571,7 @@ impl<Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
 pub struct RecordIterator<'a, T, R> {
     reader: &'a mut Reader<T>,
     record_type: std::marker::PhantomData<R>,
-    current_record: u32,
+    current_record: RecordIndex,
     record_data_buffer: std::io::Cursor<Vec<u8>>,
     /// Non-Memo field length is stored on a u8,
     /// so fields cannot exceed 255 bytes
@@ -569,21 +583,24 @@ impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            return if self.current_record >= self.reader.header.num_records {
+            return if self.current_record.0 >= self.reader.header.num_records as usize {
                 None
             } else {
                 let deletion_flag = match DeletionFlag::read_from(&mut self.reader.source) {
                     Ok(flag) => flag,
-                    Err(e) => return Some(Err(Error::io_error(e, self.current_record as usize))),
+                    Err(e) => {
+                        return Some(Err(Error::deletion_flag(self.current_record, e)));
+                    }
                 };
 
                 if deletion_flag == DeletionFlag::Deleted {
+                    // Skip the whole record
                     if let Err(e) = self.reader.source.seek(SeekFrom::Current(
                         self.record_data_buffer.get_ref().len() as i64,
                     )) {
-                        return Some(Err(Error::io_error(e, self.current_record as usize)));
+                        return Some(Err(Error::record(self.current_record, e)));
                     }
-                    self.current_record += 1;
+                    self.current_record.0 += 1;
                     continue;
                 }
 
@@ -592,13 +609,14 @@ impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
                     .source
                     .read_exact(self.record_data_buffer.get_mut())
                 {
-                    return Some(Err(Error::io_error(e, self.current_record as usize)));
+                    return Some(Err(Error::record(self.current_record, e)));
                 }
                 self.record_data_buffer.set_position(0);
 
                 let mut iter = FieldIterator {
                     source: &mut self.record_data_buffer,
-                    fields_info: self.reader.fields_info.iter().peekable(),
+                    fields_info: &self.reader.fields_info,
+                    next_index: FieldIndex(0),
                     memo_reader: &mut self.reader.memo_reader,
                     field_data_buffer: &mut self.field_data_buffer,
                     encoding: &self.reader.encoding,
@@ -607,8 +625,8 @@ impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
 
                 let record = R::read_using(&mut iter)
                     .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
-                    .map_err(|error| Error::new(error, self.current_record as usize));
-                self.current_record += 1;
+                    .map_err(|error| Error::from_field_error(self.current_record, error));
+                self.current_record.0 += 1;
                 Some(record)
             };
         }

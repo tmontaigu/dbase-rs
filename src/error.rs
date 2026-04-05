@@ -1,4 +1,7 @@
-use crate::{CodePageMark, FieldConversionError, FieldInfo, field::types::TimeError};
+use crate::{
+    CodePageMark, FieldConversionError, FieldIndex, FieldInfo, FieldType, RecordIndex,
+    field::types::TimeError,
+};
 use std::string::FromUtf8Error;
 
 #[derive(Debug)]
@@ -43,38 +46,149 @@ pub enum ErrorKind {
     Message(String),
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct FieldContext {
+    pub(crate) index: FieldIndex,
+    pub(crate) name: String,
+    pub(crate) kind: FieldType,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RecordField {
+    DeletionFlag,
+    Field(FieldContext),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RecordContext {
+    index: RecordIndex,
+    field: Option<RecordField>,
+}
+
+#[derive(Debug)]
+pub struct FieldError {
+    pub(crate) kind: ErrorKind,
+    pub(crate) context: Option<FieldContext>,
+}
+
+impl FieldError {
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
+}
+
+impl FieldError {
+    pub(crate) fn from_info(
+        index: FieldIndex,
+        info: &FieldInfo,
+        err: impl Into<ErrorKind>,
+    ) -> Self {
+        Self {
+            kind: err.into(),
+            context: Some(FieldContext {
+                index,
+                name: info.name.clone(),
+                kind: info.field_type(),
+            }),
+        }
+    }
+
+    pub(crate) const fn end_of_record() -> Self {
+        Self {
+            kind: ErrorKind::EndOfRecord,
+            context: None,
+        }
+    }
+
+    pub(crate) fn without_context(kind: impl Into<ErrorKind>) -> Self {
+        Self {
+            kind: kind.into(),
+            context: None,
+        }
+    }
+}
+
+impl std::error::Error for FieldError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.kind.source()
+    }
+}
+
+impl std::fmt::Display for FieldError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.context {
+            Some(FieldContext { index, name, kind }) => {
+                write!(
+                    f,
+                    "An error occurred at field #{} ('{name}', {kind}): {}",
+                    index.0, self.kind
+                )
+            }
+            None => write!(f, "An error occurred for a field: {}", self.kind),
+        }
+    }
+}
+
 /// The error type for this crate
 #[derive(Debug)]
 pub struct Error {
-    pub(crate) record_num: usize,
-    pub(crate) field: Option<FieldInfo>,
     pub(crate) kind: ErrorKind,
+    pub(crate) record_context: Option<RecordContext>,
 }
 
 impl Error {
-    pub(crate) fn new(field_error: FieldIOError, current_record: usize) -> Self {
-        Self {
-            record_num: current_record,
-            field: field_error.field,
-            kind: field_error.kind,
-        }
-    }
-
-    pub(crate) fn io_error(error: std::io::Error, current_record: usize) -> Self {
-        Self {
-            record_num: current_record,
-            field: None,
-            kind: ErrorKind::IoError(error),
-        }
-    }
-
     /// Shortcut for when the error happens before parsing the fields
-    /// e.g. when parsing header
-    pub(crate) fn pre_fields(kind: ErrorKind) -> Self {
+    /// i.e when parsing header
+    pub(crate) fn header(kind: impl Into<ErrorKind>) -> Self {
         Self {
-            record_num: 0,
-            field: None,
-            kind,
+            kind: kind.into(),
+            record_context: None,
+        }
+    }
+
+    /// Shortcut for when the error happens at the 'global' record level
+    /// for example when reading the whole record into a buffer, seeking to the
+    /// beginning of the record, etc
+    pub(crate) fn record(record_index: RecordIndex, kind: impl Into<ErrorKind>) -> Self {
+        Self {
+            kind: kind.into(),
+            record_context: Some(RecordContext {
+                index: record_index,
+                field: None,
+            }),
+        }
+    }
+
+    pub(crate) fn deletion_flag(record_index: RecordIndex, kind: impl Into<ErrorKind>) -> Self {
+        Self {
+            kind: kind.into(),
+            record_context: Some(RecordContext {
+                index: record_index,
+                field: Some(RecordField::DeletionFlag),
+            }),
+        }
+    }
+
+    /// Most complete error, for when it happened when reading a field
+    pub(crate) fn field(
+        record_index: RecordIndex,
+        field_ctx: FieldContext,
+        kind: impl Into<ErrorKind>,
+    ) -> Self {
+        Self {
+            kind: kind.into(),
+            record_context: Some(RecordContext {
+                index: record_index,
+                field: Some(RecordField::Field(field_ctx)),
+            }),
+        }
+    }
+
+    pub(crate) fn from_field_error(index: RecordIndex, error: FieldError) -> Self {
+        let FieldError { kind, context } = error;
+        match context {
+            Some(c) => Self::field(index, c, kind),
+            None => Self::record(index, kind),
         }
     }
 
@@ -83,40 +197,27 @@ impl Error {
         &self.kind
     }
 
-    /// Returns the index of record index for which the error occurred
+    /// Returns record index for which the error occurred
     ///
-    /// 0 may be the first record or an error that occurred before
-    /// handling the first record (eg: an error reading the header)
-    pub fn record_num(&self) -> usize {
-        self.record_num
+    /// None means the error happened outside of reading/writing a record, mainly
+    /// when reading the header
+    pub fn record_index(&self) -> Option<RecordIndex> {
+        self.record_context.as_ref().map(|ctx| ctx.index)
     }
 
-    /// Returns the information of the record field for which the error occurred
-    pub fn field(&self) -> &Option<FieldInfo> {
-        &self.field
-    }
-}
-
-#[derive(Debug)]
-pub struct FieldIOError {
-    pub(crate) field: Option<FieldInfo>,
-    pub(crate) kind: ErrorKind,
-}
-
-impl FieldIOError {
-    pub fn new(kind: ErrorKind, field: Option<FieldInfo>) -> Self {
-        Self { field, kind }
-    }
-
-    pub(crate) fn end_of_record() -> Self {
-        Self {
-            field: None,
-            kind: ErrorKind::EndOfRecord,
-        }
-    }
-
-    pub fn kind(&self) -> &ErrorKind {
-        &self.kind
+    /// Returns the field index for which the error occurred
+    ///
+    /// None means the error happened outside of reading/writing a field
+    pub fn field_index(&self) -> Option<FieldIndex> {
+        self.record_context.as_ref().and_then(|ctx| {
+            ctx.field.as_ref().and_then(|f| {
+                if let RecordField::Field(ctx) = f {
+                    Some(ctx.index)
+                } else {
+                    None
+                }
+            })
+        })
     }
 }
 
@@ -168,31 +269,62 @@ impl From<TimeError> for ErrorKind {
     }
 }
 
-impl From<FieldConversionError> for FieldIOError {
-    fn from(e: FieldConversionError) -> Self {
-        FieldIOError::new(ErrorKind::BadConversion(e), None)
+impl ErrorKind {
+    pub(crate) fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ErrorKind::IoError(e) => Some(e),
+            ErrorKind::ParseFloatError(e) => Some(e),
+            ErrorKind::ParseIntError(e) => Some(e),
+            ErrorKind::InvalidDate(e) => Some(e),
+            ErrorKind::InvalidTime(e) => Some(e),
+            ErrorKind::ErrorOpeningMemoFile(e) => Some(e),
+            ErrorKind::BadConversion(e) => Some(e),
+            ErrorKind::StringDecodeError(e) => Some(e),
+            ErrorKind::StringEncodeError(e) => Some(e),
+            _ => None,
+        }
     }
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(field_info) = &self.field {
-            write!(
-                f,
-                "Error {{ record_num: {}, kind: {}, {} }}",
-                self.record_num, self.kind, field_info
-            )
+        if let Some(ctx) = &self.record_context {
+            match &ctx.field {
+                Some(record_field) => match record_field {
+                    RecordField::DeletionFlag => {
+                        write!(
+                            f,
+                            "An error occurred in record {} at deletion flag: {}",
+                            ctx.index.0, self.kind
+                        )
+                    }
+                    RecordField::Field(FieldContext { index, name, kind }) => {
+                        write!(
+                            f,
+                            "An error occurred in record {} at field #{} ('{name}', {kind}): {}",
+                            ctx.index.0, index.0, self.kind
+                        )
+                    }
+                },
+                None => {
+                    write!(
+                        f,
+                        "An error occurred in record {}: {}",
+                        ctx.index.0, self.kind
+                    )
+                }
+            }
         } else {
-            write!(
-                f,
-                "Error {{ record_num: {}, kind: {} }}",
-                self.record_num, self.kind
-            )
+            write!(f, "Error {{ kind: {} }}", self.kind)
         }
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.kind.source()
+    }
+}
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -247,18 +379,6 @@ impl std::fmt::Display for ErrorKind {
     }
 }
 
-impl std::fmt::Display for FieldIOError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(field_info) = &self.field {
-            write!(f, "FieldIOError {{ kind: {}, {} }}", self.kind, field_info)
-        } else {
-            write!(f, "FieldIOError {{ kind: {:?} }}", self.kind)
-        }
-    }
-}
-
-impl std::error::Error for FieldIOError {}
-
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
@@ -284,7 +404,13 @@ impl From<yore::DecodeError> for DecodeError {
 
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            DecodeError::Message(msg) => write!(f, "{msg}"),
+            DecodeError::FromUtf8(e) => write!(f, "{e}"),
+            DecodeError::NotAscii => write!(f, "string contains non-ASCII bytes"),
+            #[cfg(feature = "yore")]
+            DecodeError::Yore(e) => write!(f, "{e}"),
+        }
     }
 }
 
@@ -313,7 +439,11 @@ impl From<yore::EncodeError> for EncodeError {
 
 impl std::fmt::Display for EncodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            EncodeError::Message(msg) => write!(f, "{msg}"),
+            #[cfg(feature = "yore")]
+            EncodeError::Yore(e) => write!(f, "{e}"),
+        }
     }
 }
 

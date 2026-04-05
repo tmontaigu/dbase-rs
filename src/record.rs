@@ -1,4 +1,4 @@
-use crate::{FieldIOError, FieldIterator, FieldValue, NamedValue, ReadableRecord};
+use crate::{FieldError, FieldIterator, FieldValue, NamedValue, ReadableRecord};
 use std::collections::HashMap;
 use std::collections::hash_map::RandomState;
 use std::io::{Read, Seek};
@@ -13,7 +13,7 @@ pub struct Record {
 impl ReadableRecord for Record {
     fn read_using<Source, MemoSource>(
         field_iterator: &mut FieldIterator<Source, MemoSource>,
-    ) -> Result<Self, FieldIOError>
+    ) -> Result<Self, FieldError>
     where
         Source: Read + Seek,
         MemoSource: Read + Seek,

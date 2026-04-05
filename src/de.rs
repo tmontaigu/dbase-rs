@@ -4,16 +4,14 @@ use std::io::{Read, Seek};
 use serde::Deserializer;
 use serde::de::{DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 
-use crate::{
-    ErrorKind, FieldConversionError, FieldIOError, FieldIterator, FieldValue, ReadableRecord,
-};
+use crate::{ErrorKind, FieldError, FieldIterator, FieldValue, ReadableRecord};
 
 impl<'de, 'a, R1, R2> SeqAccess<'de> for &mut FieldIterator<'a, R1, R2>
 where
     R1: Read + Seek,
     R2: Read + Seek,
 {
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn next_element_seed<T>(
         &mut self,
@@ -22,7 +20,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        if self.fields_info.peek().is_none() {
+        if self.fields_info.get(self.next_index.0).is_none() {
             Ok(None)
         } else {
             seed.deserialize(&mut **self).map(Some)
@@ -35,13 +33,13 @@ where
     T: Read + Seek,
     R: Read + Seek,
 {
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        Err(FieldConversionError::IncompatibleType.into())
+        Err(FieldError::without_context(ErrorKind::IncompatibleType))
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -56,94 +54,56 @@ where
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_i8(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_i8(self.read_next_field_as::<i8>()?.value)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_i16(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_i16(self.read_next_field_as::<i16>()?.value)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_i32(value)
+        visitor.visit_i32(self.read_next_field_as::<i32>()?.value)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_i64(value.into())
+        visitor.visit_i64(self.read_next_field_as::<i64>()?.value)
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_u8(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_u8(self.read_next_field_as::<u8>()?.value)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_u16(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_u16(self.read_next_field_as::<u16>()?.value)
     }
 
     fn deserialize_u32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_u32(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_u32(self.read_next_field_as::<u32>()?.value)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let value = self.read_next_field_as::<i32>()?.value;
-        visitor.visit_u64(
-            value
-                .try_into()
-                .ok()
-                .ok_or(FieldConversionError::IncompatibleType)?,
-        )
+        visitor.visit_u64(self.read_next_field_as::<u64>()?.value)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -170,7 +130,7 @@ where
         let mut chars = value.chars();
         match (chars.next(), chars.next()) {
             (Some(c), None) => visitor.visit_char(c),
-            _ => Err(FieldConversionError::IncompatibleType.into()),
+            _ => Err(FieldError::without_context(ErrorKind::IncompatibleType)),
         }
     }
 
@@ -361,7 +321,7 @@ where
 }
 
 impl<S: DeserializeOwned> ReadableRecord for S {
-    fn read_using<T, R>(field_iterator: &mut FieldIterator<T, R>) -> Result<Self, FieldIOError>
+    fn read_using<T, R>(field_iterator: &mut FieldIterator<T, R>) -> Result<Self, FieldError>
     where
         T: Read + Seek,
         R: Read + Seek,
@@ -370,11 +330,8 @@ impl<S: DeserializeOwned> ReadableRecord for S {
     }
 }
 
-impl serde::de::Error for FieldIOError {
+impl serde::de::Error for FieldError {
     fn custom<T: Display>(msg: T) -> Self {
-        Self {
-            field: None,
-            kind: ErrorKind::Message(msg.to_string()),
-        }
+        Self::without_context(ErrorKind::Message(msg.to_string()))
     }
 }

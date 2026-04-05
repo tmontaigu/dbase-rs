@@ -3,7 +3,7 @@ use std::io::Write;
 
 use crate::field::types::FieldType;
 use crate::writing::FieldWriter;
-use crate::{Date, FieldIOError};
+use crate::{Date, FieldError};
 use crate::{ErrorKind, WritableRecord};
 
 impl<T> WritableRecord for T
@@ -13,14 +13,14 @@ where
     fn write_using<'a, W: Write>(
         &self,
         field_writer: &mut FieldWriter<'a, W>,
-    ) -> Result<(), FieldIOError> {
+    ) -> Result<(), FieldError> {
         self.serialize(field_writer)
     }
 }
 
 impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
@@ -46,7 +46,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        let v: i32 = v.try_into().map_err(|_| -> FieldIOError {
+        let v: i32 = v.try_into().map_err(|_| -> FieldError {
             serde::ser::Error::custom("i64 value out of range for dBase integer field")
         })?;
         self.write_next_field_value(&v)
@@ -61,14 +61,14 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        let v: i32 = v.try_into().map_err(|_| -> FieldIOError {
+        let v: i32 = v.try_into().map_err(|_| -> FieldError {
             serde::ser::Error::custom("u32 value out of range for dBase integer field")
         })?;
         self.write_next_field_value(&v)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        let v: i32 = v.try_into().map_err(|_| -> FieldIOError {
+        let v: i32 = v.try_into().map_err(|_| -> FieldError {
             serde::ser::Error::custom("u64 value out of range for dBase integer field")
         })?;
         self.write_next_field_value(&v)
@@ -97,20 +97,21 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        if let Some(field_info) = self.fields_info.peek() {
+        if let Some(field_info) = self.fields_info.get(self.next_index.0) {
             match field_info.field_type {
                 FieldType::Character => self.write_next_field_value::<Option<String>>(&None),
                 FieldType::Numeric => self.write_next_field_value::<Option<f64>>(&None),
                 FieldType::Float => self.write_next_field_value::<Option<f32>>(&None),
                 FieldType::Date => self.write_next_field_value::<Option<Date>>(&None),
                 FieldType::Logical => self.write_next_field_value::<Option<bool>>(&None),
-                _ => Err(FieldIOError::new(
+                _ => Err(FieldError::from_info(
+                    self.next_index,
+                    field_info,
                     ErrorKind::Message("This field cannot store None values".to_string()),
-                    Some((*field_info).to_owned()),
                 )),
             }
         } else {
-            Err(FieldIOError::end_of_record())
+            Err(FieldError::end_of_record())
         }
     }
 
@@ -233,7 +234,7 @@ impl<'a, W: Write> Serializer for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<(), Self::Error>
     where
@@ -253,7 +254,7 @@ impl<'a, W: Write> serde::ser::SerializeStructVariant for &mut FieldWriter<'a, W
 
 impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<(), Self::Error>
     where
@@ -269,7 +270,7 @@ impl<'a, W: Write> serde::ser::SerializeStruct for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -285,7 +286,7 @@ impl<'a, W: Write> serde::ser::SerializeSeq for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
     where
@@ -308,7 +309,7 @@ impl<'a, W: Write> serde::ser::SerializeMap for &mut FieldWriter<'a, W> {
 
 impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_field<T>(&mut self, _value: &T) -> Result<(), Self::Error>
     where
@@ -328,7 +329,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleVariant for &mut FieldWriter<'a, W>
 
 impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -344,7 +345,7 @@ impl<'a, W: Write> serde::ser::SerializeTupleStruct for &mut FieldWriter<'a, W> 
 
 impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
     type Ok = ();
-    type Error = FieldIOError;
+    type Error = FieldError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -358,10 +359,10 @@ impl<'a, W: Write> serde::ser::SerializeTuple for &mut FieldWriter<'a, W> {
     }
 }
 
-impl serde::ser::Error for FieldIOError {
+impl serde::ser::Error for FieldError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         Self {
-            field: None,
+            context: None,
             kind: ErrorKind::Message(msg.to_string()),
         }
     }

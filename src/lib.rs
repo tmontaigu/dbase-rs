@@ -128,7 +128,7 @@
 //! }
 //!
 //! impl dbase::ReadableRecord for StationRecord {
-//!     fn read_using<R1, R2>(field_iterator: &mut dbase::FieldIterator<R1, R2>) -> Result<Self, dbase::FieldIOError>
+//!     fn read_using<R1, R2>(field_iterator: &mut dbase::FieldIterator<R1, R2>) -> Result<Self, dbase::FieldError>
 //!          where R1: Read + Seek,
 //!                R2: Read + Seek,
 //!    {
@@ -218,7 +218,7 @@
 //! ```
 //!
 //!```
-//! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, FieldIOError, Encoding};
+//! use dbase::{TableWriterBuilder, FieldName, WritableRecord, FieldWriter, FieldError, Encoding};
 //! use std::convert::TryFrom;
 //! use std::io::{Cursor, Write};
 //!
@@ -228,7 +228,7 @@
 //! }
 //!
 //! impl WritableRecord for User {
-//!     fn write_using<'a, W>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldIOError>
+//!     fn write_using<'a, W>(&self, field_writer: &mut FieldWriter<'a, W>) -> Result<(), FieldError>
 //!         where W: Write
 //!     {
 //!         field_writer.write_next_field_value(&self.nick_name)?;
@@ -327,7 +327,7 @@ pub use file::{BufReadWriteFile, FieldIndex, FieldRef, File, RecordIndex, Record
 #[cfg(feature = "datafusion")]
 pub use crate::datafusion::{DbaseDataSource, DbaseTableFactory};
 pub use crate::encoding::{Encoding, Unicode, UnicodeLossy};
-pub use crate::error::{Error, ErrorKind, FieldIOError};
+pub use crate::error::{Error, ErrorKind, FieldError};
 pub use crate::field::types::{
     Date, DateParseError, DateTime, FieldType, FieldValue, Time, TrimOption,
 };
@@ -376,7 +376,7 @@ macro_rules! dbase_record {
         }
 
         impl dbase::ReadableRecord for $name {
-            fn read_using<Source, MemoSource>(field_iterator: &mut dbase::FieldIterator<Source, MemoSource>) -> Result<Self, dbase::FieldIOError>
+            fn read_using<Source, MemoSource>(field_iterator: &mut dbase::FieldIterator<Source, MemoSource>) -> Result<Self, dbase::FieldError>
                 where Source: std::io::Read + std::io::Seek,
                       MemoSource: std::io::Read + std::io::Seek
                 {
@@ -391,7 +391,7 @@ macro_rules! dbase_record {
         }
 
        impl dbase::WritableRecord for $name {
-           fn write_using<'a, W>(&self, field_writer: &mut dbase::FieldWriter<'a, W>) -> Result<(), dbase::FieldIOError>
+           fn write_using<'a, W>(&self, field_writer: &mut dbase::FieldWriter<'a, W>) -> Result<(), dbase::FieldError>
            where W: std::io::Write,
            {
                 $(

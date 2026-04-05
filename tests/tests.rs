@@ -3,8 +3,8 @@ use dbase::dbase_record;
 use std::io::{Cursor, Read, Seek, Write};
 
 use dbase::{
-    Date, DateTime, FieldIOError, FieldIterator, FieldName, FieldValue, FieldWriter,
-    ReadableRecord, Reader, Record, TableWriterBuilder, Time, WritableRecord,
+    Date, DateTime, FieldError, FieldIterator, FieldName, FieldValue, FieldWriter, ReadableRecord,
+    Reader, Record, RecordIndex, TableWriterBuilder, Time, WritableRecord,
 };
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
@@ -110,7 +110,7 @@ struct Album {
 }
 
 impl ReadableRecord for Album {
-    fn read_using<R1, R2>(field_iterator: &mut FieldIterator<R1, R2>) -> Result<Self, FieldIOError>
+    fn read_using<R1, R2>(field_iterator: &mut FieldIterator<R1, R2>) -> Result<Self, FieldError>
     where
         R1: Read + Seek,
         R2: Read + Seek,
@@ -129,7 +129,7 @@ impl WritableRecord for Album {
     fn write_using<W: Write>(
         &self,
         field_writer: &mut FieldWriter<'_, W>,
-    ) -> Result<(), FieldIOError> {
+    ) -> Result<(), FieldError> {
         field_writer.write_next_field_value(&self.artist)?;
         field_writer.write_next_field_value(&self.name)?;
         field_writer.write_next_field_value(&self.released)?;
@@ -445,4 +445,43 @@ fn test_file_with_null_in_field_names() {
     for (expected_name, field) in expected_field_names.into_iter().zip(reader.fields().iter()) {
         assert_eq!(expected_name, field.name());
     }
+}
+
+// record_index() and field_index() contract tests
+
+#[test]
+fn test_header_error_has_no_record_index() {
+    let error = Reader::new(Cursor::new(vec![])).expect_err("expected error for empty input");
+    assert_eq!(error.record_index(), None);
+}
+
+#[test]
+fn test_deletion_flag_error_has_record_index_but_no_field_index() {
+    // Write 3 records so we can target a non-zero record index.
+    let mut dst = Cursor::new(Vec::<u8>::new());
+    let mut record = Record::default();
+    record.insert(
+        "name".to_owned(),
+        FieldValue::Character(Some("test".to_owned())),
+    );
+    TableWriterBuilder::new()
+        .add_character_field(FieldName::try_from("name").unwrap(), 10)
+        .build_with_dest(&mut dst)
+        .write_records(&[record.clone(), record.clone(), record])
+        .unwrap();
+
+    // Use the header to find the end of record #0, then truncate there so that
+    // reading the deletion flag of record #1 hits an unexpected EOF.
+    let bytes = dst.into_inner();
+    let header = *Reader::new(Cursor::new(bytes.clone())).unwrap().header();
+    let record_1_start = header.offset_to_first_record as usize + header.size_of_record as usize;
+    let truncated = bytes[..record_1_start].to_vec();
+
+    let error = Reader::new(Cursor::new(truncated))
+        .unwrap()
+        .read()
+        .expect_err("expected deletion flag error");
+
+    assert_eq!(error.record_index(), Some(RecordIndex(1)));
+    assert_eq!(error.field_index(), None);
 }

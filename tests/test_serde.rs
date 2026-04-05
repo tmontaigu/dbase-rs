@@ -8,6 +8,23 @@ mod serde_tests {
     use dbase::{ErrorKind, FieldName, ReadableRecord, Reader, TableWriterBuilder, WritableRecord};
     use std::fmt::Debug;
 
+    fn single_char_field_reader(value: &str) -> Reader<Cursor<Vec<u8>>> {
+        #[derive(Serialize)]
+        struct Record {
+            name: String,
+        }
+        let mut dst = Cursor::new(Vec::<u8>::new());
+        TableWriterBuilder::new()
+            .add_character_field(FieldName::try_from("name").unwrap(), 50)
+            .build_with_dest(&mut dst)
+            .write_records(&[Record {
+                name: value.to_string(),
+            }])
+            .unwrap();
+        dst.set_position(0);
+        Reader::new(dst).unwrap()
+    }
+
     fn write_read_compare<R>(records: &Vec<R>, writer_builder: TableWriterBuilder)
     where
         R: WritableRecord + ReadableRecord + Debug + PartialEq,
@@ -204,5 +221,69 @@ mod serde_tests {
         }];
 
         write_read_compare(&records, writer_builder);
+    }
+
+    // `from_field_error` has two branches: when the FieldError carries a FieldContext it promotes
+    // to Error::field (field_index is Some), and when it doesn't it falls back to Error::record
+    // (field_index is None). The two tests below pin each branch.
+
+    #[test]
+    fn test_from_field_error_with_context_sets_field_index() {
+        // A type mismatch that goes through read_next_field_as produces a FieldError with
+        // context (field index + name + type), so field_index() should be Some.
+        #[derive(Debug, Deserialize)]
+        #[allow(
+            dead_code,
+            reason = "field exists only to drive serde deserialization; value is never read"
+        )]
+        struct ReadRecord {
+            name: bool, // Character field read as bool → IncompatibleType with context
+        }
+
+        let error = single_char_field_reader("test")
+            .read_as::<ReadRecord>()
+            .expect_err("expected a type mismatch error");
+
+        assert_eq!(error.record_index(), Some(dbase::RecordIndex(0)));
+        assert_eq!(error.field_index(), Some(dbase::FieldIndex(0)));
+    }
+
+    #[test]
+    fn test_from_field_error_without_context_has_no_field_index() {
+        // deserialize_any on FieldIterator returns FieldError { context: None }, so
+        // from_field_error should fall back to Error::record: record_index is Some but
+        // field_index is None.
+        #[derive(Debug)]
+        struct TriggerDeserializeAny;
+
+        impl<'de> serde::Deserialize<'de> for TriggerDeserializeAny {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = TriggerDeserializeAny;
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "anything")
+                    }
+                }
+                deserializer.deserialize_any(V)
+            }
+        }
+
+        #[derive(Debug, Deserialize)]
+        #[allow(
+            dead_code,
+            reason = "field exists only to drive serde deserialization; value is never read"
+        )]
+        struct ReadRecord {
+            name: TriggerDeserializeAny,
+        }
+
+        let error = single_char_field_reader("test")
+            .read_as::<ReadRecord>()
+            .expect_err("expected IncompatibleType from deserialize_any");
+
+        assert!(matches!(error.kind(), ErrorKind::IncompatibleType));
+        assert_eq!(error.record_index(), Some(dbase::RecordIndex(0)));
+        assert_eq!(error.field_index(), None);
     }
 }
