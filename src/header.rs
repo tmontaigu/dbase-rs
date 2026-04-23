@@ -8,6 +8,7 @@ use crate::memo::MemoFileType;
 
 // Used this as source: https://blog.codetitans.pl/post/dbf-and-language-code-page/
 // also https://github.com/ethanfurman/dbf/blob/4f8ff35bec18ca167981ba741bfe353f5f362f99/dbf/__init__.py#L8299
+// additionally https://blog.abadev.com/2016/02/03/dbase-language-id/
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CodePageMark {
     Undefined,
@@ -158,6 +159,16 @@ impl From<u8> for CodePageMark {
             0x01 => Self::CP437,
             0x02 => Self::CP850,
             0x03 => Self::CP1252,
+            0x08 => Self::CP865,
+            0x09 => Self::CP437,
+            0x0A => Self::CP850,
+            0x0B => Self::CP437,
+            0x0D => Self::CP437,
+            0x0E => Self::CP850,
+            0x0F => Self::CP437,
+            0x10 => Self::CP850,
+            0x11 => Self::CP437,
+            0x12 => Self::CP850,
             0x13 => Self::CP932,
             0x4D => Self::CP936,
             // 0x04 => Self::StandardMacIntosh,
