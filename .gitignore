@@ -5,6 +5,9 @@ Cargo.lock
 \.idea/
 support/
 *.dbf
+*.zip
 .DS_Store
 .vscode
+.claude/
+todo.md
 !tests/data/*.dbf

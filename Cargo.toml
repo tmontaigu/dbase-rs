@@ -1,6 +1,6 @@
 [package]
 name = "dbase"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["tmontaigu <thomas.montaigu@laposte.net>"]
 description = "Read & Write .dbf in Rust"
 license = "MIT"
@@ -11,7 +11,7 @@ repository = "https://github.com/tmontaigu/dbase-rs"
 edition = "2024"
 
 [dependencies]
-byteorder = "1.4.3"
+byteorder = "1.5.0"
 time = { version = "0.3", features = ["std"] }
 serde = { version = "1.0.102", optional = true }
 yore = { version = "1.0.1", optional = true }

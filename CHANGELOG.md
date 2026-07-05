@@ -1,3 +1,21 @@
+# 0.8.0
+    - Make the crate more resistant to bad files by replacing potential panics
+    with errors (e.g panics on invalid dates)
+    - Refactor of the Error type to have more context about where the error occurred
+    (which record, which field index)
+    - Remove the `close` method that was deprecated (finalize should be used)
+    - Fix field name parsing: stop at first null byte
+    - Fix parsing of FieldType::Logical where the char `0` was parsed as true
+    - Fix Memo4 /foxbase memo reads that could be truncated
+    - Fix missing internal increment when skipping a deleted record
+    - Make RecordIterator::next return more descriptive errors
+    - Add Debug impl on Reader
+    - Add missing `From<Ascii>`, `From<Unicode>`, `From<UnicodeLossy>` impls for `DynEncoding`
+    - Add more serde deserialization of integer types
+    - Add more code page support
+    - Add narrowing integer conversion to FieldValue
+
+
 # 0.7.0
     - Make DynEncoding pub
     - Allow creating DynEncoding from a string with the name of the encoding
