@@ -73,6 +73,10 @@ impl FieldInfo {
         self.field_length
     }
 
+    pub fn decimal_places(&self) -> u8 {
+        self.num_decimal_places
+    }
+
     pub(crate) fn new(name: FieldName, field_type: FieldType, length: u8) -> Self {
         Self {
             name: name.0,
