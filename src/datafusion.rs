@@ -46,7 +46,7 @@ impl Clone for DbaseDataSource {
 impl DbaseDataSource {
     pub fn new<P: AsRef<Path> + Debug>(path: P) -> Self {
         let file = DbaseFile::open_read_only(&path).unwrap_or_else(|_| {
-            panic!("Could not find file {:?} or corresponding memo file", &path)
+            panic!("Could not find file {:?} or corresponding memo file", path)
         });
         DbaseDataSource {
             path: path
