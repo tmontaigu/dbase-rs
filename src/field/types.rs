@@ -989,6 +989,18 @@ mod de {
                     let string = String::from_utf8(v).map_err(E::custom)?;
                     Date::from_str(&string).map_err(E::custom)
                 }
+
+                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::SeqAccess<'de>,
+                {
+                    let mut bytes = vec![];
+                    while let Some(byte) = seq.next_element::<u8>()? {
+                        bytes.push(byte);
+                    }
+
+                    self.visit_byte_buf(bytes)
+                }
             }
             deserializer.deserialize_byte_buf(DateVisitor)
         }
