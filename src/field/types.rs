@@ -198,7 +198,9 @@ impl FieldValue {
             }
             FieldType::Date => {
                 let value = trim_field_data(field_bytes, TrimOption::BeginEnd);
-                if value.len() < 8 || value.iter().all(|c| c == &b' ') {
+                // The dBase format has no official null date, but shapelib (used by
+                // GDAL/QGIS) writes null dates as "00000000" and reads them back as null.
+                if value.len() < 8 || value.iter().all(|c| c == &b' ' || c == &b'0') {
                     FieldValue::Date(None)
                 } else {
                     FieldValue::Date(Some(Date::from_bytes(&value[..8])?))
@@ -1173,6 +1175,21 @@ mod test {
 
         let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
         test_we_can_read_back(&field_info, &date);
+    }
+
+    #[test]
+    fn read_zero_filled_date_as_none() {
+        let field_info = create_temp_field_info(FieldType::Date, FieldType::Date.size().unwrap());
+        let value = FieldValue::read_from::<Cursor<Vec<u8>>, _>(
+            b"00000000",
+            &mut None,
+            &field_info,
+            &UnicodeLossy,
+            TrimOption::BeginEnd,
+        )
+        .unwrap();
+
+        assert_eq!(value, FieldValue::Date(None));
     }
 
     #[test]
